@@ -1,0 +1,17 @@
+import '../styles/globals.css';
+import type { AppProps } from 'next/app';
+import { Provider } from 'react-redux';
+import { store } from '@lib/store';
+import { WalletProvider } from '@contexts/WalletContext';
+
+function MyApp({ Component, pageProps }: AppProps) {
+  return (
+    <Provider store={store}>
+      <WalletProvider>
+        <Component {...pageProps} />
+      </WalletProvider>
+    </Provider>
+  );
+}
+
+export default MyApp; 
