@@ -8,7 +8,11 @@ import { FaRegCompass, FaCompass, FaBell, FaRegBell, FaCog, FaRegUser } from 're
 import { useWallet } from '../contexts/WalletContext';
 import AuraPointsCounter from './AuraPointsCounter';
 
-const Sidebar = () => {
+interface SidebarProps {
+  className?: string;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   const router = useRouter();
   const { walletAddress } = useWallet();
   const user = useSelector((state: RootState) => state.user);
@@ -52,7 +56,7 @@ const Sidebar = () => {
   ];
 
   return (
-    <div className="h-full flex flex-col space-y-6">
+    <div className={`h-full flex flex-col space-y-6 ${className}`}>
       <div className="flex-1">
         {/* User Profile Summary */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 mb-4">

@@ -71,10 +71,12 @@ const ExplorePage: NextPage = () => {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Sidebar className="hidden md:block" />
+      <main className="container mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-12 gap-6">
+        <div className="hidden md:block md:col-span-3">
+          <Sidebar className="sticky top-20" />
+        </div>
 
-        <div className="md:col-span-3">
+        <div className="col-span-1 md:col-span-9">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
             <h1 className="text-2xl font-bold text-dark dark:text-white mb-4">Explore</h1>
             

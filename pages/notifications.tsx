@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { RootState } from '@lib/store';
-import { setNotifications, markAllAsRead, markAsRead, Notification } from '@lib/slices/notificationsSlice';
+import { RootState } from '../lib/store';
+import { setNotifications, markAllAsRead, markAsRead, Notification } from '../lib/slices/notificationsSlice';
 import Head from 'next/head';
-import Header from '@components/Header';
-import Sidebar from '@components/Sidebar';
-import AuraSidebar from '@components/AuraSidebar';
+import Header from '../components/Header';
+import Sidebar from '../components/Sidebar';
+import AuraSidebar from '../components/AuraSidebar';
 import { v4 as uuidv4 } from 'uuid';
 import Link from 'next/link';
 
@@ -173,7 +173,7 @@ const NotificationsPage = () => {
         
         <main className="container mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-12 gap-6">
           <div className="hidden md:block md:col-span-3">
-            <Sidebar />
+            <Sidebar className="sticky top-20" />
           </div>
           
           <div className="col-span-1 md:col-span-6">
