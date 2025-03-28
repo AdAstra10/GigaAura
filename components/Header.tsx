@@ -1,100 +1,151 @@
 import { useState } from 'react';
-import Link from 'next/link';
-import { useWallet } from '@contexts/WalletContext';
 import { useSelector } from 'react-redux';
 import { RootState } from '@lib/store';
+import Link from 'next/link';
+import Image from 'next/image';
+import router from 'next/router';
+import { Bell, Search, Menu, X } from 'lucide-react';
 
 const Header = () => {
-  const { disconnect, walletAddress } = useWallet();
-  const user = useSelector((state: RootState) => state.user);
-  const notifications = useSelector((state: RootState) => state.notifications);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  const truncateWallet = (address: string | null) => {
-    if (!address) return '';
-    return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const { walletAddress, username, isAuthenticated } = useSelector((state: RootState) => state.user);
+  
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
+    }
   };
 
   return (
-    <header className="bg-white shadow-md">
-      <div className="container mx-auto px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Link href="/">
-              <a className="flex items-center">
-                <span className="text-2xl font-bold text-primary">Giga<span className="text-accent">Aura</span></span>
-              </a>
+    <header className="bg-white shadow-sm sticky top-0 z-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between h-16">
+          <div className="flex items-center">
+            {/* Mobile menu button */}
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="md:hidden -ml-2 mr-2 p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+            >
+              <span className="sr-only">Open menu</span>
+              {isOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+            
+            {/* Logo */}
+            <Link href="/" className="flex items-center">
+              <div className="flex-shrink-0 flex items-center">
+                <Image 
+                  src="/images/gigaaura-logo.svg" 
+                  alt="GigaAura Logo" 
+                  width={40} 
+                  height={40} 
+                  className="h-10 w-auto" 
+                />
+                <Image 
+                  src="/images/gigaaura-text.svg" 
+                  alt="GigaAura" 
+                  width={120} 
+                  height={30} 
+                  className="h-8 w-auto ml-2 hidden sm:block" 
+                />
+              </div>
             </Link>
           </div>
-
-          <nav className="hidden md:flex items-center space-x-6">
-            <Link href="/">
-              <a className="text-dark hover:text-primary">Home</a>
-            </Link>
-            <Link href="/explore">
-              <a className="text-dark hover:text-primary">Explore</a>
-            </Link>
-            <Link href="/notifications">
-              <a className="text-dark hover:text-primary relative">
-                Notifications
-                {notifications.unreadCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-primary text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {notifications.unreadCount > 9 ? '9+' : notifications.unreadCount}
+          
+          {/* Search */}
+          <div className="flex-1 flex items-center justify-center px-2 lg:ml-6 lg:justify-end">
+            <div className="max-w-lg w-full lg:max-w-xs">
+              <form onSubmit={handleSearch} className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search size={18} className="text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search"
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-full text-sm placeholder-gray-500 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </form>
+            </div>
+          </div>
+          
+          {/* Nav Links */}
+          <div className="flex items-center">
+            {isAuthenticated ? (
+              <>
+                <Link href="/notifications" className="p-2 text-gray-400 hover:text-primary">
+                  <span className="sr-only">Notifications</span>
+                  <Bell size={20} />
+                </Link>
+                
+                <Link 
+                  href="/profile" 
+                  className="ml-4 flex items-center"
+                >
+                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-white font-medium">
+                    {username?.charAt(0) || walletAddress?.charAt(0) || '?'}
+                  </div>
+                  <span className="ml-2 text-sm font-medium text-gray-700 hidden md:block">
+                    {username || walletAddress?.substring(0, 6) + '...' + walletAddress?.slice(-4)}
                   </span>
-                )}
-              </a>
-            </Link>
-            <Link href="/profile">
-              <a className="text-dark hover:text-primary">Profile</a>
-            </Link>
-          </nav>
-
-          <div className="flex items-center space-x-4">
-            <button
-              className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/80 transition-colors"
-              onClick={() => disconnect()}
-            >
-              {truncateWallet(walletAddress)}
-            </button>
-
-            <button
-              className="md:hidden"
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
+                </Link>
+              </>
+            ) : (
+              <Link
+                href="/connect"
+                className="ml-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+              >
+                Connect Wallet
+              </Link>
+            )}
           </div>
         </div>
-
-        {/* Mobile Menu */}
-        {isMenuOpen && (
-          <div className="md:hidden mt-4 pb-4">
-            <nav className="flex flex-col space-y-4">
-              <Link href="/">
-                <a className="text-dark hover:text-primary">Home</a>
-              </Link>
-              <Link href="/explore">
-                <a className="text-dark hover:text-primary">Explore</a>
-              </Link>
-              <Link href="/notifications">
-                <a className="text-dark hover:text-primary relative">
-                  Notifications
-                  {notifications.unreadCount > 0 && (
-                    <span className="ml-2 bg-primary text-white text-xs rounded-full px-2 py-0.5">
-                      {notifications.unreadCount > 9 ? '9+' : notifications.unreadCount}
-                    </span>
-                  )}
-                </a>
-              </Link>
-              <Link href="/profile">
-                <a className="text-dark hover:text-primary">Profile</a>
-              </Link>
-            </nav>
-          </div>
-        )}
       </div>
+
+      {/* Mobile Menu */}
+      {isOpen && (
+        <div className="md:hidden">
+          <div className="pt-2 pb-3 space-y-1">
+            <Link 
+              href="/" 
+              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+              onClick={() => setIsOpen(false)}
+            >
+              Home
+            </Link>
+            <Link 
+              href="/explore"
+              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+              onClick={() => setIsOpen(false)}
+            >
+              Explore
+            </Link>
+            <Link 
+              href="/notifications"
+              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+              onClick={() => setIsOpen(false)}
+            >
+              Notifications
+            </Link>
+            <Link 
+              href="/profile"
+              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+              onClick={() => setIsOpen(false)}
+            >
+              Profile
+            </Link>
+            <Link 
+              href="/settings"
+              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+              onClick={() => setIsOpen(false)}
+            >
+              Settings
+            </Link>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

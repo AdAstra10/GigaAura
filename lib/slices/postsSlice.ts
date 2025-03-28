@@ -1,5 +1,11 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { v4 as uuidv4 } from 'uuid';
+import { 
+  cacheFeed, 
+  cacheUserPosts, 
+  getCachedFeed, 
+  getCachedUserPosts 
+} from '../../services/cache';
 
 export interface Post {
   id: string;
@@ -52,9 +58,13 @@ export const postsSlice = createSlice({
   reducers: {
     setFeed: (state, action: PayloadAction<Post[]>) => {
       state.feed = action.payload;
+      // Cache the feed when it's updated
+      cacheFeed(action.payload);
     },
     setUserPosts: (state, action: PayloadAction<Post[]>) => {
       state.userPosts = action.payload;
+      // Cache user posts when they're updated
+      cacheUserPosts(action.payload);
     },
     addPost: (state, action: PayloadAction<Omit<Post, 'id' | 'createdAt' | 'likes' | 'comments' | 'shares' | 'likedBy'>>) => {
       const newPost: Post = {
@@ -68,6 +78,10 @@ export const postsSlice = createSlice({
       };
       state.feed = [newPost, ...state.feed];
       state.userPosts = [newPost, ...state.userPosts];
+      
+      // Cache updated lists
+      cacheFeed(state.feed);
+      cacheUserPosts(state.userPosts);
     },
     likePost: (state, action: PayloadAction<{ postId: string; walletAddress: string }>) => {
       const { postId, walletAddress } = action.payload;
@@ -89,6 +103,10 @@ export const postsSlice = createSlice({
       if (state.currentPost && state.currentPost.id === postId) {
         state.currentPost = updatePost({ ...state.currentPost });
       }
+      
+      // Cache updated lists
+      cacheFeed(state.feed);
+      cacheUserPosts(state.userPosts);
     },
     unlikePost: (state, action: PayloadAction<{ postId: string; walletAddress: string }>) => {
       const { postId, walletAddress } = action.payload;
@@ -110,6 +128,10 @@ export const postsSlice = createSlice({
       if (state.currentPost && state.currentPost.id === postId) {
         state.currentPost = updatePost({ ...state.currentPost });
       }
+      
+      // Cache updated lists
+      cacheFeed(state.feed);
+      cacheUserPosts(state.userPosts);
     },
     setCurrentPost: (state, action: PayloadAction<Post>) => {
       state.currentPost = action.payload;
@@ -140,12 +162,29 @@ export const postsSlice = createSlice({
       if (state.currentPost && state.currentPost.id === newComment.postId) {
         state.currentPost = updatePost({ ...state.currentPost });
       }
+      
+      // Cache updated lists
+      cacheFeed(state.feed);
+      cacheUserPosts(state.userPosts);
     },
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.loading = action.payload;
     },
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
+    },
+    // New action to load data from cache
+    loadFromCache: (state) => {
+      const cachedFeed = getCachedFeed();
+      const cachedUserPosts = getCachedUserPosts();
+      
+      if (cachedFeed) {
+        state.feed = cachedFeed;
+      }
+      
+      if (cachedUserPosts) {
+        state.userPosts = cachedUserPosts;
+      }
     },
   },
 });
@@ -161,6 +200,7 @@ export const {
   addComment,
   setLoading,
   setError,
+  loadFromCache,
 } = postsSlice.actions;
 
 export default postsSlice.reducer; 

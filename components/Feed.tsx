@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '@lib/store';
-import { setFeed, addPost, Post } from '@lib/slices/postsSlice';
+import { setFeed, addPost, Post, loadFromCache } from '@lib/slices/postsSlice';
 import { addTransaction } from '@lib/slices/auraPointsSlice';
 import PostCard from './PostCard';
 import CreatePostForm from './CreatePostForm';
@@ -13,8 +13,18 @@ const Feed = () => {
   const { walletAddress } = useSelector((state: RootState) => state.user);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
-  // Simulate loading initial feed data
+  // Try to load feed from cache first, then fetch if needed
   useEffect(() => {
+    // First attempt to load from cache
+    dispatch(loadFromCache());
+    
+    // Check if we have data from cache
+    if (feed.length > 0) {
+      setIsInitialLoading(false);
+      return;
+    }
+    
+    // If no cached data, load mock data
     const timer = setTimeout(() => {
       // Mock data for initial posts
       const mockPosts: Post[] = [
@@ -63,7 +73,7 @@ const Feed = () => {
     }, 1500);
     
     return () => clearTimeout(timer);
-  }, [dispatch]);
+  }, [dispatch, feed.length]);
 
   const handleCreatePost = (content: string, mediaUrl?: string, mediaType?: 'image' | 'video') => {
     if (!walletAddress) return;
