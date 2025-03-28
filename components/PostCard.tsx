@@ -73,8 +73,8 @@ const PostCard: React.FC<PostCardProps> = ({ post }) => {
   return (
     <div className="bg-white rounded-lg shadow p-4">
       <div className="flex space-x-3">
-        <Link href={`/profile/${post.authorWallet}`}>
-          <a className="flex-shrink-0">
+        <div className="flex-shrink-0">
+          <Link href={`/profile/${post.authorWallet}`}>
             {post.authorAvatar ? (
               <div className="w-10 h-10 rounded-full overflow-hidden relative">
                 <Image 
@@ -89,13 +89,15 @@ const PostCard: React.FC<PostCardProps> = ({ post }) => {
                 <span className="text-gray-500 text-sm">{post.authorWallet.substring(0, 2)}</span>
               </div>
             )}
-          </a>
-        </Link>
+          </Link>
+        </div>
         
         <div className="flex-1">
           <div className="flex items-center space-x-2">
-            <Link href={`/profile/${post.authorWallet}`} className="font-medium text-dark hover:text-primary">
-              {post.authorUsername || post.authorWallet}
+            <Link href={`/profile/${post.authorWallet}`}>
+              <span className="font-medium text-dark hover:text-primary cursor-pointer">
+                {post.authorUsername || post.authorWallet}
+              </span>
             </Link>
             <span className="text-xs text-gray-500">{formatDate(post.createdAt)}</span>
           </div>
