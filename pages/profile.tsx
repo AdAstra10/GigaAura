@@ -1,17 +1,17 @@
 import { useState, useEffect, ChangeEvent } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { RootState } from '@lib/store';
-import { updateProfile } from '@lib/slices/userSlice';
-import { useWallet } from '@contexts/WalletContext';
+import { RootState } from '../lib/store';
+import { updateProfile } from '../lib/slices/userSlice';
+import { useWallet } from '../contexts/WalletContext';
 import Head from 'next/head';
-import Header from '@components/Header';
-import Sidebar from '@components/Sidebar';
-import AuraSidebar from '@components/AuraSidebar';
-import { Post } from '@lib/slices/postsSlice';
+import Header from '../components/Header';
+import Sidebar from '../components/Sidebar';
+import AuraSidebar from '../components/AuraSidebar';
+import { Post } from '../lib/slices/postsSlice';
 
 const ProfilePage = () => {
   const dispatch = useDispatch();
-  const { walletAddress } = useWallet();
+  const { walletAddress, connect, isConnecting } = useWallet();
   const user = useSelector((state: RootState) => state.user);
   const { userPosts } = useSelector((state: RootState) => state.posts);
   const { totalPoints } = useSelector((state: RootState) => state.auraPoints);
@@ -55,11 +55,47 @@ const ProfilePage = () => {
     return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
   };
   
+  const handleConnectWallet = async () => {
+    try {
+      await connect();
+    } catch (error) {
+      console.error('Error connecting wallet:', error);
+    }
+  };
+  
   if (!walletAddress) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p>Please connect your wallet to view your profile.</p>
-      </div>
+      <>
+        <Head>
+          <title>Profile | GigaAura</title>
+          <meta name="description" content="Your GigaAura profile" />
+        </Head>
+        
+        <div className="min-h-screen bg-light">
+          <Header />
+          
+          <main className="container mx-auto px-4 py-6">
+            <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-8 text-center">
+              <h2 className="text-2xl font-bold mb-4">Connect Your Wallet</h2>
+              <p className="text-gray-600 mb-6">
+                Please connect your wallet to view your profile and start earning Aura Points.
+              </p>
+              
+              <button
+                onClick={handleConnectWallet}
+                disabled={isConnecting}
+                className="px-6 py-3 bg-primary text-white font-medium rounded-full shadow-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors w-full"
+              >
+                {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+              </button>
+              
+              <p className="mt-4 text-sm text-gray-500">
+                Don't have a Phantom wallet? <a href="https://phantom.app/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Get one here</a>
+              </p>
+            </div>
+          </main>
+        </div>
+      </>
     );
   }
   
