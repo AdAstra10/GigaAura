@@ -12,9 +12,11 @@ module.exports = {
         secondary: '#60C5D1',
         accent: '#F6B73C',
         dark: '#1A1A2E',
-        light: '#F5F5F7',
+        light: '#FFFFFF',
         error: '#FF3333',
         success: '#33CC66',
+        sunHover: '#FFD700',
+        moonHover: '#2C89B7',
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],

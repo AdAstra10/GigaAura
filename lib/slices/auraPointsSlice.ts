@@ -2,10 +2,10 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 export interface AuraTransaction {
   id: string;
-  walletAddress: string;
-  action: 'post_created' | 'like_received' | 'comment_made' | 'comment_received' | 'follower_gained' | 'post_shared' | 'follow_given';
   points: number;
   timestamp: string;
+  action: 'post_created' | 'like_received' | 'comment_made' | 'comment_received' | 'follower_gained' | 'post_shared' | 'follow_given';
+  walletAddress: string;
   metadata?: {
     postId?: string;
     commentId?: string;
@@ -39,9 +39,10 @@ export const auraPointsSlice = createSlice({
     },
     setTransactions: (state, action: PayloadAction<AuraTransaction[]>) => {
       state.transactions = action.payload;
+      state.totalPoints = action.payload.reduce((total, transaction) => total + transaction.points, 0);
     },
     addTransaction: (state, action: PayloadAction<AuraTransaction>) => {
-      state.transactions = [action.payload, ...state.transactions];
+      state.transactions.push(action.payload);
       state.totalPoints += action.payload.points;
     },
     setLoading: (state, action: PayloadAction<boolean>) => {

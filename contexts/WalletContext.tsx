@@ -57,6 +57,15 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const [hasPhantomWallet, setHasPhantomWallet] = useState(false);
   const dispatch = useDispatch();
 
+  // Check for stored wallet connection on mount
+  useEffect(() => {
+    const storedWalletAddress = localStorage.getItem('walletAddress');
+    if (storedWalletAddress) {
+      setWalletAddr(storedWalletAddress);
+      dispatch(setWalletAddress(storedWalletAddress));
+    }
+  }, [dispatch]);
+
   // This runs only on client-side thanks to dynamic import with ssr: false
   useEffect(() => {
     // Check if phantom is available
@@ -72,6 +81,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
           const address = solanaProvider.publicKey.toString();
           setWalletAddr(address);
           dispatch(setWalletAddress(address));
+          localStorage.setItem('walletAddress', address);
         }
       }
     };
@@ -87,6 +97,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
             if (address) {
               setWalletAddr(address);
               dispatch(setWalletAddress(address));
+              localStorage.setItem('walletAddress', address);
             }
           }
         });
@@ -94,6 +105,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         (window as WindowWithSolana).solana?.on('disconnect', () => {
           setWalletAddr(null);
           dispatch(logout());
+          localStorage.removeItem('walletAddress');
         });
       } catch (err) {
         console.error('Failed to set wallet event listeners', err);
@@ -121,6 +133,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       
       setWalletAddr(address);
       dispatch(setWalletAddress(address));
+      localStorage.setItem('walletAddress', address);
       
       return address;
     } catch (error) {
@@ -142,6 +155,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         await solanaProvider.disconnect();
         setWalletAddr(null);
         dispatch(logout());
+        localStorage.removeItem('walletAddress');
       }
     } catch (error) {
       console.error("Failed to disconnect wallet", error);

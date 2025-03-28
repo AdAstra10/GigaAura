@@ -2,16 +2,18 @@ import { useState, useEffect } from 'react';
 import { FaSun, FaMoon, FaBell, FaEnvelope } from 'react-icons/fa';
 import { useSelector } from 'react-redux';
 import Link from 'next/link';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useWallet } from '../contexts/WalletContext';
 import { RootState } from '../lib/store';
 import { useDarkMode } from '../contexts/DarkModeContext';
 
 const Header = () => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
-  const { connect, disconnect, connected, publicKey } = useWallet();
+  const { connect, disconnect, isConnected, walletAddress } = useWallet();
   const user = useSelector((state: RootState) => state.user);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isSunHovered, setIsSunHovered] = useState(false);
+  const [isMoonHovered, setIsMoonHovered] = useState(false);
 
   useEffect(() => {
     const checkIfMobile = () => {
@@ -64,23 +66,28 @@ const Header = () => {
             <button
               onClick={toggleDarkMode}
               className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
+              onMouseEnter={() => isDarkMode ? setIsSunHovered(true) : setIsMoonHovered(true)}
+              onMouseLeave={() => {setIsSunHovered(false); setIsMoonHovered(false)}}
             >
-              {isDarkMode ? <FaSun /> : <FaMoon />}
+              {isDarkMode ? 
+                <FaSun className={isSunHovered ? "text-sunHover" : ""} /> : 
+                <FaMoon className={isMoonHovered ? "text-moonHover" : ""} />
+              }
             </button>
             
-            {connected ? (
+            {isConnected ? (
               <div className="flex items-center">
                 <Link href="/profile">
                   <div className="flex items-center cursor-pointer">
                     <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
-                      {user.username || publicKey?.toString().substring(0, 4) + '...' + publicKey?.toString().substring(publicKey.toString().length - 4)}
+                      {user.username || walletAddress?.substring(0, 4) + '...' + walletAddress?.substring(walletAddress.length - 4)}
                     </div>
                     <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                       {user.avatar ? (
                         <img src={user.avatar} alt={user.username || 'User'} className="w-8 h-8 rounded-full" />
                       ) : (
                         <span className="text-gray-500 dark:text-gray-300 text-sm">
-                          {(user.username && user.username.charAt(0)) || (publicKey && publicKey.toString().substring(0, 2))}
+                          {(user.username && user.username.charAt(0)) || (walletAddress && walletAddress.substring(0, 2))}
                         </span>
                       )}
                     </div>
@@ -118,8 +125,13 @@ const Header = () => {
               <button
                 onClick={toggleDarkMode}
                 className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
+                onMouseEnter={() => isDarkMode ? setIsSunHovered(true) : setIsMoonHovered(true)}
+                onMouseLeave={() => {setIsSunHovered(false); setIsMoonHovered(false)}}
               >
-                {isDarkMode ? <FaSun /> : <FaMoon />}
+                {isDarkMode ? 
+                  <FaSun className={isSunHovered ? "text-sunHover" : ""} /> : 
+                  <FaMoon className={isMoonHovered ? "text-moonHover" : ""} />
+                }
               </button>
               <Link href="/notifications">
                 <div className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-gray-600 dark:text-gray-300">
@@ -132,7 +144,7 @@ const Header = () => {
                 </div>
               </Link>
             </div>
-            {connected ? (
+            {isConnected ? (
               <div className="flex items-center p-2">
                 <Link href="/profile">
                   <div className="flex items-center cursor-pointer">
@@ -141,12 +153,12 @@ const Header = () => {
                         <img src={user.avatar} alt={user.username || 'User'} className="w-8 h-8 rounded-full" />
                       ) : (
                         <span className="text-gray-500 dark:text-gray-300 text-sm">
-                          {(user.username && user.username.charAt(0)) || (publicKey && publicKey.toString().substring(0, 2))}
+                          {(user.username && user.username.charAt(0)) || (walletAddress && walletAddress.substring(0, 2))}
                         </span>
                       )}
                     </div>
                     <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {user.username || publicKey?.toString().substring(0, 4) + '...' + publicKey?.toString().substring(publicKey.toString().length - 4)}
+                      {user.username || walletAddress?.substring(0, 4) + '...' + walletAddress?.substring(walletAddress.length - 4)}
                     </div>
                   </div>
                 </Link>

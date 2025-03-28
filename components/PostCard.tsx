@@ -8,6 +8,9 @@ import { addNotification } from '../lib/slices/notificationsSlice';
 import { useWallet } from '../contexts/WalletContext';
 import { useRouter } from 'next/router';
 import { v4 as uuidv4 } from 'uuid';
+import toast from 'react-hot-toast';
+import { formatDistance } from 'date-fns';
+import { followUser, unfollowUser } from '../lib/slices/userSlice';
 
 interface PostCardProps {
   post: Post;
@@ -29,7 +32,11 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { following } = useSelector((state: RootState) => state.user);
   
+  // Check if the current user is following the post author
+  const isFollowing = following.includes(post.authorWallet);
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -173,6 +180,62 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
     return post.authorWallet === walletAddress ? totalPoints : Math.floor(Math.random() * 1000);
   };
   
+  const handleFollowToggle = () => {
+    if (!walletAddress) {
+      toast.error('Please connect your wallet to follow users');
+      return;
+    }
+    
+    if (post.authorWallet === walletAddress) {
+      toast.error('You cannot follow yourself');
+      return;
+    }
+    
+    if (!isFollowing) {
+      // Follow the user
+      dispatch(followUser(post.authorWallet));
+      
+      // Add Aura Points for following
+      dispatch(
+        addTransaction({
+          id: uuidv4(),
+          points: 10,
+          timestamp: new Date().toISOString(),
+          action: 'follow_given',
+          walletAddress: walletAddress,
+          metadata: {
+            followerWallet: post.authorWallet
+          }
+        })
+      );
+      
+      // Add Aura Points for being followed
+      dispatch(
+        addTransaction({
+          id: uuidv4(),
+          points: 10,
+          timestamp: new Date().toISOString(),
+          action: 'follower_gained',
+          walletAddress: post.authorWallet,
+          metadata: {
+            followerWallet: walletAddress
+          }
+        })
+      );
+      
+      toast.success(`You are now following ${post.authorUsername || post.authorWallet.substring(0, 6)}! +10 Aura Points`);
+    } else {
+      // Unfollow the user
+      dispatch(unfollowUser(post.authorWallet));
+      toast.success(`You unfollowed ${post.authorUsername || post.authorWallet.substring(0, 6)}`);
+    }
+    
+    // Call the onFollow callback if provided (for Feed component updates)
+    if (onFollow) {
+      onFollow();
+    }
+  };
+
   return (
     <div className="border-b border-gray-200 dark:border-gray-700 py-4">
       <div className="flex space-x-3">
@@ -268,13 +331,15 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
             
             {post.authorWallet !== walletAddress && (
               <button 
-                onClick={onFollow}
-                className="flex items-center space-x-1 text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary"
+                onClick={handleFollowToggle}
+                className={`flex items-center space-x-1 ${isFollowing ? 'text-primary' : 'text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary'}`}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={isFollowing ? 
+                    "M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6z" : 
+                    "M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"} />
                 </svg>
-                <span>Follow</span>
+                <span>{isFollowing ? 'Following' : 'Follow'}</span>
               </button>
             )}
           </div>
@@ -323,7 +388,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
                           </div>
                         </Link>
                         <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatDate(comment.createdAt)}
+                          {formatDistance(new Date(comment.createdAt), new Date(), { addSuffix: true })}
                         </span>
                       </div>
                       <p className="text-sm text-gray-700 dark:text-gray-300">{comment.content}</p>
