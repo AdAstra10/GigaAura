@@ -119,7 +119,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+    <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
       <form onSubmit={handleSubmit}>
         <div className="flex space-x-3">
           <div className="flex-shrink-0">
@@ -136,7 +136,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
           
           <div className="flex-1">
             <div 
-              className={`w-full p-3 border ${isDragging ? 'border-primary border-dashed bg-primary/10' : 'border-gray-200 dark:border-gray-600'} rounded-lg focus-within:border-primary focus-within:ring-2 focus-within:ring-primary transition`}
+              className={`w-full p-3 border ${isDragging ? 'border-primary border-dashed bg-primary/10' : 'border-gray-200 dark:border-gray-600'} rounded-lg focus-within:border-primary transition`}
               onDragEnter={handleDragEnter}
               onDragLeave={handleDragLeave}
               onDragOver={handleDragOver}
@@ -155,7 +155,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
                 <div className="mt-2 relative">
                   {mediaFile?.type.includes('image') ? (
                     <div className="relative rounded-lg overflow-hidden">
-                      <img src={previewUrl} alt="Media preview" className="max-h-64 w-auto mx-auto rounded" />
+                      <img src={previewUrl} alt="Media preview" className="max-h-64 w-auto mx-auto rounded-lg" />
                       <button 
                         type="button" 
                         className="absolute top-2 right-2 bg-black bg-opacity-50 text-white rounded-full p-1 hover:bg-opacity-70"
@@ -168,7 +168,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
                     </div>
                   ) : (
                     <div className="relative rounded-lg overflow-hidden">
-                      <video src={previewUrl} controls className="max-h-64 w-auto mx-auto rounded"></video>
+                      <video src={previewUrl} controls className="max-h-64 w-auto mx-auto rounded-lg"></video>
                       <button 
                         type="button" 
                         className="absolute top-2 right-2 bg-black bg-opacity-50 text-white rounded-full p-1 hover:bg-opacity-70"

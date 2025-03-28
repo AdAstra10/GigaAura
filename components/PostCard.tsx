@@ -12,9 +12,11 @@ import { v4 as uuidv4 } from 'uuid';
 interface PostCardProps {
   post: Post;
   comments?: Comment[];
+  onShare?: () => void;
+  onFollow?: () => void;
 }
 
-const PostCard: React.FC<PostCardProps> = ({ post, comments = [] }) => {
+const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFollow }) => {
   const dispatch = useDispatch();
   const router = useRouter();
   const { connect, isConnected } = useWallet();
@@ -172,7 +174,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [] }) => {
   };
   
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+    <div className="border-b border-gray-200 dark:border-gray-700 py-4">
       <div className="flex space-x-3">
         <div className="flex-shrink-0">
           <Link href={`/profile/${post.authorWallet}`}>
@@ -215,13 +217,13 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [] }) => {
                 <img 
                   src={post.mediaUrl} 
                   alt="Post media"
-                  className="w-full h-auto rounded"
+                  className="w-full h-auto rounded-lg"
                 />
               ) : post.mediaType === 'video' ? (
                 <video 
                   src={post.mediaUrl} 
                   controls 
-                  className="w-full rounded"
+                  className="w-full rounded-lg"
                 />
               ) : null}
             </div>
@@ -254,18 +256,33 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [] }) => {
               <span>{post.comments}</span>
             </button>
             
-            <button className="flex items-center space-x-1 text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary">
+            <button 
+              onClick={onShare}
+              className="flex items-center space-x-1 text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary"
+            >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
               </svg>
               <span>{post.shares}</span>
             </button>
+            
+            {post.authorWallet !== walletAddress && (
+              <button 
+                onClick={onFollow}
+                className="flex items-center space-x-1 text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
+                <span>Follow</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
       
       {showComments && (
-        <div className="mt-4 pt-4 border-t dark:border-gray-700">
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
           <form onSubmit={handleSubmitComment} className="mb-4 flex">
             <input
               type="text"
@@ -283,7 +300,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [] }) => {
               {isSubmitting ? 'Posting...' : 'Post'}
             </button>
           </form>
-          
+
           <div className="space-y-4">
             {comments.length > 0 ? (
               comments.map((comment) => (
@@ -297,7 +314,6 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [] }) => {
                       </div>
                     </Link>
                   </div>
-                  
                   <div className="flex-1">
                     <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
                       <div className="flex items-center space-x-1 mb-1">
