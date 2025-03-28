@@ -1,20 +1,20 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useDispatch } from 'react-redux';
-import { setWalletAddress, logout } from '@lib/slices/userSlice';
+import { setWalletAddress, logout } from '../lib/slices/userSlice';
 
-type PhantomEvent = 'connect' | 'disconnect';
-
+// Basic interface for the phantom wallet provider
 interface PhantomProvider {
   connect: () => Promise<{ publicKey: { toString: () => string } }>;
   disconnect: () => Promise<void>;
-  on: (event: PhantomEvent, callback: () => void) => void;
-  isPhantom: boolean;
+  on: (event: string, callback: () => void) => void;
+  isPhantom?: boolean;
   publicKey?: { toString: () => string };
 }
 
-type WindowWithSolana = Window & { 
+// Type for window with solana property
+interface WindowWithSolana extends Window {
   solana?: PhantomProvider;
-};
+}
 
 interface WalletContextProps {
   connect: () => Promise<string | null>;
@@ -25,6 +25,7 @@ interface WalletContextProps {
   hasPhantomWallet: boolean;
 }
 
+// Default context values
 const WalletContext = createContext<WalletContextProps>({
   connect: async () => null,
   disconnect: async () => {},
@@ -34,122 +35,120 @@ const WalletContext = createContext<WalletContextProps>({
   hasPhantomWallet: false,
 });
 
+// Hook for using the wallet context
 export const useWallet = () => useContext(WalletContext);
 
-export const WalletProvider = ({ children }: { children: ReactNode }) => {
+interface WalletProviderProps {
+  children: ReactNode;
+}
+
+export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const [walletAddress, setWalletAddr] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [hasPhantomWallet, setHasPhantomWallet] = useState(false);
   const dispatch = useDispatch();
 
-  // Simple function to get Phantom provider - no fancy handling that might conflict
-  const getPhantomProvider = (): PhantomProvider | null => {
-    if (typeof window === 'undefined') return null;
-    
-    try {
-      // Access the solana property directly
-      const solana = (window as WindowWithSolana).solana;
-      if (solana?.isPhantom) {
-        return solana;
-      }
-      return null;
-    } catch (error) {
-      console.error('Error detecting Phantom wallet:', error);
-      return null;
-    }
-  };
-
-  // Check for Phantom wallet availability
+  // This runs only on client-side thanks to dynamic import with ssr: false
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    // Detect if Phantom wallet is available
+    // Check if phantom is available
     const checkForPhantom = () => {
-      const provider = getPhantomProvider();
-      if (provider) {
-        setHasPhantomWallet(true);
+      if (typeof window !== 'undefined') {
+        const solanaProvider = (window as WindowWithSolana).solana;
+        const isPhantomInstalled = solanaProvider?.isPhantom;
         
-        // Handle wallet events
-        const handleConnect = () => {
-          if (provider.publicKey) {
-            const addr = provider.publicKey.toString();
-            setWalletAddr(addr);
-            dispatch(setWalletAddress(addr));
-          }
-        };
+        setHasPhantomWallet(!!isPhantomInstalled);
         
-        const handleDisconnect = () => {
-          setWalletAddr(null);
-          dispatch(logout());
-        };
-        
-        // Set up event listeners
-        provider.on('connect', handleConnect);
-        provider.on('disconnect', handleDisconnect);
-        
-        // Check for existing connection
-        if (provider.publicKey) {
-          handleConnect();
+        // If phantom is installed and already connected, set address
+        if (isPhantomInstalled && solanaProvider?.publicKey) {
+          const address = solanaProvider.publicKey.toString();
+          setWalletAddr(address);
+          dispatch(setWalletAddress(address));
         }
       }
     };
     
-    // Check for Phantom immediately, then check again after a delay
     checkForPhantom();
-    const checkAgainTimeout = setTimeout(checkForPhantom, 1000);
     
-    return () => clearTimeout(checkAgainTimeout);
+    // Set event listeners
+    if (typeof window !== 'undefined' && (window as WindowWithSolana).solana?.on) {
+      try {
+        (window as WindowWithSolana).solana?.on('connect', () => {
+          if ((window as WindowWithSolana).solana?.publicKey) {
+            const address = (window as WindowWithSolana).solana?.publicKey?.toString() || null;
+            if (address) {
+              setWalletAddr(address);
+              dispatch(setWalletAddress(address));
+            }
+          }
+        });
+        
+        (window as WindowWithSolana).solana?.on('disconnect', () => {
+          setWalletAddr(null);
+          dispatch(logout());
+        });
+      } catch (err) {
+        console.error('Failed to set wallet event listeners', err);
+      }
+    }
   }, [dispatch]);
 
-  // Connect to wallet
+  // Connect wallet function
   const connect = async (): Promise<string | null> => {
     try {
       setIsConnecting(true);
-      const provider = getPhantomProvider();
       
-      if (!provider) {
-        throw new Error("Phantom wallet not found! Please install it.");
+      if (typeof window === 'undefined') return null;
+      
+      const solanaProvider = (window as WindowWithSolana).solana;
+      
+      if (!solanaProvider?.isPhantom) {
+        alert("Phantom wallet not installed. Please install it from phantom.app");
+        return null;
       }
       
-      const response = await provider.connect();
-      const addr = response.publicKey.toString();
+      const response = await solanaProvider.connect();
+      const address = response.publicKey.toString();
       
-      setWalletAddr(addr);
-      dispatch(setWalletAddress(addr));
+      setWalletAddr(address);
+      dispatch(setWalletAddress(address));
       
-      return addr;
+      return address;
     } catch (error) {
-      console.error("Error connecting to Phantom wallet:", error);
+      console.error("Failed to connect wallet", error);
       return null;
     } finally {
       setIsConnecting(false);
     }
   };
 
-  // Disconnect from wallet
+  // Disconnect wallet function  
   const disconnect = async (): Promise<void> => {
     try {
-      const provider = getPhantomProvider();
+      if (typeof window === 'undefined') return;
       
-      if (provider) {
-        await provider.disconnect();
+      const solanaProvider = (window as WindowWithSolana).solana;
+      
+      if (solanaProvider) {
+        await solanaProvider.disconnect();
         setWalletAddr(null);
         dispatch(logout());
       }
     } catch (error) {
-      console.error("Error disconnecting from Phantom wallet:", error);
+      console.error("Failed to disconnect wallet", error);
     }
   };
 
   return (
-    <WalletContext.Provider value={{
-      connect,
-      disconnect,
-      walletAddress,
-      isConnecting,
-      isConnected: !!walletAddress,
-      hasPhantomWallet,
-    }}>
+    <WalletContext.Provider
+      value={{
+        connect,
+        disconnect,
+        walletAddress,
+        isConnecting,
+        isConnected: !!walletAddress,
+        hasPhantomWallet,
+      }}
+    >
       {children}
     </WalletContext.Provider>
   );

@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useSelector } from 'react-redux';
-import { RootState } from '@lib/store';
+import { RootState } from '../lib/store';
 import Link from 'next/link';
 import Image from 'next/image';
 import router from 'next/router';
 import { Bell, Search, Menu, X } from 'lucide-react';
-import { useWallet } from '@contexts/WalletContext';
+import { useWallet } from '../contexts/WalletContext';
 
 const Header = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -44,8 +44,8 @@ const Header = () => {
             </button>
             
             {/* Logo */}
-            <Link href="/" className="flex items-center">
-              <div className="flex-shrink-0 flex items-center">
+            <Link href="/">
+              <div className="flex-shrink-0 flex items-center cursor-pointer">
                 <Image 
                   src="/images/GigaAuraLandscapeLogo.png" 
                   alt="GigaAura" 
@@ -80,21 +80,22 @@ const Header = () => {
           <div className="flex items-center">
             {isAuthenticated ? (
               <>
-                <Link href="/notifications" className="p-2 text-gray-400 hover:text-primary">
-                  <span className="sr-only">Notifications</span>
-                  <Bell size={20} />
+                <Link href="/notifications">
+                  <div className="p-2 text-gray-400 hover:text-primary cursor-pointer">
+                    <span className="sr-only">Notifications</span>
+                    <Bell size={20} />
+                  </div>
                 </Link>
                 
-                <Link 
-                  href="/profile" 
-                  className="ml-4 flex items-center"
-                >
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-white font-medium">
-                    {username?.charAt(0) || walletAddress?.charAt(0) || '?'}
+                <Link href="/profile">
+                  <div className="ml-4 flex items-center cursor-pointer">
+                    <div className="h-8 w-8 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-white font-medium">
+                      {username?.charAt(0) || walletAddress?.charAt(0) || '?'}
+                    </div>
+                    <span className="ml-2 text-sm font-medium text-gray-700 hidden md:block">
+                      {username || walletAddress?.substring(0, 6) + '...' + walletAddress?.slice(-4)}
+                    </span>
                   </div>
-                  <span className="ml-2 text-sm font-medium text-gray-700 hidden md:block">
-                    {username || walletAddress?.substring(0, 6) + '...' + walletAddress?.slice(-4)}
-                  </span>
                 </Link>
               </>
             ) : (
@@ -113,40 +114,45 @@ const Header = () => {
       {isOpen && (
         <div className="md:hidden">
           <div className="pt-2 pb-3 space-y-1">
-            <Link 
-              href="/" 
-              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
-              onClick={() => setIsOpen(false)}
-            >
-              Home
+            <Link href="/">
+              <div 
+                className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 cursor-pointer"
+                onClick={() => setIsOpen(false)}
+              >
+                Home
+              </div>
             </Link>
-            <Link 
-              href="/explore"
-              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
-              onClick={() => setIsOpen(false)}
-            >
-              Explore
+            <Link href="/explore">
+              <div
+                className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 cursor-pointer"
+                onClick={() => setIsOpen(false)}
+              >
+                Explore
+              </div>
             </Link>
-            <Link 
-              href="/notifications"
-              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
-              onClick={() => setIsOpen(false)}
-            >
-              Notifications
+            <Link href="/notifications">
+              <div
+                className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 cursor-pointer"
+                onClick={() => setIsOpen(false)}
+              >
+                Notifications
+              </div>
             </Link>
-            <Link 
-              href="/profile"
-              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
-              onClick={() => setIsOpen(false)}
-            >
-              Profile
+            <Link href="/profile">
+              <div
+                className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 cursor-pointer"
+                onClick={() => setIsOpen(false)}
+              >
+                Profile
+              </div>
             </Link>
-            <Link 
-              href="/settings"
-              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
-              onClick={() => setIsOpen(false)}
-            >
-              Settings
+            <Link href="/settings">
+              <div
+                className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 cursor-pointer"
+                onClick={() => setIsOpen(false)}
+              >
+                Settings
+              </div>
             </Link>
           </div>
         </div>

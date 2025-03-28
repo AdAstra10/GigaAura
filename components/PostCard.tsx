@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
-import { RootState } from '@lib/store';
-import { Post, likePost, unlikePost } from '@lib/slices/postsSlice';
-import { addTransaction } from '@lib/slices/auraPointsSlice';
-import { addNotification } from '@lib/slices/notificationsSlice';
+import { RootState } from '../lib/store';
+import { Post, likePost, unlikePost } from '../lib/slices/postsSlice';
+import { addTransaction } from '../lib/slices/auraPointsSlice';
+import { addNotification } from '../lib/slices/notificationsSlice';
 import { v4 as uuidv4 } from 'uuid';
 
 interface PostCardProps {
@@ -74,28 +74,30 @@ const PostCard: React.FC<PostCardProps> = ({ post }) => {
       <div className="flex space-x-3">
         <div className="flex-shrink-0">
           <Link href={`/profile/${post.authorWallet}`}>
-            {post.authorAvatar ? (
-              <div className="w-10 h-10 rounded-full overflow-hidden relative">
-                <img
-                  src={post.authorAvatar} 
-                  alt={post.authorUsername || post.authorWallet}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                <span className="text-gray-500 text-sm">{post.authorWallet.substring(0, 2)}</span>
-              </div>
-            )}
+            <div className="cursor-pointer">
+              {post.authorAvatar ? (
+                <div className="w-10 h-10 rounded-full overflow-hidden relative">
+                  <img
+                    src={post.authorAvatar} 
+                    alt={post.authorUsername || post.authorWallet}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                  <span className="text-gray-500 text-sm">{post.authorWallet.substring(0, 2)}</span>
+                </div>
+              )}
+            </div>
           </Link>
         </div>
         
         <div className="flex-1">
           <div className="flex items-center space-x-2">
             <Link href={`/profile/${post.authorWallet}`}>
-              <span className="font-medium text-dark hover:text-primary cursor-pointer">
+              <div className="font-medium text-dark hover:text-primary cursor-pointer">
                 {post.authorUsername || post.authorWallet}
-              </span>
+              </div>
             </Link>
             <span className="text-xs text-gray-500">{formatDate(post.createdAt)}</span>
           </div>
