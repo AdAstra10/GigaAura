@@ -1,11 +1,11 @@
 import { useState, FormEvent, ChangeEvent, useRef, DragEvent } from 'react';
 import { useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
-import { Paperclip } from 'lucide-react';
+import { Paperclip, Image, Video, XCircle, Smile } from 'lucide-react';
 import { useWallet } from '../contexts/WalletContext';
 
 interface CreatePostFormProps {
-  onSubmit: (content: string, mediaFile?: File) => void;
+  onSubmit: (content: string, mediaFile?: File) => boolean;
 }
 
 const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
@@ -40,12 +40,14 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
     setIsLoading(true);
     
     try {
-      onSubmit(content, mediaFile || undefined);
+      const success = onSubmit(content, mediaFile || undefined);
       
-      // Clear form
-      setContent('');
-      setMediaFile(null);
-      setPreviewUrl(null);
+      if (success) {
+        // Clear form
+        setContent('');
+        setMediaFile(null);
+        setPreviewUrl(null);
+      }
     } catch (error) {
       console.error('Error creating post:', error);
     } finally {
@@ -119,9 +121,9 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
   };
 
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+    <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
       <form onSubmit={handleSubmit}>
-        <div className="flex space-x-3">
+        <div className="flex space-x-4">
           <div className="flex-shrink-0">
             {avatar ? (
               <div className="w-10 h-10 rounded-full overflow-hidden relative">
@@ -135,19 +137,13 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
           </div>
           
           <div className="flex-1">
-            <div 
-              className={`w-full p-3 border ${isDragging ? 'border-primary border-dashed bg-primary/10' : 'border-gray-200 dark:border-gray-600'} rounded-lg focus-within:border-primary transition`}
-              onDragEnter={handleDragEnter}
-              onDragLeave={handleDragLeave}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-            >
+            <div className="w-full">
               <textarea
-                className="w-full bg-transparent resize-none focus:outline-none dark:text-white"
+                className="w-full resize-none focus:outline-none dark:text-white dark:bg-transparent text-lg p-2 placeholder-gray-500"
                 placeholder="What's happening?"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                rows={3}
+                rows={2}
                 disabled={isLoading}
               ></textarea>
               
@@ -155,28 +151,24 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
                 <div className="mt-2 relative">
                   {mediaFile?.type.includes('image') ? (
                     <div className="relative rounded-lg overflow-hidden">
-                      <img src={previewUrl} alt="Media preview" className="max-h-64 w-auto mx-auto rounded-lg" />
+                      <img src={previewUrl} alt="Media preview" className="max-h-64 w-auto rounded-lg" />
                       <button 
                         type="button" 
                         className="absolute top-2 right-2 bg-black bg-opacity-50 text-white rounded-full p-1 hover:bg-opacity-70"
                         onClick={removeMedia}
                       >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        <XCircle size={20} />
                       </button>
                     </div>
                   ) : (
                     <div className="relative rounded-lg overflow-hidden">
-                      <video src={previewUrl} controls className="max-h-64 w-auto mx-auto rounded-lg"></video>
+                      <video src={previewUrl} controls className="max-h-64 w-auto rounded-lg"></video>
                       <button 
                         type="button" 
                         className="absolute top-2 right-2 bg-black bg-opacity-50 text-white rounded-full p-1 hover:bg-opacity-70"
                         onClick={removeMedia}
                       >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        <XCircle size={20} />
                       </button>
                     </div>
                   )}
@@ -184,14 +176,20 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
               )}
             </div>
             
-            <div className="mt-3 flex justify-between items-center">
-              <div className="flex items-center">
+            <div className="mt-3 flex items-center justify-between border-t dark:border-gray-700 pt-3">
+              <div className="flex items-center space-x-2">
                 <button 
                   type="button"
                   onClick={triggerFileInput} 
-                  className="text-primary hover:text-primary/80 p-2"
+                  className="text-primary hover:bg-primary/10 p-2 rounded-full"
                 >
-                  <Paperclip size={20} />
+                  <Image size={18} />
+                </button>
+                <button 
+                  type="button" 
+                  className="text-primary hover:bg-primary/10 p-2 rounded-full"
+                >
+                  <Smile size={18} />
                 </button>
                 <input
                   type="file"
@@ -200,12 +198,11 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
                   accept="image/*,video/*"
                   onChange={handleFileInputChange}
                 />
-                <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">Earn +50 Aura Points by posting</span>
               </div>
               
               <button
                 type="submit"
-                className="px-4 py-2 bg-primary text-white rounded-full hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-1.5 bg-primary text-white rounded-full hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                 disabled={(content.trim() === '' && !mediaFile) || isLoading}
               >
                 {isLoading ? 'Posting...' : 'Post'}

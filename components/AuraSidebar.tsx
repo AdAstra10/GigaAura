@@ -1,15 +1,62 @@
 import { useSelector } from 'react-redux';
+import { useEffect, useState, useRef } from 'react';
 import { RootState } from '../lib/store';
 
 const AuraSidebar = () => {
-  const { totalPoints } = useSelector((state: RootState) => state.auraPoints);
+  const { totalPoints, transactions } = useSelector((state: RootState) => state.auraPoints);
+  const [displayPoints, setDisplayPoints] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const previousPoints = useRef(0);
+  
+  // Effect to handle the animation of points changing
+  useEffect(() => {
+    if (totalPoints !== previousPoints.current) {
+      // Set flag for animation class
+      setIsAnimating(true);
+      
+      // Start counter animation
+      const difference = totalPoints - previousPoints.current;
+      const duration = 1500; // animation duration in ms
+      const frames = 30; // total animation frames
+      const increment = difference / frames;
+      let currentFrame = 0;
+      
+      const animateCounter = () => {
+        currentFrame++;
+        const progress = currentFrame / frames;
+        // Easing function for a more natural animation
+        const easedProgress = -Math.cos(progress * Math.PI) / 2 + 0.5;
+        const newValue = Math.round(previousPoints.current + difference * easedProgress);
+        
+        setDisplayPoints(newValue);
+        
+        if (currentFrame < frames) {
+          requestAnimationFrame(animateCounter);
+        } else {
+          // Ensure we end at the exact total
+          setDisplayPoints(totalPoints);
+          setIsAnimating(false);
+          previousPoints.current = totalPoints;
+        }
+      };
+      
+      // Start the animation
+      requestAnimationFrame(animateCounter);
+    } else if (displayPoints === 0 && totalPoints > 0) {
+      // Initial load - set without animation
+      setDisplayPoints(totalPoints);
+      previousPoints.current = totalPoints;
+    }
+  }, [totalPoints]);
   
   return (
     <div className="px-4">
       {/* Aura Points */}
       <div className="border border-gray-200 dark:border-gray-700 rounded-2xl p-4 mb-4">
         <h2 className="text-xl font-bold mb-3">Aura Points</h2>
-        <div className="text-2xl font-bold text-primary">{totalPoints}</div>
+        <div className={`text-2xl font-bold text-primary transition-all duration-300 ${isAnimating ? 'scale-110' : ''}`}>
+          {displayPoints.toLocaleString()}
+        </div>
       </div>
       
       {/* Gain Aura */}

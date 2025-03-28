@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { RootState } from '../lib/store';
 import { useDarkMode } from '../contexts/DarkModeContext';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 
 const Header = () => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
@@ -30,6 +29,14 @@ const Header = () => {
       window.removeEventListener('resize', checkIfMobile);
     };
   }, []);
+
+  const handleConnectWallet = async () => {
+    try {
+      await connect();
+    } catch (error) {
+      console.error('Error connecting wallet:', error);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-50 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
@@ -81,7 +88,12 @@ const Header = () => {
                 </Link>
               </div>
             ) : (
-              <WalletMultiButton className="!bg-primary hover:!bg-primary/90 !rounded-full !border-none text-white font-medium py-2 px-4 cursor-pointer" />
+              <button 
+                onClick={handleConnectWallet}
+                className="bg-primary hover:bg-primary/90 rounded-full border-none text-white font-medium py-2 px-4 cursor-pointer"
+              >
+                Connect Wallet
+              </button>
             )}
           </div>
 
@@ -141,7 +153,12 @@ const Header = () => {
               </div>
             ) : (
               <div className="p-2">
-                <WalletMultiButton className="!bg-primary hover:!bg-primary/90 !rounded-full !border-none text-white font-medium py-2 px-4 w-full" />
+                <button 
+                  onClick={handleConnectWallet}
+                  className="bg-primary hover:bg-primary/90 rounded-full border-none text-white font-medium py-2 px-4 w-full"
+                >
+                  Connect Wallet
+                </button>
               </div>
             )}
           </div>

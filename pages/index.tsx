@@ -3,14 +3,18 @@ import Head from 'next/head';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../lib/store';
 import { useWallet } from '../contexts/WalletContext';
-import { loadFromCache } from '../lib/slices/postsSlice';
+import { loadFromCache, addPost } from '../lib/slices/postsSlice';
+import { addTransaction } from '../lib/slices/auraPointsSlice';
 import Header from '../components/Header';
 import Feed from '../components/Feed';
 import Sidebar from '../components/Sidebar';
 import AuraSidebar from '../components/AuraSidebar';
+import CreatePostForm from '../components/CreatePostForm';
+import { v4 as uuidv4 } from 'uuid';
+import toast from 'react-hot-toast';
 
 export default function Home() {
-  const { isConnected } = useWallet();
+  const { isConnected, walletAddress: publicKey } = useWallet();
   const user = useSelector((state: RootState) => state.user);
   const [isLoading, setIsLoading] = useState(true);
   const dispatch = useDispatch();
@@ -26,6 +30,47 @@ export default function Home() {
     
     return () => clearTimeout(timer);
   }, [dispatch]);
+
+  // Handler for creating a new post
+  const handleCreatePost = (content: string, mediaFile?: File) => {
+    if (!isConnected || !publicKey) {
+      toast.error('Please connect your wallet to post');
+      return false;
+    }
+    
+    if (!content.trim() && !mediaFile) {
+      toast.error('Post cannot be empty');
+      return false;
+    }
+    
+    let mediaUrl: string | undefined;
+    let mediaType: 'image' | 'video' | undefined;
+    
+    if (mediaFile) {
+      if (mediaFile.type.startsWith('image/')) {
+        mediaType = 'image';
+        // In a real app, this would be an uploaded URL
+        mediaUrl = URL.createObjectURL(mediaFile);
+      } else if (mediaFile.type.startsWith('video/')) {
+        mediaType = 'video';
+        mediaUrl = URL.createObjectURL(mediaFile);
+      }
+    }
+    
+    // Add Aura Points for creating a post
+    dispatch(
+      addTransaction({
+        id: uuidv4(),
+        points: 50,
+        timestamp: new Date().toISOString(),
+        action: 'post_created',
+        walletAddress: publicKey.toString(),
+      })
+    );
+    
+    toast.success('Post created successfully! +50 Aura Points');
+    return true;
+  };
 
   if (isLoading) {
     return (
@@ -52,6 +97,11 @@ export default function Home() {
           </div>
           
           <div className="col-span-1 md:col-span-6">
+            {isConnected && publicKey && (
+              <div className="mb-4">
+                <CreatePostForm onSubmit={handleCreatePost} />
+              </div>
+            )}
             <Feed />
           </div>
           

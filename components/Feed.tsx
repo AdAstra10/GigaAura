@@ -5,7 +5,6 @@ import { setFeed, addPost, Post, addComment, setComments } from '../lib/slices/p
 import { useWallet } from '@solana/wallet-adapter-react';
 import { addTransaction } from '../lib/slices/auraPointsSlice';
 import PostCard from './PostCard';
-import CreatePostForm from './CreatePostForm';
 import toast from 'react-hot-toast';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -34,55 +33,6 @@ const Feed = () => {
       localStorage.setItem('cachedPosts', JSON.stringify(feed));
     }
   }, [feed]);
-  
-  const handleCreatePost = (content: string, mediaFile?: File) => {
-    if (!connected || !publicKey) {
-      toast.error('Please connect your wallet to post');
-      return false;
-    }
-    
-    if (!content.trim() && !mediaFile) {
-      toast.error('Post cannot be empty');
-      return false;
-    }
-    
-    let mediaUrl: string | undefined;
-    let mediaType: 'image' | 'video' | undefined;
-    
-    if (mediaFile) {
-      if (mediaFile.type.startsWith('image/')) {
-        mediaType = 'image';
-        // In a real app, this would be an uploaded URL
-        mediaUrl = URL.createObjectURL(mediaFile);
-      } else if (mediaFile.type.startsWith('video/')) {
-        mediaType = 'video';
-        mediaUrl = URL.createObjectURL(mediaFile);
-      }
-    }
-    
-    dispatch(addPost({
-      content,
-      authorWallet: publicKey.toString(),
-      authorUsername: user.username || undefined,
-      authorAvatar: user.avatar || undefined,
-      mediaUrl,
-      mediaType,
-    }));
-    
-    // Add Aura Points for creating a post
-    dispatch(
-      addTransaction({
-        id: uuidv4(),
-        points: 50,
-        timestamp: new Date().toISOString(),
-        action: 'post_created',
-        walletAddress: publicKey.toString(),
-      })
-    );
-    
-    toast.success('Post created successfully! +50 Aura Points');
-    return true;
-  };
   
   const handleSharePost = (postId: string) => {
     if (!connected || !publicKey) {
@@ -164,12 +114,6 @@ const Feed = () => {
   
   return (
     <div className="w-full">
-      {connected && publicKey && (
-        <div className="mb-4">
-          <CreatePostForm onSubmit={handleCreatePost} />
-        </div>
-      )}
-      
       <div className="space-y-0">
         {isLoading ? (
           <div className="py-6 text-center text-gray-500 dark:text-gray-400">
