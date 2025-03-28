@@ -40,12 +40,14 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
   const [walletAddress, setWalletAddr] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [hasPhantomWallet, setHasPhantomWallet] = useState(false);
+  const [provider, setProvider] = useState<PhantomProvider | null>(null);
   const dispatch = useDispatch();
 
   // Safely get Phantom provider to prevent conflicts with other wallet extensions
   const getPhantomProvider = (): PhantomProvider | null => {
     try {
-      if ('solana' in window) {
+      // Use a more defensive approach to check for solana provider
+      if (typeof window !== 'undefined' && 'solana' in window) {
         const solana = (window as WindowWithSolana).solana;
         if (solana?.isPhantom) {
           return solana;
@@ -58,32 +60,27 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Initialize wallet provider
   useEffect(() => {
+    // Prevent this code from running during SSR
+    if (typeof window === 'undefined') return;
+    
     const checkForPhantom = () => {
-      const provider = getPhantomProvider();
-      if (provider) {
-        setHasPhantomWallet(true);
-        
-        // Listen for wallet connection/disconnection
-        provider.on('connect', () => {
-          if (provider.publicKey) {
-            const walletAddr = provider.publicKey.toString();
+      try {
+        const detectedProvider = getPhantomProvider();
+        if (detectedProvider) {
+          setHasPhantomWallet(true);
+          setProvider(detectedProvider);
+          
+          // Check if already connected
+          if (detectedProvider.publicKey) {
+            const walletAddr = detectedProvider.publicKey.toString();
             setWalletAddr(walletAddr);
             dispatch(setWalletAddress(walletAddr));
           }
-        });
-        
-        provider.on('disconnect', () => {
-          setWalletAddr(null);
-          dispatch(logout());
-        });
-        
-        // Check if already connected
-        if (provider.publicKey) {
-          const walletAddr = provider.publicKey.toString();
-          setWalletAddr(walletAddr);
-          dispatch(setWalletAddress(walletAddr));
         }
+      } catch (error) {
+        console.error('Error in wallet detection:', error);
       }
     };
     
@@ -95,16 +92,64 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     return () => clearTimeout(checkAgainTimeout);
   }, [dispatch]);
 
+  // Set up event listeners once provider is available
+  useEffect(() => {
+    if (!provider) return;
+    
+    const handleConnect = () => {
+      try {
+        if (provider.publicKey) {
+          const walletAddr = provider.publicKey.toString();
+          setWalletAddr(walletAddr);
+          dispatch(setWalletAddress(walletAddr));
+        }
+      } catch (error) {
+        console.error('Error handling wallet connect:', error);
+      }
+    };
+    
+    const handleDisconnect = () => {
+      try {
+        setWalletAddr(null);
+        dispatch(logout());
+      } catch (error) {
+        console.error('Error handling wallet disconnect:', error);
+      }
+    };
+    
+    // Add event listeners
+    provider.on('connect', handleConnect);
+    provider.on('disconnect', handleDisconnect);
+    
+    // Check connection status immediately
+    if (provider.publicKey) {
+      handleConnect();
+    }
+    
+    // Cleanup listeners
+    return () => {
+      // No explicit way to remove listeners in the Phantom API
+      // But we're cleaning up by separating the concerns
+    };
+  }, [provider, dispatch]);
+
   const connect = async (): Promise<string | null> => {
     try {
-      const provider = getPhantomProvider();
-      
       if (!provider) {
+        const detectedProvider = getPhantomProvider();
+        if (!detectedProvider) {
+          throw new Error("Phantom wallet not found! Please install it.");
+        }
+        setProvider(detectedProvider);
+      }
+      
+      const currentProvider = provider || getPhantomProvider();
+      if (!currentProvider) {
         throw new Error("Phantom wallet not found! Please install it.");
       }
       
       setIsConnecting(true);
-      const response = await provider.connect();
+      const response = await currentProvider.connect();
       const walletAddr = response.publicKey.toString();
       
       setWalletAddr(walletAddr);
@@ -121,10 +166,10 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
 
   const disconnect = async (): Promise<void> => {
     try {
-      const provider = getPhantomProvider();
+      const currentProvider = provider || getPhantomProvider();
       
-      if (provider) {
-        await provider.disconnect();
+      if (currentProvider) {
+        await currentProvider.disconnect();
         setWalletAddr(null);
         dispatch(logout());
       }

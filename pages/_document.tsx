@@ -14,20 +14,49 @@ class MyDocument extends Document {
           <meta name="description" content="GigaAura - Social media platform with crypto wallet integration" />
           <link rel="icon" href="/favicon.ico" />
           {/* Add meta to help prevent wallet extension conflicts */}
-          <meta name="eth-extension-conflict" content="prevent" />
+          <meta name="wallet-conflict-strategy" content="passive" />
           {/* Load wallet detection script before any other scripts */}
           <script
             dangerouslySetInnerHTML={{
               __html: `
-                // Prevent conflicts between different wallet extensions
-                if (window.ethereum) {
-                  // Mark existing ethereum provider to prevent overrides
-                  Object.defineProperty(window.ethereum, '_isCustomProvider', {
-                    value: true,
-                    writable: false,
-                    configurable: false
-                  });
-                }
+                // Create a safe environment for wallet providers
+                (function() {
+                  // Store original descriptor if it exists
+                  let originalEthereumDescriptor = null;
+                  if (Object.getOwnPropertyDescriptor(window, 'ethereum')) {
+                    originalEthereumDescriptor = Object.getOwnPropertyDescriptor(window, 'ethereum');
+                  }
+                  
+                  // Create a safe ethereum getter that doesn't throw errors
+                  const safeDescriptor = {
+                    configurable: true,
+                    get: function() {
+                      try {
+                        // Return original value if possible
+                        if (originalEthereumDescriptor && originalEthereumDescriptor.get) {
+                          return originalEthereumDescriptor.get.call(window);
+                        }
+                      } catch (e) {
+                        console.warn('Error accessing ethereum provider:', e);
+                      }
+                      return undefined;
+                    }
+                  };
+                  
+                  // Only apply if needed
+                  try {
+                    if (originalEthereumDescriptor) {
+                      // Don't override if descriptor is already safe
+                      if (!originalEthereumDescriptor._safe) {
+                        // Mark our descriptor so we know it's safe
+                        safeDescriptor._safe = true;
+                        Object.defineProperty(window, 'ethereum', safeDescriptor);
+                      }
+                    }
+                  } catch (e) {
+                    console.warn('Failed to create safe ethereum environment:', e);
+                  }
+                })();
               `,
             }}
           />
