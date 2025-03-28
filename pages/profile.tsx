@@ -1,4 +1,4 @@
-import { useState, useEffect, ChangeEvent } from 'react';
+import { useState, useEffect, ChangeEvent, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../lib/store';
 import { updateProfile } from '../lib/slices/userSlice';
@@ -11,6 +11,7 @@ import AuraSidebar from '../components/AuraSidebar';
 import { Post } from '../lib/slices/postsSlice';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import toast from 'react-hot-toast';
 
 const ProfilePage = () => {
   const dispatch = useDispatch();
@@ -27,12 +28,51 @@ const ProfilePage = () => {
   const [avatarUrl, setAvatarUrl] = useState(user.avatar || '');
   const [isSaving, setIsSaving] = useState(false);
   
+  // Profile picture upload
+  const [showPfpModal, setShowPfpModal] = useState(false);
+  const [tempImageUrl, setTempImageUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   // Update form when user data changes
   useEffect(() => {
     if (user.username) setUsername(user.username);
     if (user.bio) setBio(user.bio);
     if (user.avatar) setAvatarUrl(user.avatar);
   }, [user.username, user.bio, user.avatar]);
+
+  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      
+      // Check file size (limit to 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image size should be less than 5MB');
+        return;
+      }
+      
+      // Check file type
+      if (!file.type.includes('image/')) {
+        toast.error('Please upload an image file');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = () => {
+        setTempImageUrl(reader.result as string);
+        setShowPfpModal(true);
+      };
+      
+      reader.readAsDataURL(file);
+    }
+  };
+  
+  const handleConfirmProfilePicture = () => {
+    if (tempImageUrl) {
+      setAvatarUrl(tempImageUrl);
+      setShowPfpModal(false);
+      setTempImageUrl(null);
+    }
+  };
   
   const handleSaveProfile = async () => {
     setIsSaving(true);
@@ -47,9 +87,25 @@ const ProfilePage = () => {
         avatar: avatarUrl
       }));
       
+      // Save profile picture to localStorage for persistence
+      if (walletAddress && avatarUrl) {
+        const profilePictures = JSON.parse(localStorage.getItem('profilePictures') || '{}');
+        profilePictures[walletAddress] = avatarUrl;
+        localStorage.setItem('profilePictures', JSON.stringify(profilePictures));
+      }
+      
+      // Save username to localStorage for persistence
+      if (walletAddress && username) {
+        const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
+        usernames[walletAddress] = username;
+        localStorage.setItem('usernames', JSON.stringify(usernames));
+      }
+      
+      toast.success('Profile updated successfully');
       setIsEditing(false);
     } catch (error) {
       console.error('Error updating profile:', error);
+      toast.error('Failed to update profile');
     } finally {
       setIsSaving(false);
     }
@@ -141,16 +197,18 @@ const ProfilePage = () => {
                   {isEditing && (
                     <div className="mt-2">
                       <input
-                        type="text"
-                        className={`w-full p-2 border border-gray-300 rounded-md ${
-                          isDarkMode 
-                            ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-400' 
-                            : 'bg-white text-gray-900'
-                        }`}
-                        placeholder="Avatar URL"
-                        value={avatarUrl}
-                        onChange={(e) => setAvatarUrl(e.target.value)}
+                        type="file"
+                        ref={fileInputRef}
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        style={{ display: 'none' }}
                       />
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full p-2 text-sm bg-primary text-white border-none rounded-md cursor-pointer hover:bg-primary/90"
+                      >
+                        Upload Photo
+                      </button>
                     </div>
                   )}
                 </div>
@@ -198,11 +256,11 @@ const ProfilePage = () => {
                       <p className="text-sm text-gray-500 dark:text-gray-400">Posts</p>
                     </div>
                     <div className="bg-[#F0A830]/10 dark:bg-[#F0A830]/5 px-4 py-2 rounded-md">
-                      <p className="text-lg font-semibold dark:text-white">{user.followers}</p>
+                      <p className="text-lg font-semibold dark:text-white">{user.followers?.length || 0}</p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">Followers</p>
                     </div>
                     <div className="bg-[#2C89B7]/10 dark:bg-[#2C89B7]/5 px-4 py-2 rounded-md">
-                      <p className="text-lg font-semibold dark:text-white">{user.following}</p>
+                      <p className="text-lg font-semibold dark:text-white">{user.following?.length || 0}</p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">Following</p>
                     </div>
                     <div className="bg-[#F6B73C]/10 dark:bg-[#F6B73C]/5 px-4 py-2 rounded-md">
@@ -254,47 +312,66 @@ const ProfilePage = () => {
                 <div className="space-y-4">
                   {userPosts.map((post: Post) => (
                     <div key={post.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-                      <div className="flex items-start space-x-3">
+                      <div className="flex items-start space-x-4">
                         <div className="flex-shrink-0">
-                          <div 
-                            className="w-10 h-10 rounded-full bg-[#60C5D1] flex items-center justify-center text-white cursor-pointer"
-                            onClick={() => navigateToUserProfile(post.authorWallet)}
-                          >
-                            {username ? username.charAt(0).toUpperCase() : walletAddress.substring(0, 2)}
+                          <div className="w-10 h-10 rounded-full overflow-hidden bg-[#60C5D1]">
+                            {user.avatar ? (
+                              <img src={user.avatar} alt={user.username || 'User'} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-white font-bold">
+                                {user.username ? user.username.charAt(0).toUpperCase() : walletAddress.substring(0, 2)}
+                              </div>
+                            )}
                           </div>
                         </div>
                         
                         <div className="flex-1">
-                          <div className="flex items-center space-x-2">
-                            <span className="font-medium dark:text-white">{username || 'Anonymous'}</span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                              {new Date(post.createdAt).toLocaleDateString()}
+                          <div className="flex items-center">
+                            <h3 className="font-medium dark:text-white">{user.username || 'Anonymous User'}</h3>
+                            <span className="text-gray-500 dark:text-gray-400 text-sm ml-2">
+                              • {new Date(post.createdAt).toLocaleDateString()}
                             </span>
                           </div>
                           
-                          <p className="mt-2 dark:text-gray-300">{post.content}</p>
+                          <p className="my-2 dark:text-gray-200">{post.content}</p>
                           
                           {post.mediaUrl && (
-                            <div className="mt-3 rounded-lg overflow-hidden">
+                            <div className="mt-2 rounded-lg overflow-hidden">
                               {post.mediaType === 'image' ? (
-                                <img src={post.mediaUrl} alt="Post media" className="w-full h-auto" />
-                              ) : post.mediaType === 'video' ? (
-                                <video src={post.mediaUrl} controls className="w-full" />
-                              ) : null}
+                                <img 
+                                  src={post.mediaUrl} 
+                                  alt="Post media" 
+                                  className="w-full h-auto"
+                                />
+                              ) : (
+                                <video 
+                                  src={post.mediaUrl} 
+                                  controls 
+                                  className="w-full"
+                                ></video>
+                              )}
                             </div>
                           )}
                           
-                          <div className="mt-3 flex space-x-4 text-sm text-gray-500 dark:text-gray-400">
-                            <div className="flex items-center space-x-1">
-                              <span>❤️</span>
+                          <div className="mt-3 flex space-x-4 text-sm">
+                            <div className="flex items-center space-x-1 text-gray-500 dark:text-gray-400">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                              </svg>
                               <span>{post.likes}</span>
                             </div>
-                            <div className="flex items-center space-x-1">
-                              <span>💬</span>
+                            
+                            <div className="flex items-center space-x-1 text-gray-500 dark:text-gray-400">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                              </svg>
                               <span>{post.comments}</span>
                             </div>
-                            <div className="flex items-center space-x-1">
-                              <span>🔄</span>
+                            
+                            <div className="flex items-center space-x-1 text-gray-500 dark:text-gray-400">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                              </svg>
                               <span>{post.shares}</span>
                             </div>
                           </div>
@@ -312,6 +389,43 @@ const ProfilePage = () => {
           </div>
         </main>
       </div>
+
+      {/* Profile Picture Modal */}
+      {showPfpModal && tempImageUrl && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-xl w-full">
+            <h3 className="text-xl font-bold mb-4 dark:text-white">Set Profile Picture</h3>
+            
+            <div className="flex justify-center mb-4">
+              <div className="w-64 h-64 rounded-full overflow-hidden">
+                <img src={tempImageUrl} alt="New profile" className="w-full h-full object-cover" />
+              </div>
+            </div>
+            
+            <p className="text-gray-600 dark:text-gray-300 mb-4 text-center">
+              This is how your profile picture will look.
+            </p>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowPfpModal(false);
+                  setTempImageUrl(null);
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmProfilePicture}
+                className="px-4 py-2 bg-primary text-white rounded-md"
+              >
+                Set as Profile Picture
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
