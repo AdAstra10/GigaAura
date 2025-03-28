@@ -14,7 +14,7 @@ const Header: React.FC = () => {
   const router = useRouter();
   const { walletAddress, username, isAuthenticated } = useSelector((state: RootState) => state.user);
   const { connect } = useWallet();
-  const { isDarkMode, toggleDarkMode } = useDarkMode();
+  const { darkMode, toggleDarkMode } = useDarkMode();
   
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,7 +87,7 @@ const Header: React.FC = () => {
               className="p-2 text-gray-400 hover:text-primary cursor-pointer"
               aria-label="Toggle dark mode"
             >
-              {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
             
             {isAuthenticated ? (
