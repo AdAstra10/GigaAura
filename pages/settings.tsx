@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { RootState } from '@lib/store';
-import { useWallet } from '@contexts/WalletContext';
+import { RootState } from '../lib/store';
+import { useWallet } from '../contexts/WalletContext';
+import { useDarkMode } from '../contexts/DarkModeContext';
+import { updateProfile } from '../lib/slices/userSlice';
 import Head from 'next/head';
-import Header from '@components/Header';
-import Sidebar from '@components/Sidebar';
+import Header from '../components/Header';
+import Sidebar from '../components/Sidebar';
 
 // Settings sections
 enum SettingSection {
@@ -17,8 +19,20 @@ enum SettingSection {
 
 const SettingsPage = () => {
   const dispatch = useDispatch();
+  const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { walletAddress, disconnect } = useWallet();
+  const { username, avatar, bio } = useSelector((state: RootState) => state.user as { 
+    username: string | null, 
+    avatar: string | null, 
+    bio: string | null 
+  });
   const [activeSection, setActiveSection] = useState<SettingSection>(SettingSection.ACCOUNT);
+  
+  // Profile settings
+  const [usernameInput, setUsernameInput] = useState(username || '');
+  const [bioInput, setBioInput] = useState(bio || '');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(avatar);
   
   // Notification settings
   const [emailNotifications, setEmailNotifications] = useState(true);
@@ -34,7 +48,6 @@ const SettingsPage = () => {
   const [allowTagging, setAllowTagging] = useState(true);
   
   // Display settings
-  const [darkMode, setDarkMode] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [compactView, setCompactView] = useState(false);
   
@@ -50,6 +63,41 @@ const SettingsPage = () => {
   // Handle section change
   const handleSectionChange = (section: SettingSection) => {
     setActiveSection(section);
+  };
+  
+  // Handle avatar change
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setAvatarFile(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  
+  // Handle profile update
+  const handleProfileUpdate = () => {
+    // In a real app, you'd upload the avatar file to a storage service
+    // and get back a URL. For this implementation, we'll use the preview
+    const profileData = {
+      username: usernameInput || undefined,
+      bio: bioInput || undefined,
+      avatar: avatarPreview || undefined
+    };
+    
+    dispatch(updateProfile(profileData));
+    
+    // Save username to localStorage for persistence
+    if (usernameInput && walletAddress) {
+      const walletUsernames = JSON.parse(localStorage.getItem('walletUsernames') || '{}');
+      walletUsernames[walletAddress] = usernameInput;
+      localStorage.setItem('walletUsernames', JSON.stringify(walletUsernames));
+    }
   };
   
   if (!walletAddress) {
@@ -89,7 +137,7 @@ const SettingsPage = () => {
                             className={`w-full text-left px-4 py-2 rounded-md ${
                               activeSection === section
                                 ? 'bg-[#F6B73C] text-white'
-                                : 'hover:bg-gray-100'
+                                : 'hover:bg-gray-100 dark:hover:bg-gray-700'
                             }`}
                             onClick={() => handleSectionChange(section as SettingSection)}
                           >
@@ -109,9 +157,74 @@ const SettingsPage = () => {
                       
                       <div className="space-y-6">
                         <div>
+                          <h3 className="text-lg font-medium mb-4">Profile Information</h3>
+                          
+                          <div className="space-y-4">
+                            <div>
+                              <label htmlFor="avatar" className="block mb-2 text-sm font-medium">Profile Picture</label>
+                              <div className="flex items-center space-x-4">
+                                <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center relative">
+                                  {avatarPreview ? (
+                                    <img 
+                                      src={avatarPreview} 
+                                      alt="Profile preview" 
+                                      className="w-full h-full object-cover" 
+                                    />
+                                  ) : (
+                                    <span className="text-gray-400">{usernameInput.charAt(0) || walletAddress?.charAt(0)}</span>
+                                  )}
+                                </div>
+                                
+                                <label className="cursor-pointer bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90">
+                                  Choose Image
+                                  <input 
+                                    type="file" 
+                                    id="avatar" 
+                                    accept="image/*"
+                                    className="hidden" 
+                                    onChange={handleAvatarChange}
+                                  />
+                                </label>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <label htmlFor="username" className="block mb-2 text-sm font-medium">Username</label>
+                              <input
+                                type="text"
+                                id="username"
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                                placeholder="Enter username"
+                                value={usernameInput}
+                                onChange={(e) => setUsernameInput(e.target.value)}
+                              />
+                            </div>
+                            
+                            <div>
+                              <label htmlFor="bio" className="block mb-2 text-sm font-medium">Bio</label>
+                              <textarea
+                                id="bio"
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                                placeholder="Tell us about yourself"
+                                value={bioInput}
+                                onChange={(e) => setBioInput(e.target.value)}
+                                rows={3}
+                              ></textarea>
+                            </div>
+                            
+                            <button
+                              onClick={handleProfileUpdate}
+                              className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
+                            >
+                              Save Profile
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div className="border-t pt-6">
                           <h3 className="text-lg font-medium mb-4">Wallet Information</h3>
-                          <div className="bg-gray-50 p-4 rounded-md">
-                            <p className="text-sm text-gray-500 mb-1">Connected Wallet</p>
+                          <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-md">
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Connected Wallet</p>
                             <p className="font-mono">{walletAddress}</p>
                           </div>
                         </div>
@@ -139,14 +252,14 @@ const SettingsPage = () => {
                         <div className="flex items-center justify-between">
                           <div>
                             <h3 className="font-medium">Dark Mode</h3>
-                            <p className="text-sm text-gray-500">Switch to dark theme</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Switch to dark theme</p>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer">
                             <input
                               type="checkbox"
                               className="sr-only peer"
-                              checked={darkMode}
-                              onChange={() => setDarkMode(!darkMode)}
+                              checked={isDarkMode}
+                              onChange={toggleDarkMode}
                             />
                             <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#2C89B7] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2C89B7]"></div>
                           </label>
@@ -155,7 +268,7 @@ const SettingsPage = () => {
                         <div className="flex items-center justify-between border-t pt-4">
                           <div>
                             <h3 className="font-medium">Reduced Motion</h3>
-                            <p className="text-sm text-gray-500">Minimize animations</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Minimize animations</p>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer">
                             <input
@@ -171,7 +284,7 @@ const SettingsPage = () => {
                         <div className="flex items-center justify-between border-t pt-4">
                           <div>
                             <h3 className="font-medium">Compact View</h3>
-                            <p className="text-sm text-gray-500">Show more content with less spacing</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Show more content with less spacing</p>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer">
                             <input
@@ -195,7 +308,7 @@ const SettingsPage = () => {
                         <div className="flex items-center justify-between">
                           <div>
                             <h3 className="font-medium">Public Profile</h3>
-                            <p className="text-sm text-gray-500">Allow anyone to view your profile</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Allow anyone to view your profile</p>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer">
                             <input
@@ -211,7 +324,7 @@ const SettingsPage = () => {
                         <div className="flex items-center justify-between border-t pt-4">
                           <div>
                             <h3 className="font-medium">Show Aura Points</h3>
-                            <p className="text-sm text-gray-500">Display your Aura Points on your profile</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Display your Aura Points on your profile</p>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer">
                             <input
@@ -227,7 +340,7 @@ const SettingsPage = () => {
                         <div className="flex items-center justify-between border-t pt-4">
                           <div>
                             <h3 className="font-medium">Allow Tagging</h3>
-                            <p className="text-sm text-gray-500">Let others tag you in posts and comments</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Let others tag you in posts and comments</p>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer">
                             <input
@@ -251,7 +364,7 @@ const SettingsPage = () => {
                         <div className="flex items-center justify-between">
                           <div>
                             <h3 className="font-medium">Email Notifications</h3>
-                            <p className="text-sm text-gray-500">Receive updates via email</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Receive email notifications</p>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer">
                             <input
@@ -267,7 +380,7 @@ const SettingsPage = () => {
                         <div className="flex items-center justify-between border-t pt-4">
                           <div>
                             <h3 className="font-medium">Push Notifications</h3>
-                            <p className="text-sm text-gray-500">Receive alerts on your device</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Receive push notifications</p>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer">
                             <input
@@ -280,60 +393,70 @@ const SettingsPage = () => {
                           </label>
                         </div>
                         
-                        <h3 className="font-medium border-t pt-4">Notify me about:</h3>
+                        <h3 className="font-medium mt-6 mb-4 border-t pt-4">Notify Me About</h3>
                         
-                        <div className="ml-4 space-y-4">
-                          <div className="flex items-center justify-between">
-                            <p>Likes on my posts</p>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input
-                                type="checkbox"
-                                className="sr-only peer"
-                                checked={likesNotify}
-                                onChange={() => setLikesNotify(!likesNotify)}
-                              />
-                              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#2C89B7] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2C89B7]"></div>
-                            </label>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-medium">Likes</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">When someone likes your post</p>
                           </div>
-                          
-                          <div className="flex items-center justify-between">
-                            <p>Comments on my posts</p>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input
-                                type="checkbox"
-                                className="sr-only peer"
-                                checked={commentsNotify}
-                                onChange={() => setCommentsNotify(!commentsNotify)}
-                              />
-                              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#2C89B7] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2C89B7]"></div>
-                            </label>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
+                              checked={likesNotify}
+                              onChange={() => setLikesNotify(!likesNotify)}
+                            />
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#2C89B7] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2C89B7]"></div>
+                          </label>
+                        </div>
+                        
+                        <div className="flex items-center justify-between border-t pt-4">
+                          <div>
+                            <h3 className="font-medium">Comments</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">When someone comments on your post</p>
                           </div>
-                          
-                          <div className="flex items-center justify-between">
-                            <p>New followers</p>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input
-                                type="checkbox"
-                                className="sr-only peer"
-                                checked={followersNotify}
-                                onChange={() => setFollowersNotify(!followersNotify)}
-                              />
-                              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#2C89B7] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2C89B7]"></div>
-                            </label>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
+                              checked={commentsNotify}
+                              onChange={() => setCommentsNotify(!commentsNotify)}
+                            />
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#2C89B7] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2C89B7]"></div>
+                          </label>
+                        </div>
+                        
+                        <div className="flex items-center justify-between border-t pt-4">
+                          <div>
+                            <h3 className="font-medium">New Followers</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">When someone follows you</p>
                           </div>
-                          
-                          <div className="flex items-center justify-between">
-                            <p>Shares of my posts</p>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input
-                                type="checkbox"
-                                className="sr-only peer"
-                                checked={sharesNotify}
-                                onChange={() => setSharesNotify(!sharesNotify)}
-                              />
-                              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#2C89B7] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2C89B7]"></div>
-                            </label>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
+                              checked={followersNotify}
+                              onChange={() => setFollowersNotify(!followersNotify)}
+                            />
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#2C89B7] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2C89B7]"></div>
+                          </label>
+                        </div>
+                        
+                        <div className="flex items-center justify-between border-t pt-4">
+                          <div>
+                            <h3 className="font-medium">Shares</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">When someone shares your post</p>
                           </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
+                              checked={sharesNotify}
+                              onChange={() => setSharesNotify(!sharesNotify)}
+                            />
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#2C89B7] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2C89B7]"></div>
+                          </label>
                         </div>
                       </div>
                     </div>
@@ -344,12 +467,9 @@ const SettingsPage = () => {
                       <h2 className="text-xl font-bold mb-6">Wallet Settings</h2>
                       
                       <div className="space-y-6">
-                        <div>
-                          <h3 className="text-lg font-medium mb-4">Connected Wallet</h3>
-                          <div className="bg-gray-50 p-4 rounded-md">
-                            <p className="text-sm text-gray-500 mb-1">Wallet Address</p>
-                            <p className="font-mono break-all">{walletAddress}</p>
-                          </div>
+                        <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-md">
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Connected Wallet</p>
+                          <p className="font-mono">{walletAddress}</p>
                         </div>
                         
                         <div className="border-t pt-6">
@@ -362,9 +482,6 @@ const SettingsPage = () => {
                               Disconnect Wallet
                             </button>
                           </div>
-                          <p className="mt-4 text-sm text-gray-500">
-                            Disconnecting your wallet will sign you out of GigaAura. You can reconnect at any time.
-                          </p>
                         </div>
                       </div>
                     </div>

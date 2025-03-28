@@ -4,7 +4,11 @@
 
 @layer base {
   body {
-    @apply bg-light text-dark;
+    @apply bg-light text-dark transition-colors duration-200;
+  }
+  
+  .dark body {
+    @apply bg-dark text-light;
   }
 }
 
@@ -22,10 +26,47 @@
   }
   
   .card {
-    @apply bg-white rounded-lg shadow-md p-4;
+    @apply bg-white rounded-lg shadow-md p-4 transition-colors duration-200;
+  }
+  
+  .dark .card {
+    @apply bg-gray-800 text-light;
   }
   
   .input {
-    @apply border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
+    @apply border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-colors duration-200;
+  }
+  
+  .dark .input {
+    @apply bg-gray-700 border-gray-600 text-white;
+  }
+  
+  /* Dark mode overrides */
+  .dark .bg-white {
+    @apply bg-gray-800;
+  }
+  
+  .dark .bg-light {
+    @apply bg-gray-900;
+  }
+  
+  .dark .text-gray-800 {
+    @apply text-gray-100;
+  }
+  
+  .dark .text-gray-700 {
+    @apply text-gray-200;
+  }
+  
+  .dark .text-gray-500 {
+    @apply text-gray-400;
+  }
+  
+  .dark .border-gray-300 {
+    @apply border-gray-600;
+  }
+  
+  .dark .shadow {
+    @apply shadow-gray-900;
   }
 } 

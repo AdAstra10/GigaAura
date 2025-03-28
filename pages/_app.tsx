@@ -3,6 +3,7 @@ import type { AppProps } from 'next/app';
 import { Provider } from 'react-redux';
 import { store } from '../lib/store';
 import dynamic from 'next/dynamic';
+import { DarkModeProvider } from '../contexts/DarkModeContext';
 
 // Import WalletProvider dynamically with ssr disabled to avoid wallet provider conflicts
 const WalletProviderWithNoSSR = dynamic(
@@ -13,9 +14,11 @@ const WalletProviderWithNoSSR = dynamic(
 function MyApp({ Component, pageProps }: AppProps) {
   return (
     <Provider store={store}>
-      <WalletProviderWithNoSSR>
-        <Component {...pageProps} />
-      </WalletProviderWithNoSSR>
+      <DarkModeProvider>
+        <WalletProviderWithNoSSR>
+          <Component {...pageProps} />
+        </WalletProviderWithNoSSR>
+      </DarkModeProvider>
     </Provider>
   );
 }

@@ -8,6 +8,7 @@ export interface UserState {
   isAuthenticated: boolean;
   followers: number;
   following: number;
+  darkMode: boolean;
 }
 
 const initialState: UserState = {
@@ -18,6 +19,7 @@ const initialState: UserState = {
   isAuthenticated: false,
   followers: 0,
   following: 0,
+  darkMode: false,
 };
 
 export const userSlice = createSlice({
@@ -37,8 +39,16 @@ export const userSlice = createSlice({
     updateProfile: (state, action: PayloadAction<{ username?: string; avatar?: string; bio?: string }>) => {
       return { ...state, ...action.payload };
     },
+    toggleDarkMode: (state) => {
+      state.darkMode = !state.darkMode;
+    },
+    setDarkMode: (state, action: PayloadAction<boolean>) => {
+      state.darkMode = action.payload;
+    },
     logout: (state) => {
-      return initialState;
+      // Keep darkMode preference even after logout
+      const { darkMode } = state;
+      return { ...initialState, darkMode };
     },
   },
 });
@@ -48,6 +58,8 @@ export const {
   setAuthenticated, 
   setWalletAddress, 
   updateProfile, 
+  toggleDarkMode,
+  setDarkMode,
   logout 
 } = userSlice.actions;
 

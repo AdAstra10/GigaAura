@@ -1,16 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { RootState } from '@lib/store';
-import { setFeed, addPost, Post, loadFromCache } from '@lib/slices/postsSlice';
-import { addTransaction } from '@lib/slices/auraPointsSlice';
-import PostCard from './PostCard';
-import CreatePostForm from './CreatePostForm';
+import { RootState } from '../lib/store';
+import { setFeed, addPost, Post, loadFromCache, setComments, Comment } from '../lib/slices/postsSlice';
+import { addTransaction } from '../lib/slices/auraPointsSlice';
+import PostCard from '../components/PostCard';
+import CreatePostForm from '../components/CreatePostForm';
 import { v4 as uuidv4 } from 'uuid';
 
 const Feed = () => {
   const dispatch = useDispatch();
-  const { feed, loading, error } = useSelector((state: RootState) => state.posts);
-  const { walletAddress } = useSelector((state: RootState) => state.user);
+  const { feed, loading, error, comments } = useSelector((state: RootState) => state.posts as {
+    feed: Post[],
+    loading: boolean,
+    error: string | null,
+    comments: Comment[]
+  });
+  const { walletAddress, username, avatar } = useSelector((state: RootState) => state.user as {
+    walletAddress: string | null,
+    username: string | null,
+    avatar: string | null
+  });
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   // Try to load feed from cache first, then fetch if needed
@@ -68,20 +77,73 @@ const Feed = () => {
         },
       ];
       
+      // Create some mock comments
+      const mockComments = [
+        {
+          id: uuidv4(),
+          postId: mockPosts[0].id,
+          content: "Congrats on your first NFT! The Solana ecosystem is amazing.",
+          authorWallet: "9ytr..h5g3",
+          authorUsername: "CryptoVisionary",
+          authorAvatar: "https://i.pravatar.cc/150?img=2",
+          createdAt: new Date(Date.now() - 1000 * 60 * 20).toISOString(),
+          likes: 3
+        },
+        {
+          id: uuidv4(),
+          postId: mockPosts[0].id,
+          content: "What collection did you mint from?",
+          authorWallet: "3rfg..k8j2",
+          authorUsername: "SolDeveloper",
+          authorAvatar: "https://i.pravatar.cc/150?img=3",
+          createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+          likes: 1
+        },
+        {
+          id: uuidv4(),
+          postId: mockPosts[1].id,
+          content: "Absolutely! Ownership is the key difference in web3.",
+          authorWallet: "8xut..j4f2",
+          authorUsername: "SolanaWhale",
+          authorAvatar: "https://i.pravatar.cc/150?img=1",
+          createdAt: new Date(Date.now() - 1000 * 60 * 100).toISOString(),
+          likes: 5
+        }
+      ];
+      
       dispatch(setFeed(mockPosts));
+      dispatch(setComments(mockComments));
       setIsInitialLoading(false);
     }, 1500);
     
     return () => clearTimeout(timer);
   }, [dispatch, feed.length]);
 
-  const handleCreatePost = (content: string, mediaUrl?: string, mediaType?: 'image' | 'video') => {
+  const handleCreatePost = (content: string, mediaFile?: File) => {
     if (!walletAddress) return;
+    
+    // In a real app, you would upload the file to a storage service
+    // and get back a URL. For this demo, we'll create a local URL if provided.
+    let mediaUrl: string | undefined;
+    let mediaType: 'image' | 'video' | undefined;
+    
+    if (mediaFile) {
+      if (mediaFile.type.startsWith('image/')) {
+        mediaType = 'image';
+        // In a real app, this would be an uploaded URL
+        mediaUrl = URL.createObjectURL(mediaFile);
+      } else if (mediaFile.type.startsWith('video/')) {
+        mediaType = 'video';
+        mediaUrl = URL.createObjectURL(mediaFile);
+      }
+    }
     
     // Create a new post
     dispatch(addPost({
       content,
       authorWallet: walletAddress,
+      authorUsername: username || undefined,
+      authorAvatar: avatar || undefined,
       ...(mediaUrl && { mediaUrl }),
       ...(mediaType && { mediaType }),
     }));
@@ -96,29 +158,34 @@ const Feed = () => {
     }));
   };
 
+  // Get comments for a specific post
+  const getPostComments = (postId: string) => {
+    return comments.filter((comment: Comment) => comment.postId === postId);
+  };
+
   if (isInitialLoading) {
     return (
       <div className="space-y-4">
-        <div className="bg-white rounded-lg shadow p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
           <div className="animate-pulse flex space-x-4">
-            <div className="rounded-full bg-gray-200 h-12 w-12"></div>
+            <div className="rounded-full bg-gray-200 dark:bg-gray-700 h-12 w-12"></div>
             <div className="flex-1 space-y-4 py-1">
-              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
               <div className="space-y-2">
-                <div className="h-4 bg-gray-200 rounded"></div>
-                <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
               </div>
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
           <div className="animate-pulse flex space-x-4">
-            <div className="rounded-full bg-gray-200 h-12 w-12"></div>
+            <div className="rounded-full bg-gray-200 dark:bg-gray-700 h-12 w-12"></div>
             <div className="flex-1 space-y-4 py-1">
-              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
               <div className="space-y-2">
-                <div className="h-4 bg-gray-200 rounded"></div>
-                <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
               </div>
             </div>
           </div>
@@ -138,16 +205,20 @@ const Feed = () => {
       )}
       
       {feed.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <h2 className="text-xl font-semibold text-dark mb-2">No posts yet</h2>
-          <p className="text-gray-600 mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
+          <h2 className="text-xl font-semibold text-dark dark:text-white mb-2">No posts yet</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
             Be the first to create a post and earn 5 Aura Points!
           </p>
         </div>
       ) : (
         <div className="space-y-4">
-          {feed.map((post) => (
-            <PostCard key={post.id} post={post} />
+          {feed.map((post: Post) => (
+            <PostCard 
+              key={post.id} 
+              post={post} 
+              comments={getPostComments(post.id)} 
+            />
           ))}
         </div>
       )}

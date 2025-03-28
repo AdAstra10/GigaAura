@@ -1,27 +1,31 @@
 import { useEffect, useState } from 'react';
 import Head from 'next/head';
-import { useSelector } from 'react-redux';
-import { RootState } from '@lib/store';
-import { useWallet } from '@contexts/WalletContext';
-import Header from '@components/Header';
-import Feed from '@components/Feed';
-import AuthPage from '@components/AuthPage';
-import Sidebar from '@components/Sidebar';
-import AuraSidebar from '@components/AuraSidebar';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState } from '../lib/store';
+import { useWallet } from '../contexts/WalletContext';
+import { loadFromCache } from '../lib/slices/postsSlice';
+import Header from '../components/Header';
+import Feed from '../components/Feed';
+import Sidebar from '../components/Sidebar';
+import AuraSidebar from '../components/AuraSidebar';
 
 export default function Home() {
   const { isConnected } = useWallet();
   const user = useSelector((state: RootState) => state.user);
   const [isLoading, setIsLoading] = useState(true);
+  const dispatch = useDispatch();
 
   useEffect(() => {
+    // Load cached posts from local storage
+    dispatch(loadFromCache());
+    
     // Simulate loading user data
     const timer = setTimeout(() => {
       setIsLoading(false);
     }, 1000);
     
     return () => clearTimeout(timer);
-  }, []);
+  }, [dispatch]);
 
   if (isLoading) {
     return (
@@ -29,10 +33,6 @@ export default function Home() {
         <div className="animate-pulse text-primary text-2xl">Loading GigaAura...</div>
       </div>
     );
-  }
-
-  if (!isConnected || !user.isAuthenticated) {
-    return <AuthPage />;
   }
 
   return (
@@ -43,7 +43,7 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <div className="min-h-screen bg-light">
+      <div className="min-h-screen bg-light dark:bg-gray-900">
         <Header />
         
         <main className="container mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-12 gap-6">
