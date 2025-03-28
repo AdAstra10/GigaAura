@@ -176,7 +176,7 @@ const Feed = () => {
             Loading posts...
           </div>
         ) : feed.length > 0 ? (
-          feed
+          [...feed]
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .map((post) => (
               <PostCard 

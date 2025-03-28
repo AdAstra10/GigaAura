@@ -23,17 +23,26 @@ interface WalletContextProps {
   isConnecting: boolean;
   isConnected: boolean;
   hasPhantomWallet: boolean;
+  publicKey: string | null;
+  wallet: any;
+  wallets: any[];
 }
 
-// Default context values
-const WalletContext = createContext<WalletContextProps>({
+// Create a more robust default context with all required properties
+const defaultContext: WalletContextProps = {
   connect: async () => null,
   disconnect: async () => {},
   walletAddress: null,
   isConnecting: false,
   isConnected: false,
   hasPhantomWallet: false,
-});
+  publicKey: null,
+  wallet: null,
+  wallets: []
+};
+
+// Create the context with proper default values
+const WalletContext = createContext<WalletContextProps>(defaultContext);
 
 // Hook for using the wallet context
 export const useWallet = () => useContext(WalletContext);
@@ -106,13 +115,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         return null;
       }
       
-      // Display confirmation dialog
-      const userConfirmed = window.confirm("Please connect your wallet to interact. Would you like to connect now?");
-      
-      if (!userConfirmed) {
-        return null;
-      }
-      
+      // Simplified connect flow
       const response = await solanaProvider.connect();
       const address = response.publicKey.toString();
       
@@ -154,6 +157,9 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         isConnecting,
         isConnected: !!walletAddress,
         hasPhantomWallet,
+        publicKey: walletAddress,
+        wallet: hasPhantomWallet ? (window as any).solana : null,
+        wallets: hasPhantomWallet ? [(window as any).solana] : []
       }}
     >
       {children}

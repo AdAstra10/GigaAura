@@ -19,6 +19,29 @@ class MyDocument extends Document {
         <body>
           <Main />
           <NextScript />
+          {/* Add script to handle wallet provider conflicts */}
+          <script dangerouslySetInnerHTML={{
+            __html: `
+              window.addEventListener('load', function() {
+                // Prevent ethereum property conflicts between wallet providers
+                if (window.ethereum) {
+                  try {
+                    // Save original ethereum object
+                    const originalEthereum = window.ethereum;
+                    
+                    // Create a non-writable property
+                    Object.defineProperty(window, 'ethereum', {
+                      value: originalEthereum,
+                      writable: false,
+                      configurable: true
+                    });
+                  } catch (err) {
+                    console.warn('Error setting up ethereum property:', err);
+                  }
+                }
+              });
+            `
+          }} />
         </body>
       </Html>
     );
