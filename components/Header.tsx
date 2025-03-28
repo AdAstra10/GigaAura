@@ -5,16 +5,26 @@ import Link from 'next/link';
 import Image from 'next/image';
 import router from 'next/router';
 import { Bell, Search, Menu, X } from 'lucide-react';
+import { useWallet } from '@contexts/WalletContext';
 
 const Header = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { walletAddress, username, isAuthenticated } = useSelector((state: RootState) => state.user);
+  const { connect } = useWallet();
   
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
+    }
+  };
+
+  const handleConnectWallet = async () => {
+    try {
+      await connect();
+    } catch (error) {
+      console.error("Failed to connect wallet:", error);
     }
   };
 
@@ -36,18 +46,12 @@ const Header = () => {
             <Link href="/" className="flex items-center">
               <div className="flex-shrink-0 flex items-center">
                 <Image 
-                  src="/images/gigaaura-logo.svg" 
-                  alt="GigaAura Logo" 
-                  width={40} 
+                  src="/images/GigaAuraLandscapeLogo.png" 
+                  alt="GigaAura" 
+                  width={140} 
                   height={40} 
                   className="h-10 w-auto" 
-                />
-                <Image 
-                  src="/images/gigaaura-text.svg" 
-                  alt="GigaAura" 
-                  width={120} 
-                  height={30} 
-                  className="h-8 w-auto ml-2 hidden sm:block" 
+                  priority
                 />
               </div>
             </Link>
@@ -93,12 +97,12 @@ const Header = () => {
                 </Link>
               </>
             ) : (
-              <Link
-                href="/connect"
+              <button
+                onClick={handleConnectWallet}
                 className="ml-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full shadow-sm text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
               >
                 Connect Wallet
-              </Link>
+              </button>
             )}
           </div>
         </div>

@@ -94,10 +94,8 @@ const PostCard: React.FC<PostCardProps> = ({ post }) => {
         
         <div className="flex-1">
           <div className="flex items-center space-x-2">
-            <Link href={`/profile/${post.authorWallet}`}>
-              <a className="font-medium text-dark hover:text-primary">
-                {post.authorUsername || post.authorWallet}
-              </a>
+            <Link href={`/profile/${post.authorWallet}`} className="font-medium text-dark hover:text-primary">
+              {post.authorUsername || post.authorWallet}
             </Link>
             <span className="text-xs text-gray-500">{formatDate(post.createdAt)}</span>
           </div>
@@ -107,12 +105,10 @@ const PostCard: React.FC<PostCardProps> = ({ post }) => {
           {post.mediaUrl && (
             <div className="mt-3 rounded-lg overflow-hidden">
               {post.mediaType === 'image' ? (
-                <Image 
+                <img 
                   src={post.mediaUrl} 
                   alt="Post media"
-                  width={500}
-                  height={300}
-                  layout="responsive"
+                  className="w-full h-auto rounded"
                 />
               ) : post.mediaType === 'video' ? (
                 <video 

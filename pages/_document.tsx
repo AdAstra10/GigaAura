@@ -20,43 +20,51 @@ class MyDocument extends Document {
             dangerouslySetInnerHTML={{
               __html: `
                 // Create a safe environment for wallet providers
-                (function() {
-                  // Store original descriptor if it exists
-                  let originalEthereumDescriptor = null;
-                  if (Object.getOwnPropertyDescriptor(window, 'ethereum')) {
-                    originalEthereumDescriptor = Object.getOwnPropertyDescriptor(window, 'ethereum');
-                  }
+                try {
+                  // Store the original values temporarily
+                  const originalEthereum = window.ethereum;
+                  const originalSolana = window.solana;
                   
-                  // Create a safe ethereum getter that doesn't throw errors
-                  const safeDescriptor = {
-                    configurable: true,
-                    get: function() {
-                      try {
-                        // Return original value if possible
-                        if (originalEthereumDescriptor && originalEthereumDescriptor.get) {
-                          return originalEthereumDescriptor.get.call(window);
+                  // Create safe getters and setters
+                  let ethereumValue = originalEthereum;
+                  let solanaValue = originalSolana;
+                  
+                  // Only define once to prevent conflicts
+                  if (!window._walletProvidersHandled) {
+                    // Define ethereum property with controlled getter and setter
+                    Object.defineProperty(window, 'ethereum', {
+                      configurable: true,
+                      get: function() {
+                        return ethereumValue;
+                      },
+                      set: function(val) {
+                        // Allow setting only if not already set or if we know it's safe
+                        if (!ethereumValue || val._isAuraWalletProvider) {
+                          ethereumValue = val;
                         }
-                      } catch (e) {
-                        console.warn('Error accessing ethereum provider:', e);
                       }
-                      return undefined;
-                    }
-                  };
-                  
-                  // Only apply if needed
-                  try {
-                    if (originalEthereumDescriptor) {
-                      // Don't override if descriptor is already safe
-                      if (!originalEthereumDescriptor._safe) {
-                        // Mark our descriptor so we know it's safe
-                        safeDescriptor._safe = true;
-                        Object.defineProperty(window, 'ethereum', safeDescriptor);
+                    });
+                    
+                    // Define solana property with controlled getter and setter
+                    Object.defineProperty(window, 'solana', {
+                      configurable: true,
+                      get: function() {
+                        return solanaValue;
+                      },
+                      set: function(val) {
+                        // Allow setting only if not already set or if we know it's safe
+                        if (!solanaValue || val._isAuraWalletProvider) {
+                          solanaValue = val;
+                        }
                       }
-                    }
-                  } catch (e) {
-                    console.warn('Failed to create safe ethereum environment:', e);
+                    });
+                    
+                    // Mark as handled
+                    window._walletProvidersHandled = true;
                   }
-                })();
+                } catch (e) {
+                  console.warn('Failed to set up safe wallet environment', e);
+                }
               `,
             }}
           />

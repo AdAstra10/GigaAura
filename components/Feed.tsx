@@ -33,7 +33,7 @@ const Feed = () => {
           content: "Just minted my first NFT on Solana! The transaction fees are amazingly low compared to other chains. #SolanaRocks",
           authorWallet: "8xut..j4f2",
           authorUsername: "SolanaWhale",
-          authorAvatar: "https://cloudinary.com/avatar1.jpg",
+          authorAvatar: "https://i.pravatar.cc/150?img=1",
           createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 minutes ago
           likes: 24,
           comments: 5,
@@ -45,9 +45,9 @@ const Feed = () => {
           content: "The future of web3 social media is all about ownership and rewards. Excited to be part of this community!",
           authorWallet: "9ytr..h5g3",
           authorUsername: "CryptoVisionary",
-          authorAvatar: "https://cloudinary.com/avatar2.jpg",
+          authorAvatar: "https://i.pravatar.cc/150?img=2",
           createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(), // 2 hours ago
-          mediaUrl: "https://cloudinary.com/crypto-image.jpg",
+          mediaUrl: "https://images.unsplash.com/photo-1639762681057-408e52192e55?q=80&w=2070",
           mediaType: "image",
           likes: 42,
           comments: 12,
@@ -59,7 +59,7 @@ const Feed = () => {
           content: "Building on Solana has been an incredible experience. The speed and low cost make it perfect for social applications.",
           authorWallet: "3rfg..k8j2",
           authorUsername: "SolDeveloper",
-          authorAvatar: "https://cloudinary.com/avatar3.jpg",
+          authorAvatar: "https://i.pravatar.cc/150?img=3",
           createdAt: new Date(Date.now() - 1000 * 60 * 240).toISOString(), // 4 hours ago
           likes: 31,
           comments: 8,
