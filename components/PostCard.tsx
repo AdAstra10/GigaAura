@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react';
+import React, { useState, FormEvent } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
@@ -17,10 +17,10 @@ interface PostCardProps {
 const PostCard: React.FC<PostCardProps> = ({ post, comments = [] }) => {
   const dispatch = useDispatch();
   const router = useRouter();
-  const { walletAddress, username, isConnected } = useSelector((state: RootState) => state.user as {
+  const { isConnected } = useWallet();
+  const { walletAddress, username } = useSelector((state: RootState) => state.user as {
     walletAddress: string | null;
     username: string | null;
-    isConnected: boolean;
   });
   const [isLiked, setIsLiked] = useState(post.likedBy?.includes(walletAddress || '') || false);
   const [showComments, setShowComments] = useState(false);
@@ -309,4 +309,4 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [] }) => {
   );
 };
 
-export default PostCard; 
+export default PostCard;

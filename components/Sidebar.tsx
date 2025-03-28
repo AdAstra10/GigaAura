@@ -1,1 +1,1 @@
- 
+import React from "react"; interface SidebarProps { className?: string; } const Sidebar: React.FC<SidebarProps> = ({ className }) => { return <div className={className}>Sidebar</div>; }; export default Sidebar;
