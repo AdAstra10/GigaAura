@@ -20,7 +20,7 @@ enum SettingSection {
 const SettingsPage = () => {
   const dispatch = useDispatch();
   const { isDarkMode, toggleDarkMode } = useDarkMode();
-  const { walletAddress, disconnect } = useWallet();
+  const { walletAddress, disconnect, connect } = useWallet();
   const { username, avatar, bio } = useSelector((state: RootState) => state.user as { 
     username: string | null, 
     avatar: string | null, 
@@ -102,9 +102,38 @@ const SettingsPage = () => {
   
   if (!walletAddress) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p>Please connect your wallet to access settings.</p>
-      </div>
+      <>
+        <Head>
+          <title>Settings | GigaAura</title>
+          <meta name="description" content="Manage your GigaAura account settings" />
+        </Head>
+        
+        <div className="min-h-screen bg-light dark:bg-gray-900">
+          <Header />
+          
+          <main className="container mx-auto px-4 py-6">
+            <div className="max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
+              <h2 className="text-2xl font-bold mb-4 dark:text-white">Connect Your Wallet</h2>
+              <p className="text-gray-600 dark:text-gray-300 mb-6">
+                Please connect your wallet to access settings.
+              </p>
+              
+              <button
+                onClick={async () => {
+                  try {
+                    await connect();
+                  } catch (error) {
+                    console.error('Error connecting wallet:', error);
+                  }
+                }}
+                className="px-6 py-3 bg-primary text-white font-medium rounded-full shadow-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors w-full"
+              >
+                Connect Wallet
+              </button>
+            </div>
+          </main>
+        </div>
+      </>
     );
   }
   

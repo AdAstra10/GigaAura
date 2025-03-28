@@ -17,11 +17,12 @@ interface PostCardProps {
 const PostCard: React.FC<PostCardProps> = ({ post, comments = [] }) => {
   const dispatch = useDispatch();
   const router = useRouter();
-  const { isConnected } = useWallet();
+  const { connect, isConnected } = useWallet();
   const { walletAddress, username } = useSelector((state: RootState) => state.user as {
     walletAddress: string | null;
     username: string | null;
   });
+  const { totalPoints } = useSelector((state: RootState) => state.auraPoints);
   const [isLiked, setIsLiked] = useState(post.likedBy?.includes(walletAddress || '') || false);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -31,29 +32,37 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [] }) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    const diffInHours = diffInSeconds / 3600;
     
     if (diffInSeconds < 60) {
       return `${diffInSeconds}s`;
     } else if (diffInSeconds < 3600) {
       return `${Math.floor(diffInSeconds / 60)}m`;
-    } else if (diffInSeconds < 86400) {
-      return `${Math.floor(diffInSeconds / 3600)}h`;
+    } else if (diffInHours < 24) {
+      return `${Math.floor(diffInHours)}h`;
     } else {
-      return date.toLocaleDateString();
+      // If more than 24 hours, show the date
+      return date.toLocaleDateString(undefined, { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      });
     }
   };
   
-  const promptConnect = () => {
+  const promptConnect = async () => {
     const confirm = window.confirm('Please connect your wallet to interact. Would you like to connect now?');
     if (confirm) {
-      router.push('/auth');
+      await connect();
+      return isConnected; // Return the updated connection state
     }
     return false;
   };
   
-  const handleLike = () => {
+  const handleLike = async () => {
     if (!isConnected) {
-      return promptConnect();
+      const connected = await promptConnect();
+      if (!connected) return;
     }
     
     if (!walletAddress) return;
@@ -69,7 +78,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [] }) => {
           id: uuidv4(),
           walletAddress: post.authorWallet, // Points go to the post creator
           action: 'like_received',
-          points: 1, // 1 point for received like
+          points: 10, // 10 points for received like
           timestamp: new Date().toISOString(),
           metadata: {
             postId: post.id,
@@ -91,11 +100,12 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [] }) => {
     }
   };
   
-  const handleSubmitComment = (e: FormEvent) => {
+  const handleSubmitComment = async (e: FormEvent) => {
     e.preventDefault();
     
     if (!isConnected) {
-      return promptConnect();
+      const connected = await promptConnect();
+      if (!connected) return;
     }
     
     if (!commentText.trim() || !walletAddress) return;
@@ -126,7 +136,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [] }) => {
           id: uuidv4(),
           walletAddress: walletAddress, // Points go to the commenter
           action: 'comment_made',
-          points: 2, // 2 points for making a comment
+          points: 10, // 10 points for making a comment
           timestamp: new Date().toISOString(),
           metadata: {
             postId: post.id,
@@ -138,7 +148,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [] }) => {
           id: uuidv4(),
           walletAddress: post.authorWallet, // Points go to the post creator
           action: 'comment_received',
-          points: 1, // 1 point for received comment
+          points: 10, // 10 points for received comment
           timestamp: new Date().toISOString(),
           metadata: {
             postId: post.id,
@@ -152,6 +162,13 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [] }) => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+  
+  // Get the author's Aura Points
+  const getAuthorAuraPoints = () => {
+    // In a real app, this would come from a query or state
+    // For now, just show a mock value or the points if it's the current user
+    return post.authorWallet === walletAddress ? totalPoints : Math.floor(Math.random() * 1000);
   };
   
   return (
@@ -178,12 +195,15 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [] }) => {
         </div>
         
         <div className="flex-1">
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center">
             <Link href={`/profile/${post.authorWallet}`}>
               <div className="font-medium text-dark dark:text-white hover:text-primary cursor-pointer">
-                {post.authorUsername || post.authorWallet}
+                {post.authorUsername || 'Anon'}
               </div>
             </Link>
+            <span className="text-gray-400 mx-1">|</span>
+            <span className="text-sm text-primary">{getAuthorAuraPoints()} AP</span>
+            <span className="text-gray-400 mx-1">·</span>
             <span className="text-xs text-gray-500 dark:text-gray-400">{formatDate(post.createdAt)}</span>
           </div>
           
@@ -269,38 +289,36 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [] }) => {
               comments.map((comment) => (
                 <div key={comment.id} className="flex space-x-3">
                   <div className="flex-shrink-0">
-                    {comment.authorAvatar ? (
-                      <div className="w-8 h-8 rounded-full overflow-hidden">
-                        <img 
-                          src={comment.authorAvatar} 
-                          alt={comment.authorUsername || comment.authorWallet}
-                          className="w-full h-full object-cover" 
-                        />
+                    <Link href={`/profile/${comment.authorWallet}`}>
+                      <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center cursor-pointer">
+                        <span className="text-gray-500 dark:text-gray-300 text-xs">
+                          {comment.authorUsername ? comment.authorUsername.charAt(0).toUpperCase() : comment.authorWallet.substring(0, 2)}
+                        </span>
                       </div>
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                        <span className="text-gray-500 dark:text-gray-300 text-xs">{comment.authorWallet.substring(0, 2)}</span>
-                      </div>
-                    )}
+                    </Link>
                   </div>
                   
                   <div className="flex-1">
-                    <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-3">
-                      <div className="flex items-center space-x-2 mb-1">
+                    <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
+                      <div className="flex items-center space-x-1 mb-1">
                         <Link href={`/profile/${comment.authorWallet}`}>
-                          <div className="font-medium text-dark dark:text-white hover:text-primary cursor-pointer">
-                            {comment.authorUsername || comment.authorWallet}
+                          <div className="font-medium text-dark dark:text-white text-sm cursor-pointer">
+                            {comment.authorUsername || 'Anon'}
                           </div>
                         </Link>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">{formatDate(comment.createdAt)}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {formatDate(comment.createdAt)}
+                        </span>
                       </div>
-                      <p className="text-gray-800 dark:text-gray-100">{comment.content}</p>
+                      <p className="text-sm text-gray-700 dark:text-gray-300">{comment.content}</p>
                     </div>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-center text-gray-500 dark:text-gray-400 text-sm">No comments yet. Be the first to comment!</p>
+              <div className="text-center py-3 text-gray-500 dark:text-gray-400">
+                No comments yet. Be the first to comment!
+              </div>
             )}
           </div>
         </div>

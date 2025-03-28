@@ -3,15 +3,13 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
 import { Paperclip } from 'lucide-react';
 import { useWallet } from '../contexts/WalletContext';
-import { useRouter } from 'next/router';
 
 interface CreatePostFormProps {
   onSubmit: (content: string, mediaFile?: File) => void;
 }
 
 const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
-  const router = useRouter();
-  const { isConnected, walletAddress } = useWallet();
+  const { connect, isConnected, walletAddress } = useWallet();
   const [content, setContent] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [mediaFile, setMediaFile] = useState<File | null>(null);
@@ -26,14 +24,17 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     
-    if (!content.trim()) return;
+    // Allow posting with just media and no content
+    if (!content.trim() && !mediaFile) return;
     
     if (!isConnected) {
       const confirm = window.confirm('Please connect your wallet to post. Would you like to connect now?');
       if (confirm) {
-        router.push('/auth');
+        await connect();
+        if (!isConnected) return; // If still not connected after attempt, return
+      } else {
+        return;
       }
-      return;
     }
     
     setIsLoading(true);
@@ -199,13 +200,13 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
                   accept="image/*,video/*"
                   onChange={handleFileInputChange}
                 />
-                <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">Earn +5 Aura Points by posting</span>
+                <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">Earn +50 Aura Points by posting</span>
               </div>
               
               <button
                 type="submit"
                 className="px-4 py-2 bg-primary text-white rounded-full hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!content.trim() || isLoading}
+                disabled={(content.trim() === '' && !mediaFile) || isLoading}
               >
                 {isLoading ? 'Posting...' : 'Post'}
               </button>

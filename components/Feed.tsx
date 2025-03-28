@@ -153,7 +153,7 @@ const Feed = () => {
       id: uuidv4(),
       walletAddress,
       action: 'post_created',
-      points: 5, // 5 points for creating a post
+      points: 50, // 50 points for creating a post
       timestamp: new Date().toISOString(),
     }));
   };
@@ -161,6 +161,58 @@ const Feed = () => {
   // Get comments for a specific post
   const getPostComments = (postId: string) => {
     return comments.filter((comment: Comment) => comment.postId === postId);
+  };
+
+  // Handle following user
+  const handleFollowUser = (userWallet: string) => {
+    if (!walletAddress) return;
+    
+    // In a real app, this would update a database relation
+    // For this demo, we'll just update the user state
+    
+    // Add Aura Points transaction for the user being followed
+    dispatch(addTransaction({
+      id: uuidv4(),
+      walletAddress: userWallet, // Points go to user being followed
+      action: 'follower_gained',
+      points: 10, // 10 points for gaining a follower
+      timestamp: new Date().toISOString(),
+      metadata: {
+        followerWallet: walletAddress,
+      },
+    }));
+    
+    // Add Aura Points for the follower
+    dispatch(addTransaction({
+      id: uuidv4(),
+      walletAddress, // Points go to follower
+      action: 'follow_given',
+      points: 10, // 10 points for following someone
+      timestamp: new Date().toISOString(),
+      metadata: {
+        followerWallet: userWallet,
+      },
+    }));
+  };
+  
+  // Handle sharing post
+  const handleSharePost = (postId: string) => {
+    if (!walletAddress) return;
+    
+    // In a real app, this would create a share relation
+    // For this demo, we'll just update the post state
+    
+    // Add Aura Points transaction for sharing
+    dispatch(addTransaction({
+      id: uuidv4(),
+      walletAddress,
+      action: 'post_shared',
+      points: 100, // 100 points for sharing a post
+      timestamp: new Date().toISOString(),
+      metadata: {
+        postId,
+      },
+    }));
   };
 
   if (isInitialLoading) {
