@@ -106,6 +106,13 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         return null;
       }
       
+      // Display confirmation dialog
+      const userConfirmed = window.confirm("Please connect your wallet to interact. Would you like to connect now?");
+      
+      if (!userConfirmed) {
+        return null;
+      }
+      
       const response = await solanaProvider.connect();
       const address = response.publicKey.toString();
       
