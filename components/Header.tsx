@@ -20,7 +20,8 @@ const Header = () => {
     }
   };
 
-  const handleConnectWallet = async () => {
+  const handleConnectWallet = async (e: React.MouseEvent) => {
+    e.preventDefault();
     try {
       await connect();
     } catch (error) {

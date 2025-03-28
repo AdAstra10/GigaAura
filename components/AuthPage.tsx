@@ -5,7 +5,8 @@ const AuthPage = () => {
   const { connect, isConnecting, hasPhantomWallet } = useWallet();
   const [error, setError] = useState<string | null>(null);
 
-  const handleConnect = async () => {
+  const handleConnect = async (e: React.MouseEvent) => {
+    e.preventDefault();
     setError(null);
     
     if (!hasPhantomWallet) {

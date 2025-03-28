@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '@lib/store';
 import { Post, likePost, unlikePost } from '@lib/slices/postsSlice';
@@ -77,11 +76,10 @@ const PostCard: React.FC<PostCardProps> = ({ post }) => {
           <Link href={`/profile/${post.authorWallet}`}>
             {post.authorAvatar ? (
               <div className="w-10 h-10 rounded-full overflow-hidden relative">
-                <Image 
+                <img
                   src={post.authorAvatar} 
                   alt={post.authorUsername || post.authorWallet}
-                  layout="fill"
-                  objectFit="cover"
+                  className="w-full h-full object-cover"
                 />
               </div>
             ) : (
