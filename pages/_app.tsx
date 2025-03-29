@@ -86,83 +86,54 @@ const WalletProviderIsolation = () => {
         dangerouslySetInnerHTML={{
           __html: `
             (function() {
-              // Function to safely handle multiple providers
-              function safelyHandleProviders() {
+              // Function to safely track wallet providers without modifying ethereum
+              function safelyTrackWalletProviders() {
                 try {
-                  // Create a list to store all providers
-                  if (!window._walletProviders) {
-                    window._walletProviders = [];
-                    
-                    // If ethereum exists, store it
-                    if (window.ethereum) {
-                      window._walletProviders.push(window.ethereum);
-                    }
+                  // Initialize provider list if it doesn't exist
+                  window._walletProviders = window._walletProviders || [];
+                  
+                  // Store Phantom wallet if available - avoid touching ethereum completely
+                  if (window.phantom && window.phantom.solana && !window._walletProviders.includes(window.phantom.solana)) {
+                    window._walletProviders.push(window.phantom.solana);
                   }
                   
-                  // Create a safe getter for wallet detection
+                  // Add Solana if available
+                  if (window.solana && window.solana.isPhantom && !window._walletProviders.includes(window.solana)) {
+                    window._walletProviders.push(window.solana);
+                  }
+                  
+                  // Create a safe method to get the phantom wallet
                   window.getPhantomWallet = function() {
-                    // Look for the Phantom provider in our providers list
-                    for (let provider of window._walletProviders || []) {
-                      if (provider && provider.isPhantom) {
-                        return provider;
+                    // First check our tracked providers
+                    if (Array.isArray(window._walletProviders)) {
+                      for (let provider of window._walletProviders) {
+                        if (provider && provider.isPhantom) {
+                          return provider;
+                        }
                       }
                     }
                     
-                    // Alternative detection for Phantom
+                    // Direct checks without modifying anything
                     if (window.phantom && window.phantom.solana) {
                       return window.phantom.solana;
                     }
                     
-                    // Alternative backup detection for Solana
                     if (window.solana && window.solana.isPhantom) {
                       return window.solana;
                     }
                     
                     return null;
                   };
-                  
-                  // Only attempt to modify window.ethereum if it doesn't already have a getter
-                  if (!Object.getOwnPropertyDescriptor(window, 'ethereum') || 
-                      Object.getOwnPropertyDescriptor(window, 'ethereum').configurable) {
-                    
-                    // Get the current ethereum provider
-                    const originalEthereum = window.ethereum;
-                    
-                    // Define a new descriptor that won't conflict with extensions
-                    Object.defineProperty(window, '_safeEthereum', {
-                      configurable: true,
-                      enumerable: false,
-                      writable: true,
-                      value: originalEthereum
-                    });
-                    
-                    // Watch for new providers by intercepting assignments to a safe property
-                    Object.defineProperty(window, '_ethereumProvider', {
-                      configurable: true,
-                      enumerable: false,
-                      get: function() {
-                        return window._safeEthereum;
-                      },
-                      set: function(newValue) {
-                        if (newValue && typeof newValue === 'object' && !window._walletProviders.includes(newValue)) {
-                          window._walletProviders.push(newValue);
-                          window._safeEthereum = newValue;
-                          console.log('New wallet provider detected and registered safely');
-                        }
-                        return true;
-                      }
-                    });
-                  }
                 } catch (e) {
-                  console.error('Error in wallet provider isolation:', e);
+                  console.error('Error in wallet provider tracking:', e);
                 }
               }
               
-              // Execute immediately
-              safelyHandleProviders();
+              // Run immediately
+              safelyTrackWalletProviders();
               
-              // Also run after a delay to catch late injections
-              setTimeout(safelyHandleProviders, 500);
+              // Run again after delay to catch late injections
+              setTimeout(safelyTrackWalletProviders, 1000);
             })();
           `
         }}
@@ -176,6 +147,40 @@ function MyApp({ Component, pageProps }: AppProps) {
     <Provider store={store}>
       <DarkModeProvider>
         <WalletProvider>
+          <Head>
+            <script
+              dangerouslySetInnerHTML={{
+                __html: `
+                  // Early wallet detection script - must run before other scripts
+                  window._phantomWalletRef = null;
+                  
+                  // Store references to any wallet provider
+                  if (window.phantom && window.phantom.solana) {
+                    window._phantomWalletRef = window.phantom.solana;
+                  } else if (window.solana && window.solana.isPhantom) {
+                    window._phantomWalletRef = window.solana;
+                  }
+                  
+                  // Create a safe method to get the phantom wallet that won't conflict with other extensions
+                  window.getPhantomWallet = function() {
+                    if (window._phantomWalletRef) return window._phantomWalletRef;
+                    
+                    if (window.phantom && window.phantom.solana) {
+                      window._phantomWalletRef = window.phantom.solana;
+                      return window._phantomWalletRef;
+                    }
+                    
+                    if (window.solana && window.solana.isPhantom) {
+                      window._phantomWalletRef = window.solana;
+                      return window._phantomWalletRef;
+                    }
+                    
+                    return null;
+                  };
+                `
+              }}
+            />
+          </Head>
           <WalletProviderIsolation />
           <AppWithWallet Component={Component} pageProps={pageProps} />
           <Toaster position="bottom-center" />

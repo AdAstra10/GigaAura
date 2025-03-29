@@ -20,6 +20,7 @@ interface WindowWithSolana extends Window {
   };
   getPhantomWallet?: () => PhantomWallet | null;
   _walletProviders?: any[];
+  _phantomWalletRef?: PhantomWallet;
 }
 
 interface WalletContextProps {
@@ -71,31 +72,26 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     
     try {
       const windowObj = window as WindowWithSolana;
-      let provider = null;
       
-      // Method 1: Use our custom isolation getter (preferred)
-      if (typeof windowObj.getPhantomWallet === 'function') {
-        provider = windowObj.getPhantomWallet();
-        if (provider) return provider;
+      // Method 1: Use our direct reference (preferred)
+      if (windowObj._phantomWalletRef) {
+        return windowObj._phantomWalletRef;
       }
       
-      // Method 2: Scan our custom provider list
-      if (Array.isArray(windowObj._walletProviders)) {
-        for (const possibleProvider of windowObj._walletProviders) {
-          if (possibleProvider && possibleProvider.isPhantom) {
-            return possibleProvider;
-          }
-        }
+      // Method 2: Use our custom isolation getter
+      if (typeof windowObj.getPhantomWallet === 'function') {
+        const provider = windowObj.getPhantomWallet();
+        if (provider) return provider;
       }
       
       // Method 3: Traditional phantom detection as fallback
       if (windowObj.phantom?.solana) {
-        provider = windowObj.phantom.solana;
+        return windowObj.phantom.solana;
       } else if (windowObj.solana?.isPhantom) {
-        provider = windowObj.solana;
+        return windowObj.solana;
       }
       
-      return provider;
+      return null;
     } catch (error) {
       console.error("Error accessing wallet provider:", error);
       return null;
