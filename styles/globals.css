@@ -25,17 +25,73 @@
   }
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: rgb(var(--background-start-rgb));
+@layer base {
+  body {
+    @apply bg-light text-dark transition-colors duration-200;
+  }
+
+  .dark body {
+    @apply bg-dark text-light;
+  }
 }
 
-.dark body {
-  background: linear-gradient(
-    to bottom,
-    rgb(var(--background-start-rgb)),
-    rgb(var(--background-end-rgb))
-  );
+/* Custom text colors for icon hover states */
+.text-sunHover {
+  color: var(--sun-hover, #FF9933);
+}
+
+.text-moonHover {
+  color: var(--moon-hover, #4A6FA5);
+}
+
+/* Add some custom styles for components */
+.card {
+  @apply bg-white dark:bg-gray-800 rounded-lg shadow-md p-4;
+}
+
+.btn-primary {
+  @apply bg-primary hover:bg-primary/90 text-white font-medium py-2 px-4 rounded-md;
+}
+
+/* Dark mode transparent styling only applies in dark mode */
+.dark .transparent-bg {
+  background-color: transparent !important;
+}
+
+/* Light mode keeps solid backgrounds */
+.transparent-bg {
+  background-color: white;
+}
+
+/* Preserve hover effects in dark mode */
+.dark .hover-effect:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Add vertical separators instead of boxes in dark mode */
+@media (min-width: 768px) {
+  .dark .sidebar-column {
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .dark .content-column {
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Media Styles */
+.post-image {
+  max-height: 500px;
+  object-fit: contain;
+}
+
+.post-video {
+  max-height: 500px;
+}
+
+/* Keep header solid in dark mode */
+.dark .header-solid {
+  background-color: #1A202C !important;
 }
 
 .main-content-grid {
@@ -49,16 +105,6 @@ body {
   }
 }
 
-/* Hover Effects */
-.hover-effect {
-  transition: all 0.2s ease;
-}
-
-/* Header Styles */
-.header-solid {
-  backdrop-filter: blur(8px);
-}
-
 /* Common Styles */
 .thin-borders {
   border-width: 1px;
@@ -66,24 +112,6 @@ body {
 
 .no-shadow {
   box-shadow: none;
-}
-
-/* In light mode, ensure backgrounds are not transparent */
-.transparent-bg {
-  background-color: white;
-}
-
-.card-outline {
-  border: 1px solid rgba(209, 213, 219, 0.3);
-}
-
-/* Custom Icons Hover Colors */
-.text-sunHover {
-  color: #FCD34D;
-}
-
-.text-moonHover {
-  color: #A78BFA;
 }
 
 /* Sidebar Styles */
@@ -94,16 +122,6 @@ body {
 .content-column {
   margin: 0 auto;
   max-width: 100%;
-}
-
-/* Media Styles */
-.post-image {
-  max-height: 500px;
-  object-fit: contain;
-}
-
-.post-video {
-  max-height: 500px;
 }
 
 /* Mobile media adjustments */
@@ -118,11 +136,6 @@ body {
     padding: 0.5rem 0;
     z-index: 50;
   }
-}
-
-/* Dark mode specific overrides */
-.dark .transparent-bg {
-  background-color: transparent !important;
 }
 
 /* Timeline separator */
@@ -144,12 +157,6 @@ body {
   background-color: rgba(75, 85, 99, 0.3);
 }
 
-@layer base {
-  body {
-    @apply bg-light dark:bg-gray-900;
-  }
-}
-
 /* Open design for dark mode - use direct class selectors to avoid circular references */
 .dark .thin-borders {
   border-color: rgba(255, 255, 255, 0.1) !important;
@@ -159,47 +166,13 @@ body {
   box-shadow: none !important;
 }
 
-/* Add vertical separators instead of boxes in dark mode */
-@media (min-width: 768px) {
-  .dark .sidebar-column {
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  
-  .dark .content-column {
-    border-left: 1px solid rgba(255, 255, 255, 0.1);
-  }
-}
-
-/* Preserve hover effects in dark mode */
-.dark .hover-effect:hover {
-  background-color: rgba(255, 255, 255, 0.05) !important;
-}
-
-/* Preserve card outlines without solid backgrounds */
-.dark .card-outline {
-  position: relative;
-}
-
-.dark .card-outline::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: inherit;
-  pointer-events: none;
-}
-
 /* Override for post items and feed to improve readability */
 .dark .post-separator {
   border-color: rgba(255, 255, 255, 0.05) !important;
 }
 
-/* Keep header and footer solid */
-.dark .header-solid {
-  background-color: #1A202C !important;
+.card-outline {
+  border: 1px solid rgba(209, 213, 219, 0.3);
 }
 
 @layer components {
@@ -207,20 +180,8 @@ body {
     @apply px-4 py-2 rounded-md transition-colors;
   }
   
-  .btn-primary {
-    @apply bg-primary text-white hover:bg-primary/80;
-  }
-  
   .btn-secondary {
     @apply bg-secondary text-white hover:bg-secondary/80;
-  }
-  
-  .card {
-    @apply bg-white rounded-lg shadow-md p-4 transition-colors duration-200;
-  }
-  
-  .dark .card {
-    @apply bg-gray-800 text-light;
   }
   
   .input {

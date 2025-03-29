@@ -17,23 +17,27 @@ interface DarkModeProviderProps {
 }
 
 export const DarkModeProvider: React.FC<DarkModeProviderProps> = ({ children }) => {
-  // Check localStorage and system preference for initial state
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    // Check if we're in the browser environment
-    if (typeof window !== 'undefined') {
-      // First check localStorage
-      const savedMode = localStorage.getItem('darkMode');
-      if (savedMode !== null) {
-        return savedMode === 'true';
-      }
+  // Initialize with a default of light mode
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+  
+  // Check for stored preference and system preference on mount
+  useEffect(() => {
+    const loadDarkMode = () => {
+      // First try to load from localStorage
+      const storedDarkMode = localStorage.getItem('darkMode');
       
-      // Then check system preference
-      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
+      if (storedDarkMode !== null) {
+        // User has a preference
+        return storedDarkMode === 'true';
+      } else {
+        // No saved preference, check system preference
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+    };
     
-    // Default to light mode
-    return false;
-  });
+    // Set dark mode based on stored preferences
+    setIsDarkMode(loadDarkMode());
+  }, []);
   
   // Apply dark mode class to document
   useEffect(() => {
@@ -46,26 +50,6 @@ export const DarkModeProvider: React.FC<DarkModeProviderProps> = ({ children }) 
     // Save preference to localStorage
     localStorage.setItem('darkMode', isDarkMode.toString());
   }, [isDarkMode]);
-  
-  // Listen for system preference changes
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      
-      const handleChange = (e: MediaQueryListEvent) => {
-        // Only update if user hasn't set a preference
-        if (localStorage.getItem('darkMode') === null) {
-          setIsDarkMode(e.matches);
-        }
-      };
-      
-      // Add event listener for theme changes
-      mediaQuery.addEventListener('change', handleChange);
-      
-      // Clean up
-      return () => mediaQuery.removeEventListener('change', handleChange);
-    }
-  }, []);
   
   const toggleDarkMode = () => {
     setIsDarkMode(prev => !prev);
