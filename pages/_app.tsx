@@ -86,24 +86,23 @@ const WalletProviderIsolation = () => {
         dangerouslySetInnerHTML={{
           __html: `
             (function() {
-              // Store any existing window.ethereum instance
-              const originalEthereum = window.ethereum;
-              
               // Function to safely handle multiple providers
               function safelyHandleProviders() {
                 try {
                   // Create a list to store all providers
-                  window._walletProviders = window._walletProviders || [];
-                  
-                  // Add the original provider if it exists
-                  if (originalEthereum && !window._walletProviders.includes(originalEthereum)) {
-                    window._walletProviders.push(originalEthereum);
+                  if (!window._walletProviders) {
+                    window._walletProviders = [];
+                    
+                    // If ethereum exists, store it
+                    if (window.ethereum) {
+                      window._walletProviders.push(window.ethereum);
+                    }
                   }
                   
                   // Create a safe getter for wallet detection
                   window.getPhantomWallet = function() {
                     // Look for the Phantom provider in our providers list
-                    for (let provider of window._walletProviders) {
+                    for (let provider of window._walletProviders || []) {
                       if (provider && provider.isPhantom) {
                         return provider;
                       }
@@ -122,21 +121,38 @@ const WalletProviderIsolation = () => {
                     return null;
                   };
                   
-                  // Watch for new providers being set
-                  Object.defineProperty(window, 'ethereum', {
-                    configurable: true,
-                    enumerable: true,
-                    get: function() {
-                      return originalEthereum;
-                    },
-                    set: function(newValue) {
-                      if (newValue && typeof newValue === 'object' && !window._walletProviders.includes(newValue)) {
-                        window._walletProviders.push(newValue);
-                        console.log('New wallet provider detected and registered safely');
+                  // Only attempt to modify window.ethereum if it doesn't already have a getter
+                  if (!Object.getOwnPropertyDescriptor(window, 'ethereum') || 
+                      Object.getOwnPropertyDescriptor(window, 'ethereum').configurable) {
+                    
+                    // Get the current ethereum provider
+                    const originalEthereum = window.ethereum;
+                    
+                    // Define a new descriptor that won't conflict with extensions
+                    Object.defineProperty(window, '_safeEthereum', {
+                      configurable: true,
+                      enumerable: false,
+                      writable: true,
+                      value: originalEthereum
+                    });
+                    
+                    // Watch for new providers by intercepting assignments to a safe property
+                    Object.defineProperty(window, '_ethereumProvider', {
+                      configurable: true,
+                      enumerable: false,
+                      get: function() {
+                        return window._safeEthereum;
+                      },
+                      set: function(newValue) {
+                        if (newValue && typeof newValue === 'object' && !window._walletProviders.includes(newValue)) {
+                          window._walletProviders.push(newValue);
+                          window._safeEthereum = newValue;
+                          console.log('New wallet provider detected and registered safely');
+                        }
+                        return true;
                       }
-                      return true;
-                    }
-                  });
+                    });
+                  }
                 } catch (e) {
                   console.error('Error in wallet provider isolation:', e);
                 }
