@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../lib/store';
 import { setFeed, addPost, Post, addComment, setComments } from '../lib/slices/postsSlice';
@@ -7,14 +7,41 @@ import { addTransaction } from '../lib/slices/auraPointsSlice';
 import PostCard from './PostCard';
 import toast from 'react-hot-toast';
 import { v4 as uuidv4 } from 'uuid';
+import { useDarkMode } from '../contexts/DarkModeContext';
+import dynamic from 'next/dynamic';
+
+// Import the emoji picker dynamically to avoid SSR issues
+const EmojiPicker = dynamic(
+  () => import('emoji-picker-react'),
+  { ssr: false }
+);
+
+interface EmojiClickData {
+  emoji: string;
+}
 
 const Feed = () => {
   const dispatch = useDispatch();
   const { walletAddress } = useWallet();
+  const { isDarkMode } = useDarkMode();
   const feed = useSelector((state: RootState) => state.posts.feed);
   const comments = useSelector((state: RootState) => state.posts.comments);
   const user = useSelector((state: RootState) => state.user);
+  
+  // Loading state
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Post creation states
+  const [newPostContent, setNewPostContent] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFileType, setSelectedFileType] = useState<'image' | 'video' | undefined>(undefined);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [location, setLocation] = useState<{lat: number, lng: number} | null>(null);
+  
+  // Refs
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Load posts from cache or initialize with mock data
   useEffect(() => {
@@ -33,6 +60,94 @@ const Feed = () => {
       localStorage.setItem('cachedPosts', JSON.stringify(feed));
     }
   }, [feed]);
+  
+  // Handle file selection for media upload
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    
+    if (!isImage && !isVideo) {
+      toast.error('Please upload an image or video file');
+      return;
+    }
+    
+    setSelectedFile(file);
+    setSelectedFileType(isImage ? 'image' : 'video');
+  };
+  
+  // Handle post creation
+  const handleCreatePost = async () => {
+    if (!walletAddress) {
+      toast.error('Please connect your wallet to create a post');
+      return;
+    }
+    
+    if (!newPostContent.trim() && !selectedFile) {
+      toast.error('Post cannot be empty');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    try {
+      // In a real app, you'd upload the file and get a URL
+      // For this demo, we're creating a mock URL
+      let mediaUrl;
+      if (selectedFile) {
+        // In a real app, this would be a server upload
+        // For demo purposes, we'll just create a data URL
+        mediaUrl = URL.createObjectURL(selectedFile);
+      }
+      
+      // Create the new post object
+      const newPost: Partial<Post> = {
+        id: uuidv4(),
+        content: newPostContent,
+        authorWallet: walletAddress,
+        authorUsername: user.username || undefined,
+        authorAvatar: user.avatar || undefined,
+        createdAt: new Date().toISOString(),
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        likedBy: [],
+        mediaUrl,
+        mediaType: selectedFileType,
+      };
+      
+      // Add the post to the feed
+      dispatch(addPost(newPost as Post));
+      
+      // Add Aura Points for creating a post
+      dispatch(
+        addTransaction({
+          id: uuidv4(),
+          amount: 50, // 50 points for creating a post
+          timestamp: new Date().toISOString(),
+          action: 'post_created',
+          counterpartyName: 'System',
+          counterpartyWallet: 'system'
+        })
+      );
+      
+      // Reset form and state
+      setNewPostContent('');
+      setSelectedFile(null);
+      setSelectedFileType(undefined);
+      setLocation(null);
+      setShowEmojiPicker(false);
+      
+      toast.success('Post created successfully! +50 Aura Points');
+    } catch (error) {
+      console.error('Error creating post:', error);
+      toast.error('Failed to create post');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
   
   const handleSharePost = (postId: string) => {
     if (!walletAddress) {
@@ -56,7 +171,7 @@ const Feed = () => {
         timestamp: new Date().toISOString(),
         action: 'post_shared',
         counterpartyName: post?.authorUsername || 'Unknown',
-        counterpartyWallet: post?.authorWallet
+        counterpartyWallet: post?.authorWallet || ''
       })
     );
     
@@ -272,10 +387,11 @@ const Feed = () => {
             </div>
             {showEmojiPicker && (
               <div className="absolute z-10 mt-1">
+                {/* @ts-ignore */}
                 <EmojiPicker
-                  onEmojiClick={(emojiData) => {
+                  onEmojiClick={(emojiData: EmojiClickData) => {
                     setNewPostContent(
-                      (prev) => prev + emojiData.emoji
+                      (prev: string) => prev + emojiData.emoji
                     );
                     setShowEmojiPicker(false);
                   }}
@@ -308,8 +424,8 @@ const Feed = () => {
               key={post.id} 
               post={post}
               comments={getPostComments(post.id)}
-              onShare={handleSharePost ? () => handleSharePost(post.id) : undefined}
-              onFollow={handleFollowUser ? () => handleFollowUser(post.authorWallet, post.authorUsername || '') : undefined}
+              onShare={() => handleSharePost(post.id)}
+              onFollow={() => post.authorWallet && handleFollowUser(post.authorWallet, post.authorUsername || '')}
             />
           ))}
         </div>
