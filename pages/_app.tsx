@@ -8,6 +8,7 @@ import { DarkModeProvider } from '../contexts/DarkModeContext';
 import { loadWalletPoints } from '../lib/slices/auraPointsSlice';
 import { updateProfile } from '../lib/slices/userSlice';
 import '../styles/globals.css';
+import Head from 'next/head';
 
 // Wrapper component to access wallet context inside app
 const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Component']; pageProps: AppProps['pageProps'] }) => {
@@ -77,11 +78,89 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
   return <Component {...pageProps} />;
 };
 
+// Script to prevent ethereum provider conflicts
+const WalletProviderIsolation = () => {
+  return (
+    <Head>
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+            (function() {
+              // Store any existing window.ethereum instance
+              const originalEthereum = window.ethereum;
+              
+              // Function to safely handle multiple providers
+              function safelyHandleProviders() {
+                try {
+                  // Create a list to store all providers
+                  window._walletProviders = window._walletProviders || [];
+                  
+                  // Add the original provider if it exists
+                  if (originalEthereum && !window._walletProviders.includes(originalEthereum)) {
+                    window._walletProviders.push(originalEthereum);
+                  }
+                  
+                  // Create a safe getter for wallet detection
+                  window.getPhantomWallet = function() {
+                    // Look for the Phantom provider in our providers list
+                    for (let provider of window._walletProviders) {
+                      if (provider && provider.isPhantom) {
+                        return provider;
+                      }
+                    }
+                    
+                    // Alternative detection for Phantom
+                    if (window.phantom && window.phantom.solana) {
+                      return window.phantom.solana;
+                    }
+                    
+                    // Alternative backup detection for Solana
+                    if (window.solana && window.solana.isPhantom) {
+                      return window.solana;
+                    }
+                    
+                    return null;
+                  };
+                  
+                  // Watch for new providers being set
+                  Object.defineProperty(window, 'ethereum', {
+                    configurable: true,
+                    enumerable: true,
+                    get: function() {
+                      return originalEthereum;
+                    },
+                    set: function(newValue) {
+                      if (newValue && typeof newValue === 'object' && !window._walletProviders.includes(newValue)) {
+                        window._walletProviders.push(newValue);
+                        console.log('New wallet provider detected and registered safely');
+                      }
+                      return true;
+                    }
+                  });
+                } catch (e) {
+                  console.error('Error in wallet provider isolation:', e);
+                }
+              }
+              
+              // Execute immediately
+              safelyHandleProviders();
+              
+              // Also run after a delay to catch late injections
+              setTimeout(safelyHandleProviders, 500);
+            })();
+          `
+        }}
+      />
+    </Head>
+  );
+};
+
 function MyApp({ Component, pageProps }: AppProps) {
   return (
     <Provider store={store}>
       <DarkModeProvider>
         <WalletProvider>
+          <WalletProviderIsolation />
           <AppWithWallet Component={Component} pageProps={pageProps} />
           <Toaster position="bottom-center" />
         </WalletProvider>

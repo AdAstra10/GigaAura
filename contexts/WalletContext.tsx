@@ -12,12 +12,14 @@ interface PhantomWallet {
   disconnect: () => Promise<void>;
 }
 
-// Extended Window interface to include Solana and Phantom
+// Extended Window interface to include Solana, Phantom and our custom provider list
 interface WindowWithSolana extends Window {
   solana?: PhantomWallet;
   phantom?: {
     solana?: PhantomWallet;
   };
+  getPhantomWallet?: () => PhantomWallet | null;
+  _walletProviders?: any[];
 }
 
 interface WalletContextProps {
@@ -63,22 +65,33 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
 
   const dispatch = useDispatch();
 
-  // Helper function to safely get Phantom wallet provider with more reliable detection
+  // Helper function to safely get Phantom wallet provider using our isolation technique
   const getPhantomProvider = (): PhantomWallet | null => {
     if (typeof window === 'undefined') return null;
     
     try {
       const windowObj = window as WindowWithSolana;
-      
-      // Try multiple methods to detect Phantom wallet - listed in priority order
       let provider = null;
       
-      // Method 1: phantom.solana
+      // Method 1: Use our custom isolation getter (preferred)
+      if (typeof windowObj.getPhantomWallet === 'function') {
+        provider = windowObj.getPhantomWallet();
+        if (provider) return provider;
+      }
+      
+      // Method 2: Scan our custom provider list
+      if (Array.isArray(windowObj._walletProviders)) {
+        for (const possibleProvider of windowObj._walletProviders) {
+          if (possibleProvider && possibleProvider.isPhantom) {
+            return possibleProvider;
+          }
+        }
+      }
+      
+      // Method 3: Traditional phantom detection as fallback
       if (windowObj.phantom?.solana) {
         provider = windowObj.phantom.solana;
-      }
-      // Method 2: window.solana with isPhantom check
-      else if (windowObj.solana?.isPhantom) {
+      } else if (windowObj.solana?.isPhantom) {
         provider = windowObj.solana;
       }
       
@@ -121,7 +134,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     }
   };
 
-  // Initialize wallet connection
+  // Initialize wallet connection with more robust detection
   useEffect(() => {
     const checkIfWalletIsConnected = async () => {
       try {
@@ -130,7 +143,10 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         setIsLoading(true);
         setWalletDetectionComplete(true);
         
-        // Get phantom provider using our helper function
+        // Delay wallet detection to ensure our isolation code has run
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Get phantom provider using our enhanced helper function
         const provider = getPhantomProvider();
         
         if (provider) {
@@ -176,7 +192,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     // Use setTimeout with a longer delay to ensure browser extensions have time to inject
     const timeoutId = setTimeout(() => {
       checkIfWalletIsConnected();
-    }, 1000);
+    }, 1500);
     
     return () => clearTimeout(timeoutId);
     
@@ -197,12 +213,15 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     }
   };
 
-  // Connect wallet
+  // Connect wallet with enhanced error handling
   const connectWallet = async () => {
     setIsLoading(true);
     
     try {
-      // Get provider using our helper function
+      // Wait a moment to ensure our isolation script has had time to run
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Get provider using our enhanced helper function
       const provider = getPhantomProvider();
 
       if (!provider) {
