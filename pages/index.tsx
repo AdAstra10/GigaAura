@@ -18,7 +18,7 @@ import Feed from '../components/Feed';
 const HomePage = () => {
   const dispatch = useDispatch();
   const router = useRouter();
-  const { walletAddress, connect, isConnected } = useWallet();
+  const { walletAddress, connectWallet, walletConnected } = useWallet();
   const user = useSelector((state: RootState) => state.user);
   const { feed } = useSelector((state: RootState) => state.posts);
   
@@ -53,10 +53,10 @@ const HomePage = () => {
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!isConnected) {
+    if (!walletConnected) {
       const confirmConnect = window.confirm('You need to connect your wallet to create a post. Connect now?');
       if (confirmConnect) {
-        await connect();
+        await connectWallet();
         return; // Return and let the user try again after connecting
       } else {
         return;
@@ -147,9 +147,9 @@ const HomePage = () => {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-12 gap-6">
-        <div className="hidden md:block md:col-span-3 sidebar-column">
-          <Sidebar className="sticky top-20" />
+      <main className="container mx-auto px-4 py-4 grid grid-cols-1 md:grid-cols-12 gap-4">
+        <div className="hidden md:block md:col-span-3 sticky top-16 h-[calc(100vh-4rem)]">
+          <Sidebar className="pt-2" />
         </div>
         
         <div className="col-span-1 md:col-span-6 content-column">

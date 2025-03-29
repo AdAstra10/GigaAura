@@ -71,9 +71,9 @@ const ExplorePage: NextPage = () => {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-12 gap-6">
-        <div className="hidden md:block md:col-span-3">
-          <Sidebar className="sticky top-20" />
+      <main className="container mx-auto px-4 py-4 grid grid-cols-1 md:grid-cols-12 gap-4">
+        <div className="hidden md:block md:col-span-3 sticky top-16 h-[calc(100vh-4rem)]">
+          <Sidebar className="pt-2" />
         </div>
 
         <div className="col-span-1 md:col-span-9">
