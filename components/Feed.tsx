@@ -22,10 +22,10 @@ interface EmojiClickData {
 
 const Feed = () => {
   const dispatch = useDispatch();
-  const { walletAddress } = useWallet();
+  const { walletAddress, walletConnected } = useWallet();
   const { isDarkMode } = useDarkMode();
-  const feed = useSelector((state: RootState) => state.posts.feed);
-  const comments = useSelector((state: RootState) => state.posts.comments);
+  const feed = useSelector((state: RootState) => state.posts.feed || []);
+  const comments = useSelector((state: RootState) => state.posts.comments || {});
   const user = useSelector((state: RootState) => state.user);
   
   // Loading state
@@ -43,23 +43,42 @@ const Feed = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Safely access feed data with error handling
+  const safeFeed = Array.isArray(feed) ? feed : [];
+  
   // Load posts from cache or initialize with mock data
   useEffect(() => {
-    const cachedPosts = localStorage.getItem('cachedPosts');
-    if (cachedPosts) {
-      dispatch(setFeed(JSON.parse(cachedPosts)));
-    } else {
+    try {
+      const cachedPosts = localStorage.getItem('cachedPosts');
+      if (cachedPosts) {
+        const parsedPosts = JSON.parse(cachedPosts);
+        if (Array.isArray(parsedPosts)) {
+          dispatch(setFeed(parsedPosts));
+        } else {
+          // If cached data is invalid, initialize with empty array
+          dispatch(setFeed([]));
+        }
+      } else {
+        dispatch(setFeed([]));
+      }
+    } catch (error) {
+      console.error('Error loading cached posts:', error);
       dispatch(setFeed([]));
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, [dispatch]);
   
   // Save posts to cache whenever they change
   useEffect(() => {
-    if (feed.length > 0) {
-      localStorage.setItem('cachedPosts', JSON.stringify(feed));
+    if (safeFeed.length > 0) {
+      try {
+        localStorage.setItem('cachedPosts', JSON.stringify(safeFeed));
+      } catch (error) {
+        console.error('Error saving posts to cache:', error);
+      }
     }
-  }, [feed]);
+  }, [safeFeed]);
   
   // Handle file selection for media upload
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -80,7 +99,7 @@ const Feed = () => {
   
   // Handle post creation
   const handleCreatePost = async () => {
-    if (!walletAddress) {
+    if (!walletConnected || !walletAddress) {
       toast.error('Please connect your wallet to create a post');
       return;
     }
@@ -150,36 +169,36 @@ const Feed = () => {
   };
   
   const handleSharePost = (postId: string) => {
-    if (!walletAddress) {
+    if (!walletConnected || !walletAddress) {
       toast.error('Please connect your wallet to share posts');
       return;
     }
     
     // Find and update the post
-    const post = feed.find(p => p.id === postId);
+    const post = safeFeed.find(p => p.id === postId);
     if (post) {
       const updatedPost = {...post, shares: post.shares + 1};
-      const updatedFeed = feed.map(p => p.id === postId ? updatedPost : p);
+      const updatedFeed = safeFeed.map(p => p.id === postId ? updatedPost : p);
       dispatch(setFeed(updatedFeed));
+      
+      // Add Aura Points for sharing a post
+      dispatch(
+        addTransaction({
+          id: uuidv4(),
+          amount: 100,
+          timestamp: new Date().toISOString(),
+          action: 'post_shared',
+          counterpartyName: post?.authorUsername || 'Unknown',
+          counterpartyWallet: post?.authorWallet || ''
+        })
+      );
+      
+      toast.success('Post shared successfully! +100 Aura Points');
     }
-    
-    // Add Aura Points for sharing a post
-    dispatch(
-      addTransaction({
-        id: uuidv4(),
-        amount: 100,
-        timestamp: new Date().toISOString(),
-        action: 'post_shared',
-        counterpartyName: post?.authorUsername || 'Unknown',
-        counterpartyWallet: post?.authorWallet || ''
-      })
-    );
-    
-    toast.success('Post shared successfully! +100 Aura Points');
   };
   
   const handleFollowUser = (userWallet: string, username: string) => {
-    if (!walletAddress) {
+    if (!walletConnected || !walletAddress) {
       toast.error('Please connect your wallet to follow users');
       return;
     }
@@ -412,14 +431,14 @@ const Feed = () => {
           </div>
           <p className="text-gray-500 dark:text-gray-400 mt-4">Loading posts...</p>
         </div>
-      ) : feed.length === 0 ? (
+      ) : safeFeed.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 transparent-bg rounded-lg shadow-md no-shadow card-outline p-6 text-center">
           <p className="text-gray-500 dark:text-gray-400">No posts yet.</p>
           <p className="mt-2 dark:text-gray-300">Be the first to share an update!</p>
         </div>
       ) : (
         <div className="space-y-4">
-          {feed.map((post) => (
+          {safeFeed.map((post) => (
             <PostCard 
               key={post.id} 
               post={post}

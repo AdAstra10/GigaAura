@@ -59,21 +59,30 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const [walletProvider, setWalletProvider] = useState<PhantomWallet | null>(null);
   const [walletConnected, setWalletConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [walletDetectionComplete, setWalletDetectionComplete] = useState(false);
 
   const dispatch = useDispatch();
 
-  // Helper function to safely get Phantom wallet provider
+  // Helper function to safely get Phantom wallet provider with more reliable detection
   const getPhantomProvider = (): PhantomWallet | null => {
     if (typeof window === 'undefined') return null;
     
     try {
       const windowObj = window as WindowWithSolana;
-      // Try multiple methods to get the provider
-      const provider = 
-        (windowObj.phantom?.solana) || 
-        (windowObj.solana?.isPhantom ? windowObj.solana : null);
       
-      return provider || null;
+      // Try multiple methods to detect Phantom wallet - listed in priority order
+      let provider = null;
+      
+      // Method 1: phantom.solana
+      if (windowObj.phantom?.solana) {
+        provider = windowObj.phantom.solana;
+      }
+      // Method 2: window.solana with isPhantom check
+      else if (windowObj.solana?.isPhantom) {
+        provider = windowObj.solana;
+      }
+      
+      return provider;
     } catch (error) {
       console.error("Error accessing wallet provider:", error);
       return null;
@@ -81,7 +90,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   };
 
   // Load user profile data from localStorage based on wallet address
-  const loadUserProfileData = (address: string) => {
+  const loadUserProfileData = (address: string | null) => {
     if (!address) return;
     
     try {
@@ -116,7 +125,10 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   useEffect(() => {
     const checkIfWalletIsConnected = async () => {
       try {
+        if (walletDetectionComplete) return;
+        
         setIsLoading(true);
+        setWalletDetectionComplete(true);
         
         // Get phantom provider using our helper function
         const provider = getPhantomProvider();
@@ -127,15 +139,25 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
           // Check if we're already authorized and connected
           try {
             const response = await provider.connect({ onlyIfTrusted: true });
-            const address = safeGetAddress(response?.publicKey);
+            
+            // Defensive coding - check response exists
+            if (!response) {
+              console.warn("No response from wallet connect");
+              return;
+            }
+            
+            // Safely get address with null checks
+            const address = safeGetAddress(response.publicKey);
             
             if (address) {
               setWalletState(address);
               setWalletConnected(true);
               dispatch(setWalletAddress(address));
               loadWalletAuraPoints(address);
-              loadUserProfileData(address); // Load profile data here
+              loadUserProfileData(address);
               console.log("Auto-connected to wallet:", address);
+            } else {
+              console.warn("Connected to wallet but could not get address");
             }
           } catch (error) {
             // Not connected yet (normal, will connect later when user clicks)
@@ -151,16 +173,18 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       }
     };
 
-    // Use setTimeout to ensure browser extensions have time to inject their objects
-    setTimeout(() => {
+    // Use setTimeout with a longer delay to ensure browser extensions have time to inject
+    const timeoutId = setTimeout(() => {
       checkIfWalletIsConnected();
-    }, 500);
+    }, 1000);
+    
+    return () => clearTimeout(timeoutId);
     
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [walletDetectionComplete]);
 
   // Load Aura Points from localStorage or initialize to default value
-  const loadWalletAuraPoints = (address: string) => {
+  const loadWalletAuraPoints = (address: string | null) => {
     if (!address) return;
     
     try {
@@ -188,7 +212,15 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
 
       try {
         const response = await provider.connect();
-        const address = safeGetAddress(response?.publicKey);
+        
+        // Defensive coding - check response exists
+        if (!response) {
+          alert("Error connecting to wallet: No response from wallet");
+          return;
+        }
+        
+        // Safely get address with null checks
+        const address = safeGetAddress(response.publicKey);
         
         if (address) {
           // Set wallet state and dispatch to Redux
@@ -199,7 +231,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
           
           // Load data for this wallet address
           loadWalletAuraPoints(address);
-          loadUserProfileData(address); // Load profile data here
+          loadUserProfileData(address);
           console.log("Connected to wallet:", address);
         } else {
           console.error("Failed to get publicKey from wallet connection");
