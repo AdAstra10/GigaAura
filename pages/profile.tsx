@@ -105,33 +105,48 @@ const ProfilePage = () => {
       
       // Save profile data to localStorage for persistence with wallet address
       if (walletAddress) {
-        // Save profile picture
-        if (avatarUrl) {
-          const profilePictures = JSON.parse(localStorage.getItem('profilePictures') || '{}');
-          profilePictures[walletAddress] = avatarUrl;
-          localStorage.setItem('profilePictures', JSON.stringify(profilePictures));
-        }
+        // Create centralized function to save all profile data
+        const saveProfileData = () => {
+          // Save profile picture
+          if (avatarUrl) {
+            const profilePictures = JSON.parse(localStorage.getItem('profilePictures') || '{}');
+            profilePictures[walletAddress] = avatarUrl;
+            localStorage.setItem('profilePictures', JSON.stringify(profilePictures));
+          }
+          
+          // Save banner image
+          if (bannerUrl) {
+            const bannerImages = JSON.parse(localStorage.getItem('bannerImages') || '{}');
+            bannerImages[walletAddress] = bannerUrl;
+            localStorage.setItem('bannerImages', JSON.stringify(bannerImages));
+          }
+          
+          // Save username
+          if (username) {
+            const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
+            usernames[walletAddress] = username;
+            localStorage.setItem('usernames', JSON.stringify(usernames));
+          }
+          
+          // Save bio
+          if (bio) {
+            const bios = JSON.parse(localStorage.getItem('userBios') || '{}');
+            bios[walletAddress] = bio;
+            localStorage.setItem('userBios', JSON.stringify(bios));
+          }
+        };
         
-        // Save banner image
-        if (bannerUrl) {
-          const bannerImages = JSON.parse(localStorage.getItem('bannerImages') || '{}');
-          bannerImages[walletAddress] = bannerUrl;
-          localStorage.setItem('bannerImages', JSON.stringify(bannerImages));
-        }
+        // Execute the save function
+        saveProfileData();
         
-        // Save username
-        if (username) {
-          const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
-          usernames[walletAddress] = username;
-          localStorage.setItem('usernames', JSON.stringify(usernames));
-        }
-        
-        // Save bio
-        if (bio) {
-          const bios = JSON.parse(localStorage.getItem('userBios') || '{}');
-          bios[walletAddress] = bio;
-          localStorage.setItem('userBios', JSON.stringify(bios));
-        }
+        // Force a reload of profile data to ensure it's updated across the app
+        // This is important for ensuring that Header component also sees the changes
+        dispatch(updateProfile({
+          username,
+          bio,
+          avatar: avatarUrl,
+          bannerImage: bannerUrl
+        }));
       }
       
       toast.success('Profile updated successfully');
@@ -208,13 +223,13 @@ const ProfilePage = () => {
         <Header />
         
         <main className="container mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-12 gap-6">
-          <div className="hidden md:block md:col-span-3">
+          <div className="hidden md:block md:col-span-3 sidebar-column">
             <Sidebar className="sticky top-20" />
           </div>
           
-          <div className="col-span-1 md:col-span-6 space-y-6">
+          <div className="col-span-1 md:col-span-6 space-y-6 content-column">
             {/* Profile Header */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 transparent-bg rounded-lg shadow-md no-shadow overflow-hidden card-outline">
               {/* Banner Image */}
               <div className="relative h-40 bg-gradient-to-r from-yellow-400 via-green-400 to-blue-400">
                 {bannerUrl && (
@@ -339,7 +354,7 @@ const ProfilePage = () => {
                         </button>
                         <button
                           onClick={() => setIsEditing(false)}
-                          className="px-4 py-2 bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
+                          className="px-4 py-2 bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 hover-effect"
                         >
                           Cancel
                         </button>
@@ -362,7 +377,7 @@ const ProfilePage = () => {
               <h2 className="text-xl font-semibold mb-4 dark:text-white">Your Posts</h2>
               
               {userPosts.length === 0 ? (
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 text-center">
+                <div className="bg-white dark:bg-gray-800 transparent-bg rounded-lg shadow-md no-shadow p-6 text-center card-outline">
                   <p className="text-gray-500 dark:text-gray-400">You haven't created any posts yet.</p>
                   <p className="mt-2 dark:text-gray-300">
                     <a href="/" className="text-[#2C89B7] hover:underline">Go to home</a> to create your first post and earn Aura Points!
@@ -371,7 +386,7 @@ const ProfilePage = () => {
               ) : (
                 <div className="space-y-4">
                   {userPosts.map((post: Post) => (
-                    <div key={post.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                    <div key={post.id} className="bg-white dark:bg-gray-800 transparent-bg rounded-lg shadow-md no-shadow p-4 card-outline">
                       <div className="flex items-start space-x-4">
                         <div className="flex-shrink-0">
                           <div className="w-10 h-10 rounded-full overflow-hidden bg-[#60C5D1]">

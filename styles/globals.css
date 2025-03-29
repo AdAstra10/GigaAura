@@ -2,14 +2,206 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --primary: #60C5D1;
+  --secondary: #7AD5DF;
+  --accent: #F6B73C;
+  --dark: #1A202C;
+  --light: #F8FAFC;
+  --error: #E53E3E;
+  --success: #48BB78;
+  --sun-hover: #FF9933;
+  --moon-hover: #4A6FA5;
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 248, 248, 254;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 20, 22, 28;
+    --background-end-rgb: 16, 16, 20;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: rgb(var(--background-start-rgb));
+}
+
+.dark body {
+  background: linear-gradient(
+    to bottom,
+    rgb(var(--background-start-rgb)),
+    rgb(var(--background-end-rgb))
+  );
+}
+
+.main-content-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .main-content-grid {
+    grid-template-columns: 3fr 6fr 3fr;
+  }
+}
+
+/* Hover Effects */
+.hover-effect {
+  transition: all 0.2s ease;
+}
+
+/* Header Styles */
+.header-solid {
+  backdrop-filter: blur(8px);
+}
+
+/* Dark Mode Specific Styles */
+.thin-borders {
+  border-width: 1px;
+}
+
+.no-shadow {
+  box-shadow: none !important;
+}
+
+.transparent-bg {
+  background-color: transparent;
+}
+
+.card-outline {
+  border: 1px solid rgba(209, 213, 219, 0.1);
+}
+
+/* Custom Icons Hover Colors */
+.text-sunHover {
+  color: #FCD34D;
+}
+
+.text-moonHover {
+  color: #A78BFA;
+}
+
+/* Sidebar Styles */
+.sidebar-column {
+  position: relative;
+}
+
+.content-column {
+  margin: 0 auto;
+  max-width: 100%;
+}
+
+/* Media Styles */
+.post-image {
+  max-height: 500px;
+  object-fit: contain;
+}
+
+.post-video {
+  max-height: 500px;
+}
+
+/* Mobile media adjustments */
+@media (max-width: 767px) {
+  .mobile-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: rgb(var(--background-end-rgb));
+    border-top: 1px solid rgba(209, 213, 219, 0.1);
+    padding: 0.5rem 0;
+    z-index: 50;
+  }
+}
+
+.dark .transparent-bg {
+  background-color: rgba(31, 41, 55, 0.5) !important;
+}
+
+/* Timeline separator */
+.timeline-separator {
+  position: relative;
+}
+
+.timeline-separator::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: rgba(209, 213, 219, 0.3);
+}
+
+.dark .timeline-separator::after {
+  background-color: rgba(75, 85, 99, 0.3);
+}
+
 @layer base {
   body {
-    @apply bg-light text-dark transition-colors duration-200;
+    @apply bg-light dark:bg-gray-900;
+  }
+}
+
+/* Open design for dark mode - use direct class selectors to avoid circular references */
+.dark .transparent-bg {
+  background-color: transparent !important;
+}
+
+.dark .thin-borders {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.dark .no-shadow {
+  box-shadow: none !important;
+}
+
+/* Add vertical separators instead of boxes in dark mode */
+@media (min-width: 768px) {
+  .dark .sidebar-column {
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
   }
   
-  .dark body {
-    @apply bg-dark text-light;
+  .dark .content-column {
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
   }
+}
+
+/* Preserve hover effects in dark mode */
+.dark .hover-effect:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Preserve card outlines without solid backgrounds */
+.dark .card-outline {
+  position: relative;
+}
+
+.dark .card-outline::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* Override for post items and feed to improve readability */
+.dark .post-separator {
+  border-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Keep header and footer solid */
+.dark .header-solid {
+  background-color: #1A202C !important;
 }
 
 @layer components {

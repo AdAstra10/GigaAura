@@ -1,12 +1,10 @@
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import React from 'react';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 import { useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
-import { IoHomeOutline, IoHomeSharp, IoPersonOutline, IoPersonSharp } from 'react-icons/io5';
-import { FaRegCompass, FaCompass, FaBell, FaRegBell, FaCog, FaRegUser } from 'react-icons/fa';
-import { useWallet } from '../contexts/WalletContext';
-import AuraPointsCounter from './AuraPointsCounter';
+import { FaHome, FaCompass, FaBell, FaEnvelope, FaBookmark, 
+         FaUser, FaCog, FaInfoCircle } from 'react-icons/fa';
 
 interface SidebarProps {
   className?: string;
@@ -14,129 +12,96 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   const router = useRouter();
-  const { walletAddress } = useWallet();
   const user = useSelector((state: RootState) => state.user);
-  const { totalPoints } = useSelector((state: RootState) => state.auraPoints);
+  const walletAddress = useSelector((state: RootState) => state.user.walletAddress);
   
-  const isActivePath = (path: string) => {
-    return router.pathname === path;
-  };
-  
-  const truncateAddress = (address: string | null) => {
+  // Truncate wallet address for display
+  const truncateWallet = (address: string) => {
     if (!address) return '';
-    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+    return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
   };
-  
-  const menuItems = [
-    {
-      name: 'Home',
-      path: '/',
-      icon: isActivePath('/') ? <IoHomeSharp size={24} /> : <IoHomeOutline size={24} />,
-    },
-    {
-      name: 'Explore',
-      path: '/explore',
-      icon: isActivePath('/explore') ? <FaCompass size={24} /> : <FaRegCompass size={24} />,
-    },
-    {
-      name: 'Notifications',
-      path: '/notifications',
-      icon: isActivePath('/notifications') ? <FaBell size={24} /> : <FaRegBell size={24} />,
-    },
-    {
-      name: 'Profile',
-      path: '/profile',
-      icon: isActivePath('/profile') ? <IoPersonSharp size={24} /> : <IoPersonOutline size={24} />,
-    },
-    {
-      name: 'Settings',
-      path: '/settings',
-      icon: <FaCog size={24} />,
-    },
+
+  const navigation = [
+    { name: 'Home', href: '/', icon: FaHome },
+    { name: 'Explore', href: '/explore', icon: FaCompass },
+    { name: 'Notifications', href: '/notifications', icon: FaBell },
+    { name: 'Messages', href: '/messages', icon: FaEnvelope },
+    { name: 'Bookmarks', href: '/bookmarks', icon: FaBookmark },
+    { name: 'Profile', href: '/profile', icon: FaUser },
+    { name: 'Settings', href: '/settings', icon: FaCog },
+    { name: 'About', href: '/about', icon: FaInfoCircle },
   ];
 
   return (
-    <div className={`h-full flex flex-col space-y-6 ${className}`}>
-      <div className="flex-1">
-        {/* User Profile Summary */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 mb-4">
-          <div className="flex items-center space-x-3">
-            <div className="flex-shrink-0">
-              <div className="w-12 h-12 rounded-full overflow-hidden bg-primary">
-                {user.avatar ? (
-                  <img src={user.avatar} alt={user.username || ''} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-white font-medium">
-                    {user.username ? user.username.charAt(0).toUpperCase() : walletAddress?.substring(0, 2)}
-                  </div>
-                )}
+    <aside className={`transparent-bg dark:bg-gray-800 rounded-lg ${className}`}>
+      {/* User Profile Section */}
+      <div className="p-4 mb-6">
+        <Link href="/profile">
+          <div className="flex items-center space-x-3 hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded-lg hover-effect cursor-pointer">
+            <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center">
+              {user.avatar ? (
+                <img 
+                  src={user.avatar} 
+                  alt={user.username || 'User'} 
+                  className="w-10 h-10 rounded-full object-cover"
+                />
+              ) : (
+                <span className="text-lg font-semibold">
+                  {user.username ? user.username.charAt(0).toUpperCase() : walletAddress?.substring(0, 2)}
+                </span>
+              )}
+            </div>
+            <div>
+              <div className="font-medium dark:text-white">
+                {user.username || 'Anonymous User'}
+              </div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                @{user.username || truncateWallet(walletAddress || '')}
               </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <Link href="/profile">
-                <div className="font-medium text-gray-900 dark:text-gray-100 hover:text-primary truncate cursor-pointer">
-                  {user.username || 'Anonymous'}
-                </div>
-              </Link>
-              <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                {truncateAddress(walletAddress)}
-              </p>
-            </div>
           </div>
-          
-          <div className="flex justify-between mt-3 text-sm">
-            <div>
-              <div className="font-semibold dark:text-white">{user.following?.length || 0}</div>
-              <div className="text-gray-500 dark:text-gray-400">Following</div>
-            </div>
-            <div>
-              <div className="font-semibold dark:text-white">{user.followers?.length || 0}</div>
-              <div className="text-gray-500 dark:text-gray-400">Followers</div>
-            </div>
-            <div>
-              <div className="font-semibold dark:text-white">
-                <AuraPointsCounter points={totalPoints} className="text-primary" />
-              </div>
-              <div className="text-gray-500 dark:text-gray-400">Aura Points</div>
-            </div>
+        </Link>
+
+        <div className="flex mt-4 text-sm">
+          <div className="mr-4">
+            <span className="font-semibold dark:text-white">{user.followers?.length || 0}</span>{' '}
+            <span className="text-gray-500 dark:text-gray-400">Followers</span>
           </div>
-        </div>
-        
-        {/* Main Navigation */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
-          <nav className="space-y-1">
-            {menuItems.map((item) => (
-              <Link href={item.path} key={item.name}>
-                <div
-                  className={`flex items-center px-3 py-2 text-sm font-medium rounded-md cursor-pointer ${
-                    isActivePath(item.path)
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  <div className="mr-3">{item.icon}</div>
-                  <span>{item.name}</span>
-                </div>
-              </Link>
-            ))}
-          </nav>
-          
-          <div className="mt-6">
-            <button 
-              className="w-full px-4 py-2 bg-primary text-white rounded-full hover:bg-primary/90 transition-colors"
-              onClick={() => router.push('/')}
-            >
-              Create Post
-            </button>
+          <div>
+            <span className="font-semibold dark:text-white">{user.following?.length || 0}</span>{' '}
+            <span className="text-gray-500 dark:text-gray-400">Following</span>
           </div>
         </div>
       </div>
-      
-      {/* Copyright */}
-      <div className="text-xs text-gray-500 dark:text-gray-400 p-4">
-        © 2025 GigaAura. All rights reserved.
-      </div>
-    </div>
+
+      {/* Navigation Links */}
+      <nav className="space-y-1 px-3 pb-4">
+        {navigation.map((item) => {
+          const isActive = router.pathname === item.href;
+          
+          return (
+            <Link key={item.name} href={item.href}>
+              <div 
+                className={`flex items-center px-3 py-2 text-sm font-medium rounded-md hover-effect ${
+                  isActive
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+              >
+                <item.icon 
+                  className={`mr-3 h-5 w-5 ${
+                    isActive 
+                      ? 'text-primary' 
+                      : 'text-gray-500 dark:text-gray-400'
+                  }`} 
+                />
+                {item.name}
+              </div>
+            </Link>
+          );
+        })}
+      </nav>
+    </aside>
   );
 };
 

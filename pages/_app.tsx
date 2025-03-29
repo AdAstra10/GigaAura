@@ -15,8 +15,16 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
   const [loaded, setLoaded] = useState(false);
   
   useEffect(() => {
+    if (walletAddress) {
+      // Reset the loaded state whenever wallet address changes
+      setLoaded(false);
+    }
+  }, [walletAddress]);
+  
+  useEffect(() => {
     if (walletAddress && !loaded) {
       // Load wallet-specific data when wallet connects
+      console.log("Loading data for wallet:", walletAddress);
       
       // Load Aura Points
       store.dispatch(loadWalletPoints(walletAddress));
@@ -46,6 +54,8 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
           avatar,
           bannerImage
         }));
+        
+        console.log("Loaded profile data:", { username, avatar });
       } catch (error) {
         console.error('Error loading profile data:', error);
       }

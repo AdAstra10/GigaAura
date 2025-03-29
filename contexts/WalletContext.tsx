@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useDispatch } from 'react-redux';
 import { setWalletAddress, logout } from '../lib/slices/userSlice';
+import { loadWalletPoints } from '../lib/slices/auraPointsSlice';
 
 // Basic interface for the phantom wallet provider
 interface PhantomProvider {
@@ -57,12 +58,37 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const [hasPhantomWallet, setHasPhantomWallet] = useState(false);
   const dispatch = useDispatch();
 
+  // Load wallet-specific data when wallet connects or changes
+  const loadWalletData = (address: string) => {
+    try {
+      // Load the profile data for this wallet
+      const profilePictures = JSON.parse(localStorage.getItem('profilePictures') || '{}');
+      const avatar = profilePictures[address] || null;
+      
+      const bannerImages = JSON.parse(localStorage.getItem('bannerImages') || '{}');
+      const bannerImage = bannerImages[address] || null;
+      
+      const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
+      const username = usernames[address] || null;
+      
+      const bios = JSON.parse(localStorage.getItem('userBios') || '{}');
+      const bio = bios[address] || null;
+      
+      dispatch(setWalletAddress(address));
+      
+      // Load Aura Points for this wallet
+      dispatch(loadWalletPoints(address));
+    } catch (error) {
+      console.error('Error loading wallet data:', error);
+    }
+  };
+
   // Check for stored wallet connection on mount
   useEffect(() => {
     const storedWalletAddress = localStorage.getItem('walletAddress');
     if (storedWalletAddress) {
       setWalletAddr(storedWalletAddress);
-      dispatch(setWalletAddress(storedWalletAddress));
+      loadWalletData(storedWalletAddress);
     }
   }, [dispatch]);
 
@@ -80,7 +106,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         if (isPhantomInstalled && solanaProvider?.publicKey) {
           const address = solanaProvider.publicKey.toString();
           setWalletAddr(address);
-          dispatch(setWalletAddress(address));
+          loadWalletData(address);
           localStorage.setItem('walletAddress', address);
         }
       }
@@ -96,7 +122,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
             const address = (window as WindowWithSolana).solana?.publicKey?.toString() || null;
             if (address) {
               setWalletAddr(address);
-              dispatch(setWalletAddress(address));
+              loadWalletData(address);
               localStorage.setItem('walletAddress', address);
             }
           }
@@ -117,12 +143,14 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
             const newAddress = newPublicKey.toString();
             // If the address has changed, update it
             if (newAddress !== walletAddress) {
+              console.log('Wallet changed to:', newAddress);
               setWalletAddr(newAddress);
-              dispatch(setWalletAddress(newAddress));
+              loadWalletData(newAddress);
               localStorage.setItem('walletAddress', newAddress);
             }
           } else {
             // If no publicKey after account change, treat as disconnect
+            console.log('Wallet disconnected via account change');
             setWalletAddr(null);
             dispatch(logout());
             localStorage.removeItem('walletAddress');
@@ -132,6 +160,18 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         console.error('Failed to set wallet event listeners', err);
       }
     }
+
+    // Return a cleanup function to remove event listeners
+    return () => {
+      if (typeof window !== 'undefined' && (window as WindowWithSolana).solana?.on) {
+        try {
+          // Remove listeners if possible
+          // Note: Phantom may not support removeListener directly
+        } catch (err) {
+          console.error('Failed to clean up wallet event listeners', err);
+        }
+      }
+    };
   }, [dispatch, walletAddress]);
 
   // Connect wallet function
@@ -153,7 +193,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       const address = response.publicKey.toString();
       
       setWalletAddr(address);
-      dispatch(setWalletAddress(address));
+      loadWalletData(address);
       localStorage.setItem('walletAddress', address);
       
       return address;

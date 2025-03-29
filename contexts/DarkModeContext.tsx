@@ -1,7 +1,4 @@
-import React, { createContext, useContext, useEffect, ReactNode } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { RootState } from '../lib/store';
-import { setDarkMode } from '../lib/slices/userSlice';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 interface DarkModeContextProps {
   isDarkMode: boolean;
@@ -20,37 +17,62 @@ interface DarkModeProviderProps {
 }
 
 export const DarkModeProvider: React.FC<DarkModeProviderProps> = ({ children }) => {
-  const dispatch = useDispatch();
-  const { darkMode } = useSelector((state: RootState) => state.user as { darkMode: boolean });
-
-  // Apply dark mode class to html element
+  // Check localStorage and system preference for initial state
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    // Check if we're in the browser environment
+    if (typeof window !== 'undefined') {
+      // First check localStorage
+      const savedMode = localStorage.getItem('darkMode');
+      if (savedMode !== null) {
+        return savedMode === 'true';
+      }
+      
+      // Then check system preference
+      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    
+    // Default to light mode
+    return false;
+  });
+  
+  // Apply dark mode class to document
   useEffect(() => {
-    if (darkMode) {
+    if (isDarkMode) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [darkMode]);
-
-  // Initialize dark mode from local storage or user preference
+    
+    // Save preference to localStorage
+    localStorage.setItem('darkMode', isDarkMode.toString());
+  }, [isDarkMode]);
+  
+  // Listen for system preference changes
   useEffect(() => {
-    const savedDarkMode = localStorage.getItem('darkMode');
-    if (savedDarkMode !== null) {
-      dispatch(setDarkMode(savedDarkMode === 'true'));
-    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      // Use system preference as default if no saved preference
-      dispatch(setDarkMode(true));
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      
+      const handleChange = (e: MediaQueryListEvent) => {
+        // Only update if user hasn't set a preference
+        if (localStorage.getItem('darkMode') === null) {
+          setIsDarkMode(e.matches);
+        }
+      };
+      
+      // Add event listener for theme changes
+      mediaQuery.addEventListener('change', handleChange);
+      
+      // Clean up
+      return () => mediaQuery.removeEventListener('change', handleChange);
     }
-  }, [dispatch]);
-
+  }, []);
+  
   const toggleDarkMode = () => {
-    const newDarkMode = !darkMode;
-    dispatch(setDarkMode(newDarkMode));
-    localStorage.setItem('darkMode', String(newDarkMode));
+    setIsDarkMode(prev => !prev);
   };
-
+  
   return (
-    <DarkModeContext.Provider value={{ isDarkMode: darkMode, toggleDarkMode }}>
+    <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
       {children}
     </DarkModeContext.Provider>
   );

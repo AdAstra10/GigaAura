@@ -215,7 +215,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
   };
 
   return (
-    <div className="border-b border-gray-200 dark:border-gray-700 py-4">
+    <div className="bg-white dark:bg-gray-800 transparent-bg rounded-lg shadow-md no-shadow card-outline p-4 mb-4">
       <div className="flex space-x-3">
         <div className="flex-shrink-0">
           <Link href={`/profile/${post.authorWallet}`}>
@@ -240,7 +240,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
         <div className="flex-1">
           <div className="flex items-center">
             <Link href={`/profile/${post.authorWallet}`}>
-              <div className="font-medium text-dark dark:text-white hover:text-primary cursor-pointer">
+              <div className="font-medium text-dark dark:text-white hover:text-primary cursor-pointer hover-effect">
                 {post.authorUsername || 'Anon'}
               </div>
             </Link>
@@ -248,140 +248,145 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
             <span className="text-sm text-primary">{getAuthorAuraPoints()} AP</span>
             <span className="text-gray-400 mx-1">·</span>
             <span className="text-xs text-gray-500 dark:text-gray-400">{formatDate(post.createdAt)}</span>
-          </div>
-          
-          <p className="mt-2 text-gray-800 dark:text-gray-100">{post.content}</p>
-          
-          {post.mediaUrl && (
-            <div className="mt-3 rounded-lg overflow-hidden">
-              {post.mediaType === 'image' ? (
-                <img 
-                  src={post.mediaUrl} 
-                  alt="Post media"
-                  className="w-full h-auto rounded-lg"
-                />
-              ) : post.mediaType === 'video' ? (
-                <video 
-                  src={post.mediaUrl} 
-                  controls 
-                  className="w-full rounded-lg"
-                />
-              ) : null}
-            </div>
-          )}
-          
-          <div className="mt-4 flex space-x-6 text-sm">
-            <button 
-              onClick={handleLike}
-              className={`flex items-center space-x-1 ${isLiked ? 'text-primary' : 'text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary'}`}
-            >
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                className="h-5 w-5" 
-                fill={isLiked ? "currentColor" : "none"} 
-                viewBox="0 0 24 24" 
-                stroke="currentColor"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-              </svg>
-              <span>{post.likes}</span>
-            </button>
-            
-            <button 
-              onClick={() => setShowComments(!showComments)}
-              className="flex items-center space-x-1 text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-              <span>{post.comments}</span>
-            </button>
-            
-            <button 
-              onClick={onShare}
-              className="flex items-center space-x-1 text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-              </svg>
-              <span>{post.shares}</span>
-            </button>
             
             {post.authorWallet !== walletAddress && (
               <button 
                 onClick={handleFollowToggle}
-                className={`flex items-center space-x-1 ${isFollowing ? 'text-primary' : 'text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary'}`}
+                className={`ml-auto text-xs font-medium rounded-full px-3 py-1 hover-effect ${
+                  isFollowing 
+                    ? 'bg-primary/10 text-primary hover:bg-primary/20' 
+                    : 'bg-primary text-white hover:bg-primary/90'
+                }`}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={isFollowing ? 
-                    "M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6z" : 
-                    "M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"} />
-                </svg>
-                <span>{isFollowing ? 'Following' : 'Follow'}</span>
+                {isFollowing ? 'Following' : 'Follow'}
               </button>
             )}
           </div>
+          
+          <p className="mt-2 mb-3 text-gray-900 dark:text-gray-200">{post.content}</p>
+          
+          {post.mediaUrl && (
+            <div className="mt-2 mb-3 rounded-lg overflow-hidden">
+              {post.mediaType === 'image' ? (
+                <img 
+                  src={post.mediaUrl} 
+                  alt="Post media" 
+                  className="w-full post-image"
+                />
+              ) : (
+                <video 
+                  src={post.mediaUrl} 
+                  controls 
+                  className="w-full post-video"
+                ></video>
+              )}
+            </div>
+          )}
+          
+          <div className="flex justify-between mt-3">
+            <div className="flex space-x-4">
+              <button 
+                onClick={handleLike}
+                className={`flex items-center space-x-1 text-gray-500 dark:text-gray-400 hover-effect ${isLiked ? 'text-red-500 dark:text-red-400' : ''}`}
+              >
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  className="h-5 w-5" 
+                  fill={isLiked ? "currentColor" : "none"} 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={isLiked ? 0 : 1.5} 
+                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" 
+                  />
+                </svg>
+                <span>{post.likes}</span>
+              </button>
+              
+              <button 
+                onClick={() => setShowComments(!showComments)}
+                className="flex items-center space-x-1 text-gray-500 dark:text-gray-400 hover-effect"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                <span>{post.comments}</span>
+              </button>
+              
+              <button 
+                onClick={onShare}
+                className="flex items-center space-x-1 text-gray-500 dark:text-gray-400 hover-effect"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+                <span>{post.shares}</span>
+              </button>
+            </div>
+          </div>
+          
+          {showComments && (
+            <div className="mt-4">
+              <form onSubmit={handleSubmitComment} className="mb-4">
+                <div className="flex">
+                  <input
+                    type="text"
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    className="flex-1 p-2 text-sm border rounded-l-md focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                    placeholder="Write a comment..."
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || !commentText.trim()}
+                    className={`px-4 py-2 rounded-r-md text-white font-medium hover-effect ${
+                      isSubmitting || !commentText.trim()
+                        ? 'bg-primary/60 cursor-not-allowed'
+                        : 'bg-primary hover:bg-primary/90'
+                    }`}
+                  >
+                    {isSubmitting ? 'Posting...' : 'Post'}
+                  </button>
+                </div>
+              </form>
+              
+              {comments.length > 0 ? (
+                <div className="space-y-3">
+                  {comments.map((comment) => (
+                    <div key={comment.id} className="flex space-x-2 border-t border-gray-100 dark:border-gray-700 pt-3">
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                          <span className="text-gray-500 dark:text-gray-300 text-xs">
+                            {comment.authorWallet.substring(0, 2)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center">
+                          <span className="font-medium dark:text-white">
+                            {comment.authorUsername || comment.authorWallet.substring(0, 6)}
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                            {formatDistance(new Date(comment.createdAt), new Date(), { addSuffix: true })}
+                          </span>
+                        </div>
+                        <p className="text-sm dark:text-gray-300 mt-1">{comment.content}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-gray-500 dark:text-gray-400 py-2">
+                  No comments yet. Be the first to comment!
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
-      
-      {showComments && (
-        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <form onSubmit={handleSubmitComment} className="mb-4 flex">
-            <input
-              type="text"
-              placeholder="Write a comment..."
-              className="flex-1 p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-l-md focus:outline-none focus:ring-1 focus:ring-primary"
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              disabled={isSubmitting}
-            />
-            <button
-              type="submit"
-              className="bg-primary text-white px-4 py-2 rounded-r-md hover:bg-primary/90 disabled:opacity-50"
-              disabled={!commentText.trim() || isSubmitting}
-            >
-              {isSubmitting ? 'Posting...' : 'Post'}
-            </button>
-          </form>
-
-          <div className="space-y-4">
-            {comments.length > 0 ? (
-              comments.map((comment) => (
-                <div key={comment.id} className="flex space-x-3">
-                  <div className="flex-shrink-0">
-                    <Link href={`/profile/${comment.authorWallet}`}>
-                      <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center cursor-pointer">
-                        <span className="text-gray-500 dark:text-gray-300 text-xs">
-                          {comment.authorUsername ? comment.authorUsername.charAt(0).toUpperCase() : comment.authorWallet.substring(0, 2)}
-                        </span>
-                      </div>
-                    </Link>
-                  </div>
-                  <div className="flex-1">
-                    <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
-                      <div className="flex items-center space-x-1 mb-1">
-                        <Link href={`/profile/${comment.authorWallet}`}>
-                          <div className="font-medium text-dark dark:text-white text-sm cursor-pointer">
-                            {comment.authorUsername || 'Anon'}
-                          </div>
-                        </Link>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatDistance(new Date(comment.createdAt), new Date(), { addSuffix: true })}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-700 dark:text-gray-300">{comment.content}</p>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-3 text-gray-500 dark:text-gray-400">
-                No comments yet. Be the first to comment!
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

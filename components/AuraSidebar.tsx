@@ -58,7 +58,7 @@ const AuraSidebar = () => {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+    <div className="bg-white dark:bg-gray-800 transparent-bg rounded-lg shadow-md no-shadow p-6 card-outline">
       <h2 className="text-lg font-bold mb-4 dark:text-white">Your Aura</h2>
       
       <div className="bg-[#F6B73C]/10 dark:bg-[#F6B73C]/5 rounded-lg p-4 mb-5">
@@ -86,7 +86,7 @@ const AuraSidebar = () => {
         <p className="text-gray-500 dark:text-gray-400 text-sm">No recent activity. Start interacting to earn Aura Points!</p>
       )}
       
-      <div className="mt-5 border-t border-gray-200 dark:border-gray-700 pt-4">
+      <div className="mt-5 border-t border-gray-200 dark:border-gray-700 thin-borders pt-4">
         <h3 className="text-md font-medium mb-3 dark:text-white">How to Earn Aura</h3>
         <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-2">
           <li className="flex justify-between">
