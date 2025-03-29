@@ -25,14 +25,20 @@ const initialState: User = {
 };
 
 // Helper to check if username is unique
-const isUsernameUnique = (username: string): boolean => {
+const isUsernameUnique = (username: string, currentWallet: string | null): boolean => {
   if (typeof window === 'undefined') return true;
   
   // Get all registered usernames from localStorage
-  const usernameRegistry = JSON.parse(localStorage.getItem('usernameRegistry') || '{}');
+  const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
   
-  // Check if username exists and is associated with a different wallet
-  return !Object.values(usernameRegistry).includes(username);
+  // Find if username already exists for another wallet
+  for (const [wallet, name] of Object.entries(usernames)) {
+    if (name === username && wallet !== currentWallet) {
+      return false;
+    }
+  }
+  
+  return true;
 };
 
 const userSlice = createSlice({
@@ -62,25 +68,56 @@ const userSlice = createSlice({
       }
     },
     updateProfile: (state, action: PayloadAction<Partial<User>>) => {
-      const { username, avatar, bio } = action.payload;
+      const { username, avatar, bio, bannerImage } = action.payload;
       
-      // If username is being updated and is not unique, don't update it
+      // Check if username is being updated and is not unique
       if (username && username !== state.username) {
-        if (!isUsernameUnique(username)) {
-          // In a real app, you would throw an error or handle this case
+        if (!isUsernameUnique(username, state.walletAddress)) {
           console.error('This username is already taken');
           return state;
         }
-        
-        // Update username registry if valid
-        if (typeof window !== 'undefined' && state.walletAddress) {
-          const usernameRegistry = JSON.parse(localStorage.getItem('usernameRegistry') || '{}');
-          usernameRegistry[state.walletAddress] = username;
-          localStorage.setItem('usernameRegistry', JSON.stringify(usernameRegistry));
-        }
       }
       
-      return { ...state, ...action.payload };
+      // Always update the state with the new data
+      if (username) state.username = username;
+      if (avatar) state.avatar = avatar;
+      if (bio) state.bio = bio;
+      if (bannerImage) state.bannerImage = bannerImage;
+      
+      // Save user data to localStorage (for username persistence)
+      if (typeof window !== 'undefined' && state.walletAddress) {
+        try {
+          // Save username
+          if (username) {
+            const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
+            usernames[state.walletAddress] = username;
+            localStorage.setItem('usernames', JSON.stringify(usernames));
+          }
+          
+          // Save avatar
+          if (avatar) {
+            const profilePictures = JSON.parse(localStorage.getItem('profilePictures') || '{}');
+            profilePictures[state.walletAddress] = avatar;
+            localStorage.setItem('profilePictures', JSON.stringify(profilePictures));
+          }
+          
+          // Save bio
+          if (bio) {
+            const bios = JSON.parse(localStorage.getItem('userBios') || '{}');
+            bios[state.walletAddress] = bio;
+            localStorage.setItem('userBios', JSON.stringify(bios));
+          }
+          
+          // Save banner image
+          if (bannerImage) {
+            const bannerImages = JSON.parse(localStorage.getItem('bannerImages') || '{}');
+            bannerImages[state.walletAddress] = bannerImage;
+            localStorage.setItem('bannerImages', JSON.stringify(bannerImages));
+          }
+        } catch (error) {
+          console.error('Error saving profile data to localStorage:', error);
+        }
+      }
     },
     toggleDarkMode: (state) => {
       state.darkMode = !state.darkMode;
@@ -91,9 +128,9 @@ const userSlice = createSlice({
     logout: (state) => {
       state.walletAddress = null;
       state.isAuthenticated = false;
-      // Keep darkMode preference and username/avatar/bio even after logout
-      const { darkMode, username, avatar, bio } = state;
-      return { ...initialState, darkMode, username, avatar, bio };
+      // Keep darkMode preference but clear user data on logout
+      const { darkMode } = state;
+      return { ...initialState, darkMode };
     },
     followUser: (state, action: PayloadAction<string>) => {
       const walletToFollow = action.payload;

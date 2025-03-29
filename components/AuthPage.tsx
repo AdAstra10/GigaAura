@@ -1,13 +1,23 @@
 import { useState } from 'react';
 import { useWallet } from '@contexts/WalletContext';
 
+// Extended Window interface to include Solana
+interface WindowWithSolana extends Window {
+  solana?: {
+    isPhantom?: boolean;
+  };
+}
+
 const AuthPage = () => {
-  const { connect, isConnecting, hasPhantomWallet } = useWallet();
+  const { connectWallet, isLoading, walletProvider } = useWallet();
   const [error, setError] = useState<string | null>(null);
 
   const handleConnect = async (e: React.MouseEvent) => {
     e.preventDefault();
     setError(null);
+    
+    const windowWithSolana = window as WindowWithSolana;
+    const hasPhantomWallet = !!walletProvider || (typeof window !== 'undefined' && !!windowWithSolana.solana?.isPhantom);
     
     if (!hasPhantomWallet) {
       setError('Phantom wallet not detected. Please install the Phantom browser extension.');
@@ -15,10 +25,7 @@ const AuthPage = () => {
     }
     
     try {
-      const walletAddress = await connect();
-      if (!walletAddress) {
-        setError('Failed to connect to Phantom wallet.');
-      }
+      await connectWallet();
     } catch (err) {
       setError('An error occurred while connecting to your wallet.');
       console.error(err);
@@ -67,7 +74,7 @@ const AuthPage = () => {
           {error && (
             <div className="bg-error/10 border border-error text-error px-4 py-3 rounded-lg text-sm">
               {error}
-              {!hasPhantomWallet && (
+              {!walletProvider && (
                 <div className="mt-2">
                   <a 
                     href="https://phantom.app/" 
@@ -84,10 +91,10 @@ const AuthPage = () => {
 
           <button
             onClick={handleConnect}
-            disabled={isConnecting}
+            disabled={isLoading}
             className="w-full py-3 px-4 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
           >
-            {isConnecting ? (
+            {isLoading ? (
               <>
                 <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

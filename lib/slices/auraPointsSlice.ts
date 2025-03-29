@@ -80,18 +80,15 @@ const auraPointsSlice = createSlice({
         }
       }
     },
-    loadWalletPoints: (state, action: PayloadAction<string>) => {
-      const walletAddress = action.payload;
-      if (typeof window !== 'undefined' && walletAddress) {
-        try {
-          const savedPoints = localStorage.getItem(`auraPoints_${walletAddress}`);
-          if (savedPoints) {
-            const parsed = JSON.parse(savedPoints);
-            state.totalPoints = parsed.totalPoints;
-            state.transactions = parsed.transactions;
-          }
-        } catch (e) {
-          console.error('Failed to load wallet points:', e);
+    loadWalletPoints: (state, action: PayloadAction<number>) => {
+      // If passing a number directly, just set the total points
+      state.totalPoints = action.payload;
+      
+      // Save to localStorage if we have a wallet address
+      if (typeof window !== 'undefined') {
+        const walletAddress = localStorage.getItem('walletAddress');
+        if (walletAddress) {
+          localStorage.setItem(`auraPoints_${walletAddress}`, JSON.stringify(state));
         }
       }
     }

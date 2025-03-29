@@ -26,7 +26,7 @@ interface Contact {
 }
 
 const MessagesPage = () => {
-  const { isConnected, walletAddress } = useWallet();
+  const { walletConnected, walletAddress } = useWallet();
   const user = useSelector((state: RootState) => state.user);
   const [messages, setMessages] = useState<Message[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -374,7 +374,7 @@ const MessagesPage = () => {
                           />
                           <button
                             onClick={handleSendMessage}
-                            disabled={!newMessage.trim() || !isConnected}
+                            disabled={!newMessage.trim() || !walletConnected}
                             className="bg-primary text-white rounded-full p-2 disabled:opacity-50"
                           >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

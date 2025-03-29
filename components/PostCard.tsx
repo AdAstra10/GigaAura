@@ -22,7 +22,7 @@ interface PostCardProps {
 const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFollow }) => {
   const dispatch = useDispatch();
   const router = useRouter();
-  const { connect, isConnected } = useWallet();
+  const { connectWallet, walletConnected } = useWallet();
   const { walletAddress, username } = useSelector((state: RootState) => state.user as {
     walletAddress: string | null;
     username: string | null;
@@ -59,19 +59,19 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
     }
   };
   
-  const promptConnect = async () => {
-    const confirm = window.confirm('Please connect your wallet to interact. Would you like to connect now?');
-    if (confirm) {
-      await connect();
-      return isConnected; // Return the updated connection state
-    }
-    return false;
-  };
-  
   const handleLike = async () => {
-    if (!isConnected) {
-      const connected = await promptConnect();
-      if (!connected) return;
+    if (!walletConnected) {
+      const shouldConnect = window.confirm('You need to connect a wallet to like posts. Connect now?');
+      if (shouldConnect) {
+        try {
+          await connectWallet();
+        } catch (error) {
+          console.error('Failed to connect wallet:', error);
+          return;
+        }
+      } else {
+        return;
+      }
     }
     
     if (!walletAddress) return;
@@ -110,12 +110,23 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
   const handleSubmitComment = async (e: FormEvent) => {
     e.preventDefault();
     
-    if (!isConnected) {
-      const connected = await promptConnect();
-      if (!connected) return;
+    if (!commentText.trim()) return;
+    
+    if (!walletConnected) {
+      const shouldConnect = window.confirm('You need to connect a wallet to comment. Connect now?');
+      if (shouldConnect) {
+        try {
+          await connectWallet();
+        } catch (error) {
+          console.error('Failed to connect wallet:', error);
+          return;
+        }
+      } else {
+        return;
+      }
     }
     
-    if (!commentText.trim() || !walletAddress) return;
+    if (!walletAddress) return;
     
     setIsSubmitting(true);
     

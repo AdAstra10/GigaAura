@@ -27,7 +27,15 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
       console.log("Loading data for wallet:", walletAddress);
       
       // Load Aura Points
-      store.dispatch(loadWalletPoints(walletAddress));
+      try {
+        // Try to load aura points from localStorage or set default
+        const pointsStr = localStorage.getItem(`auraPoints_${walletAddress}`);
+        const points = pointsStr ? parseInt(pointsStr, 10) : 100;
+        store.dispatch(loadWalletPoints(points));
+      } catch (error) {
+        console.error("Error loading aura points:", error);
+        store.dispatch(loadWalletPoints(100)); // Default
+      }
       
       // Load profile data from localStorage
       try {

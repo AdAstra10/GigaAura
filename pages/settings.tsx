@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../lib/store';
 import { useWallet } from '../contexts/WalletContext';
 import { useDarkMode } from '../contexts/DarkModeContext';
-import { updateProfile } from '../lib/slices/userSlice';
+import { setDarkMode, updateProfile } from '../lib/slices/userSlice';
 import Head from 'next/head';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
@@ -20,7 +20,7 @@ enum SettingSection {
 const SettingsPage = () => {
   const dispatch = useDispatch();
   const { isDarkMode, toggleDarkMode } = useDarkMode();
-  const { walletAddress, disconnect, connect } = useWallet();
+  const { walletAddress, disconnectWallet, connectWallet } = useWallet();
   const { username, avatar, bio } = useSelector((state: RootState) => state.user as { 
     username: string | null, 
     avatar: string | null, 
@@ -54,7 +54,7 @@ const SettingsPage = () => {
   // Handle disconnect wallet
   const handleDisconnectWallet = async () => {
     try {
-      await disconnect();
+      await disconnectWallet();
     } catch (error) {
       console.error('Error disconnecting wallet:', error);
     }
@@ -121,7 +121,7 @@ const SettingsPage = () => {
               <button
                 onClick={async () => {
                   try {
-                    await connect();
+                    await connectWallet();
                   } catch (error) {
                     console.error('Error connecting wallet:', error);
                   }
