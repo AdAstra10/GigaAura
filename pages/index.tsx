@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, FormEvent } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useRouter } from 'next/router';
 import { RootState } from '../lib/store';
@@ -23,7 +23,7 @@ const HomePage = () => {
   const { feed } = useSelector((state: RootState) => state.posts);
   
   const [postContent, setPostContent] = useState('');
-  const [mediaUrl, setMediaUrl] = useState('');
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingFeed, setIsLoadingFeed] = useState(true);
@@ -50,42 +50,46 @@ const HomePage = () => {
     dispatch(setFeed(sortedFeed));
   };
 
-  const handleCreatePost = async (e: React.FormEvent) => {
+  const handleCreatePost = async (e: FormEvent) => {
     e.preventDefault();
     
     if (!walletConnected) {
       const confirmConnect = window.confirm('You need to connect your wallet to create a post. Connect now?');
       if (confirmConnect) {
-        await connectWallet();
-        return; // Return and let the user try again after connecting
+        try {
+          await connectWallet();
+          return; // Return and let the user try again after connecting
+        } catch (error) {
+          console.error("Failed to connect wallet:", error);
+          toast.error("Could not connect to wallet. Please try again.");
+          return;
+        }
       } else {
         return;
       }
     }
     
-    if (!postContent.trim()) {
-      toast.error('Post content cannot be empty');
+    if (!postContent.trim() && !mediaUrl) {
+      toast.error('Please add some content to your post');
       return;
     }
     
     setIsSubmitting(true);
     
     try {
-      // Create a new post
-      const newPost = {
+      // Create and dispatch the new post
+      dispatch(addPost({
         content: postContent,
         authorWallet: walletAddress || '',
         authorUsername: user.username || undefined,
         authorAvatar: user.avatar || undefined,
         mediaUrl: mediaUrl || undefined,
-        mediaType: mediaType || undefined,
-      };
-      
-      dispatch(addPost(newPost));
+        mediaType: mediaType || undefined
+      }));
       
       // Add Aura Points for creating a post
       dispatch(addTransaction({
-        id: uuidv4(),
+        id: `tx_${Date.now()}`,
         amount: 50,
         timestamp: new Date().toISOString(),
         action: 'post_created',
