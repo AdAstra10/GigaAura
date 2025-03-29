@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../lib/store';
 import { setFeed, addPost, Post, addComment, setComments } from '../lib/slices/postsSlice';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useWallet } from '../contexts/WalletContext';
 import { addTransaction } from '../lib/slices/auraPointsSlice';
 import PostCard from './PostCard';
 import toast from 'react-hot-toast';
@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 const Feed = () => {
   const dispatch = useDispatch();
-  const { connected, publicKey } = useWallet();
+  const { walletAddress } = useWallet();
   const feed = useSelector((state: RootState) => state.posts.feed);
   const comments = useSelector((state: RootState) => state.posts.comments);
   const user = useSelector((state: RootState) => state.user);
@@ -35,7 +35,7 @@ const Feed = () => {
   }, [feed]);
   
   const handleSharePost = (postId: string) => {
-    if (!connected || !publicKey) {
+    if (!walletAddress) {
       toast.error('Please connect your wallet to share posts');
       return;
     }
@@ -52,13 +52,11 @@ const Feed = () => {
     dispatch(
       addTransaction({
         id: uuidv4(),
-        points: 100,
+        amount: 100,
         timestamp: new Date().toISOString(),
         action: 'post_shared',
-        walletAddress: publicKey.toString(),
-        metadata: {
-          postId
-        }
+        counterpartyName: post?.authorUsername || 'Unknown',
+        counterpartyWallet: post?.authorWallet
       })
     );
     
@@ -66,12 +64,12 @@ const Feed = () => {
   };
   
   const handleFollowUser = (userWallet: string, username: string) => {
-    if (!connected || !publicKey) {
+    if (!walletAddress) {
       toast.error('Please connect your wallet to follow users');
       return;
     }
     
-    if (userWallet === publicKey.toString()) {
+    if (userWallet === walletAddress) {
       toast.error('You cannot follow yourself');
       return;
     }
@@ -80,27 +78,11 @@ const Feed = () => {
     dispatch(
       addTransaction({
         id: uuidv4(),
-        points: 10,
-        timestamp: new Date().toISOString(),
-        action: 'follow_given',
-        walletAddress: publicKey.toString(),
-        metadata: {
-          followerWallet: userWallet
-        }
-      })
-    );
-    
-    // Add Aura Points for being followed
-    dispatch(
-      addTransaction({
-        id: uuidv4(),
-        points: 10,
+        amount: 10,
         timestamp: new Date().toISOString(),
         action: 'follower_gained',
-        walletAddress: userWallet,
-        metadata: {
-          followerWallet: publicKey.toString()
-        }
+        counterpartyName: username || userWallet.substring(0, 6),
+        counterpartyWallet: userWallet
       })
     );
     

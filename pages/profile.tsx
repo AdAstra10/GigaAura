@@ -12,6 +12,8 @@ import { Post } from '../lib/slices/postsSlice';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import toast from 'react-hot-toast';
+import { FaCalendarAlt, FaCamera } from 'react-icons/fa';
+import { format } from 'date-fns';
 
 const ProfilePage = () => {
   const dispatch = useDispatch();
@@ -26,21 +28,27 @@ const ProfilePage = () => {
   const [username, setUsername] = useState(user.username || '');
   const [bio, setBio] = useState(user.bio || '');
   const [avatarUrl, setAvatarUrl] = useState(user.avatar || '');
+  const [bannerUrl, setBannerUrl] = useState(user.bannerImage || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [editJoinDate] = useState(new Date(2025, 2, 1)); // March 2025
   
   // Profile picture upload
   const [showPfpModal, setShowPfpModal] = useState(false);
   const [tempImageUrl, setTempImageUrl] = useState<string | null>(null);
+  const [imageZoom, setImageZoom] = useState(1);
+  const [editingBanner, setEditingBanner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
   
   // Update form when user data changes
   useEffect(() => {
     if (user.username) setUsername(user.username);
     if (user.bio) setBio(user.bio);
     if (user.avatar) setAvatarUrl(user.avatar);
-  }, [user.username, user.bio, user.avatar]);
+    if (user.bannerImage) setBannerUrl(user.bannerImage);
+  }, [user.username, user.bio, user.avatar, user.bannerImage]);
 
-  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>, isBanner = false) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       
@@ -60,6 +68,8 @@ const ProfilePage = () => {
       reader.onload = () => {
         setTempImageUrl(reader.result as string);
         setShowPfpModal(true);
+        setEditingBanner(isBanner);
+        setImageZoom(1);
       };
       
       reader.readAsDataURL(file);
@@ -68,9 +78,14 @@ const ProfilePage = () => {
   
   const handleConfirmProfilePicture = () => {
     if (tempImageUrl) {
-      setAvatarUrl(tempImageUrl);
+      if (editingBanner) {
+        setBannerUrl(tempImageUrl);
+      } else {
+        setAvatarUrl(tempImageUrl);
+      }
       setShowPfpModal(false);
       setTempImageUrl(null);
+      setEditingBanner(false);
     }
   };
   
@@ -84,21 +99,39 @@ const ProfilePage = () => {
       dispatch(updateProfile({
         username,
         bio,
-        avatar: avatarUrl
+        avatar: avatarUrl,
+        bannerImage: bannerUrl
       }));
       
-      // Save profile picture to localStorage for persistence
-      if (walletAddress && avatarUrl) {
-        const profilePictures = JSON.parse(localStorage.getItem('profilePictures') || '{}');
-        profilePictures[walletAddress] = avatarUrl;
-        localStorage.setItem('profilePictures', JSON.stringify(profilePictures));
-      }
-      
-      // Save username to localStorage for persistence
-      if (walletAddress && username) {
-        const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
-        usernames[walletAddress] = username;
-        localStorage.setItem('usernames', JSON.stringify(usernames));
+      // Save profile data to localStorage for persistence with wallet address
+      if (walletAddress) {
+        // Save profile picture
+        if (avatarUrl) {
+          const profilePictures = JSON.parse(localStorage.getItem('profilePictures') || '{}');
+          profilePictures[walletAddress] = avatarUrl;
+          localStorage.setItem('profilePictures', JSON.stringify(profilePictures));
+        }
+        
+        // Save banner image
+        if (bannerUrl) {
+          const bannerImages = JSON.parse(localStorage.getItem('bannerImages') || '{}');
+          bannerImages[walletAddress] = bannerUrl;
+          localStorage.setItem('bannerImages', JSON.stringify(bannerImages));
+        }
+        
+        // Save username
+        if (username) {
+          const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
+          usernames[walletAddress] = username;
+          localStorage.setItem('usernames', JSON.stringify(usernames));
+        }
+        
+        // Save bio
+        if (bio) {
+          const bios = JSON.parse(localStorage.getItem('userBios') || '{}');
+          bios[walletAddress] = bio;
+          localStorage.setItem('userBios', JSON.stringify(bios));
+        }
       }
       
       toast.success('Profile updated successfully');
@@ -176,123 +209,150 @@ const ProfilePage = () => {
         
         <main className="container mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-12 gap-6">
           <div className="hidden md:block md:col-span-3">
-            <Sidebar />
+            <Sidebar className="sticky top-20" />
           </div>
           
           <div className="col-span-1 md:col-span-6 space-y-6">
             {/* Profile Header */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-              <div className="flex flex-col items-center sm:flex-row sm:items-start gap-6">
-                <div className="relative">
-                  <div className="w-32 h-32 rounded-full overflow-hidden bg-[#60C5D1]">
-                    {avatarUrl ? (
-                      <img src={avatarUrl} alt={username || 'User'} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-white text-4xl font-bold">
-                        {username ? username.charAt(0).toUpperCase() : walletAddress.substring(0, 2)}
-                      </div>
-                    )}
-                  </div>
-                  
-                  {isEditing && (
-                    <div className="mt-2">
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        style={{ display: 'none' }}
-                      />
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+              {/* Banner Image */}
+              <div className="relative h-40 bg-gradient-to-r from-yellow-400 via-green-400 to-blue-400">
+                {bannerUrl && (
+                  <img src={bannerUrl} alt="Profile Banner" className="w-full h-full object-cover" />
+                )}
+                {isEditing && (
+                  <button 
+                    onClick={() => bannerInputRef.current?.click()}
+                    className="absolute bottom-2 right-2 bg-black/50 text-white p-2 rounded-full"
+                  >
+                    <FaCamera size={16} />
+                  </button>
+                )}
+                <input
+                  type="file"
+                  ref={bannerInputRef}
+                  accept="image/*"
+                  onChange={(e) => handleImageUpload(e, true)}
+                  style={{ display: 'none' }}
+                />
+              </div>
+              
+              <div className="p-6 pt-16">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-6">
+                  <div className="relative -mt-24 z-10">
+                    <div className="w-32 h-32 rounded-full overflow-hidden bg-[#60C5D1] border-4 border-white dark:border-gray-800">
+                      {avatarUrl ? (
+                        <img src={avatarUrl} alt={username || 'User'} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white text-4xl font-bold">
+                          {username ? username.charAt(0).toUpperCase() : walletAddress.substring(0, 2)}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {isEditing && (
                       <button
                         onClick={() => fileInputRef.current?.click()}
-                        className="w-full p-2 text-sm bg-primary text-white border-none rounded-md cursor-pointer hover:bg-primary/90"
+                        className="absolute bottom-0 right-0 bg-primary text-white p-2 rounded-full"
                       >
-                        Upload Photo
+                        <FaCamera size={16} />
                       </button>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="flex-1 text-center sm:text-left">
-                  {isEditing ? (
+                    )}
                     <input
-                      type="text"
-                      className={`w-full p-2 text-2xl font-bold border border-gray-300 rounded-md mb-2 ${
-                        isDarkMode 
-                          ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-400' 
-                          : 'bg-white text-gray-900'
-                      }`}
-                      placeholder="Username"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      maxLength={20}
+                      type="file"
+                      ref={fileInputRef}
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(e, false)}
+                      style={{ display: 'none' }}
                     />
-                  ) : (
-                    <h1 className="text-2xl font-bold mb-1 dark:text-white">{username || 'Anonymous User'}</h1>
-                  )}
-                  
-                  <p className="text-gray-500 dark:text-gray-400 mb-3">{truncateWallet(walletAddress)}</p>
-                  
-                  {isEditing ? (
-                    <textarea
-                      className={`w-full p-2 border border-gray-300 rounded-md mb-4 ${
-                        isDarkMode 
-                          ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-400' 
-                          : 'bg-white text-gray-900'
-                      }`}
-                      placeholder="Bio"
-                      value={bio}
-                      onChange={(e) => setBio(e.target.value)}
-                      rows={3}
-                      maxLength={160}
-                    />
-                  ) : (
-                    <p className="mb-4 dark:text-gray-300">{bio || 'No bio yet'}</p>
-                  )}
-                  
-                  <div className="flex flex-wrap gap-4 mb-4">
-                    <div className="bg-[#F6E04C]/10 dark:bg-[#F6E04C]/5 px-4 py-2 rounded-md">
-                      <p className="text-lg font-semibold dark:text-white">{userPosts.length}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Posts</p>
-                    </div>
-                    <div className="bg-[#F0A830]/10 dark:bg-[#F0A830]/5 px-4 py-2 rounded-md">
-                      <p className="text-lg font-semibold dark:text-white">{user.followers?.length || 0}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Followers</p>
-                    </div>
-                    <div className="bg-[#2C89B7]/10 dark:bg-[#2C89B7]/5 px-4 py-2 rounded-md">
-                      <p className="text-lg font-semibold dark:text-white">{user.following?.length || 0}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Following</p>
-                    </div>
-                    <div className="bg-[#F6B73C]/10 dark:bg-[#F6B73C]/5 px-4 py-2 rounded-md">
-                      <p className="text-lg font-semibold dark:text-white">{totalPoints}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Aura Points</p>
-                    </div>
                   </div>
                   
-                  {isEditing ? (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleSaveProfile}
-                        disabled={isSaving}
-                        className="px-4 py-2 bg-[#2C89B7] text-white rounded-md hover:bg-[#2C89B7]/90 flex-1"
-                      >
-                        {isSaving ? 'Saving...' : 'Save Profile'}
-                      </button>
-                      <button
-                        onClick={() => setIsEditing(false)}
-                        className="px-4 py-2 bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
-                      >
-                        Cancel
-                      </button>
+                  <div className="flex-1 text-center sm:text-left">
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        className={`w-full p-2 text-2xl font-bold border border-gray-300 rounded-md mb-2 ${
+                          isDarkMode 
+                            ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-400' 
+                            : 'bg-white text-gray-900'
+                        }`}
+                        placeholder="Username"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        maxLength={20}
+                      />
+                    ) : (
+                      <h1 className="text-2xl font-bold mb-1 dark:text-white">{username || 'Anonymous User'}</h1>
+                    )}
+                    
+                    <p className="text-gray-500 dark:text-gray-400 mb-1">@{username || truncateWallet(walletAddress)}</p>
+                    
+                    <div className="flex items-center justify-center sm:justify-start text-gray-500 dark:text-gray-400 mb-3">
+                      <FaCalendarAlt className="mr-1" size={14} />
+                      <span className="text-sm">Joined {format(editJoinDate, 'MMMM yyyy')}</span>
                     </div>
-                  ) : (
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="px-4 py-2 bg-[#F6B73C] text-white rounded-md hover:bg-[#F6B73C]/90"
-                    >
-                      Edit Profile
-                    </button>
-                  )}
+                    
+                    {isEditing ? (
+                      <textarea
+                        className={`w-full p-2 border border-gray-300 rounded-md mb-4 ${
+                          isDarkMode 
+                            ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-400' 
+                            : 'bg-white text-gray-900'
+                        }`}
+                        placeholder="Bio"
+                        value={bio}
+                        onChange={(e) => setBio(e.target.value)}
+                        rows={3}
+                        maxLength={160}
+                      />
+                    ) : (
+                      <p className="mb-4 dark:text-gray-300">{bio || 'No bio yet'}</p>
+                    )}
+                    
+                    <div className="flex flex-wrap gap-4 mb-4">
+                      <div className="bg-[#F6E04C]/10 dark:bg-[#F6E04C]/5 px-4 py-2 rounded-md">
+                        <p className="text-lg font-semibold dark:text-white">{userPosts.length}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Posts</p>
+                      </div>
+                      <div className="bg-[#F0A830]/10 dark:bg-[#F0A830]/5 px-4 py-2 rounded-md">
+                        <p className="text-lg font-semibold dark:text-white">{user.followers?.length || 0}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Followers</p>
+                      </div>
+                      <div className="bg-[#2C89B7]/10 dark:bg-[#2C89B7]/5 px-4 py-2 rounded-md">
+                        <p className="text-lg font-semibold dark:text-white">{user.following?.length || 0}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Following</p>
+                      </div>
+                      <div className="bg-[#F6B73C]/10 dark:bg-[#F6B73C]/5 px-4 py-2 rounded-md">
+                        <p className="text-lg font-semibold dark:text-white">{totalPoints}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Aura Points</p>
+                      </div>
+                    </div>
+                    
+                    {isEditing ? (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleSaveProfile}
+                          disabled={isSaving}
+                          className="px-4 py-2 bg-[#2C89B7] text-white rounded-md hover:bg-[#2C89B7]/90 flex-1"
+                        >
+                          {isSaving ? 'Saving...' : 'Save Profile'}
+                        </button>
+                        <button
+                          onClick={() => setIsEditing(false)}
+                          className="px-4 py-2 bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setIsEditing(true)}
+                        className="px-4 py-2 bg-[#F6B73C] text-white rounded-md hover:bg-[#F6B73C]/90"
+                      >
+                        Edit Profile
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -390,20 +450,42 @@ const ProfilePage = () => {
         </main>
       </div>
 
-      {/* Profile Picture Modal */}
+      {/* Image Edit Modal for both profile picture and banner */}
       {showPfpModal && tempImageUrl && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-xl w-full">
-            <h3 className="text-xl font-bold mb-4 dark:text-white">Set Profile Picture</h3>
+            <h3 className="text-xl font-bold mb-4 dark:text-white">
+              {editingBanner ? 'Edit Banner Image' : 'Set Profile Picture'}
+            </h3>
             
-            <div className="flex justify-center mb-4">
-              <div className="w-64 h-64 rounded-full overflow-hidden">
-                <img src={tempImageUrl} alt="New profile" className="w-full h-full object-cover" />
+            <div className="flex justify-center mb-4 overflow-hidden">
+              <div className={`overflow-hidden ${editingBanner ? 'w-full h-48 aspect-[3/1]' : 'w-64 h-64 rounded-full'}`}>
+                <img 
+                  src={tempImageUrl} 
+                  alt={editingBanner ? "Banner" : "Profile"} 
+                  className="w-full h-full object-cover transform"
+                  style={{ transform: `scale(${imageZoom})` }}
+                />
               </div>
             </div>
             
-            <p className="text-gray-600 dark:text-gray-300 mb-4 text-center">
-              This is how your profile picture will look.
+            <div className="mb-4">
+              <label className="text-sm text-gray-600 dark:text-gray-300 mb-1 block">Zoom</label>
+              <input 
+                type="range" 
+                min="1" 
+                max="2" 
+                step="0.01" 
+                value={imageZoom} 
+                onChange={(e) => setImageZoom(parseFloat(e.target.value))}
+                className="w-full"
+              />
+            </div>
+            
+            <p className="text-gray-600 dark:text-gray-300 mb-4 text-center text-sm">
+              {editingBanner 
+                ? 'Recommended banner size is 1500×500 pixels (3:1 aspect ratio)' 
+                : 'Recommended profile picture size is 400×400 pixels'}
             </p>
             
             <div className="flex justify-end space-x-3">
@@ -411,6 +493,7 @@ const ProfilePage = () => {
                 onClick={() => {
                   setShowPfpModal(false);
                   setTempImageUrl(null);
+                  setEditingBanner(false);
                 }}
                 className="px-4 py-2 bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 rounded-md"
               >
@@ -420,7 +503,7 @@ const ProfilePage = () => {
                 onClick={handleConfirmProfilePicture}
                 className="px-4 py-2 bg-primary text-white rounded-md"
               >
-                Set as Profile Picture
+                Apply
               </button>
             </div>
           </div>

@@ -107,11 +107,32 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
           dispatch(logout());
           localStorage.removeItem('walletAddress');
         });
+
+        // Add listener for account change
+        (window as WindowWithSolana).solana?.on('accountChanged', () => {
+          // When wallet account changes, check if we have a new publicKey
+          const newPublicKey = (window as WindowWithSolana).solana?.publicKey;
+          
+          if (newPublicKey) {
+            const newAddress = newPublicKey.toString();
+            // If the address has changed, update it
+            if (newAddress !== walletAddress) {
+              setWalletAddr(newAddress);
+              dispatch(setWalletAddress(newAddress));
+              localStorage.setItem('walletAddress', newAddress);
+            }
+          } else {
+            // If no publicKey after account change, treat as disconnect
+            setWalletAddr(null);
+            dispatch(logout());
+            localStorage.removeItem('walletAddress');
+          }
+        });
       } catch (err) {
         console.error('Failed to set wallet event listeners', err);
       }
     }
-  }, [dispatch]);
+  }, [dispatch, walletAddress]);
 
   // Connect wallet function
   const connect = async (): Promise<string | null> => {

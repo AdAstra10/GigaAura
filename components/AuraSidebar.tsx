@@ -78,7 +78,7 @@ const AuraSidebar = () => {
                 <p className="text-sm font-medium dark:text-white">{getActionLabel(tx.action)}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">{formatTimestamp(tx.timestamp)}</p>
               </div>
-              <div className="text-sm font-semibold text-[#F6B73C]">+{tx.points} AP</div>
+              <div className="text-sm font-semibold text-[#F6B73C]">+{tx.amount} AP</div>
             </div>
           ))}
         </div>

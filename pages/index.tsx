@@ -85,13 +85,11 @@ const HomePage = () => {
       // Add Aura Points for creating a post
       dispatch(addTransaction({
         id: uuidv4(),
-        points: 50,
+        amount: 50,
         timestamp: new Date().toISOString(),
         action: 'post_created',
-        walletAddress: walletAddress || '',
-        metadata: {
-          postId: uuidv4(),
-        }
+        counterpartyName: user.username || 'You',
+        counterpartyWallet: walletAddress || undefined
       }));
       
       toast.success('Post created! +50 Aura Points');

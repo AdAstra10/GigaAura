@@ -5,6 +5,7 @@ export interface User {
   username: string | null;
   avatar: string | null;
   bio: string | null;
+  bannerImage: string | null;
   following: string[]; // Array of wallet addresses the user is following
   followers: string[]; // Array of wallet addresses following the user
   isAuthenticated: boolean;
@@ -16,6 +17,7 @@ const initialState: User = {
   username: null,
   avatar: null,
   bio: null,
+  bannerImage: null,
   following: [],
   followers: [],
   isAuthenticated: false,

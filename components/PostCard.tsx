@@ -85,13 +85,11 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
         // Add Aura Points transaction for the post creator
         dispatch(addTransaction({
           id: uuidv4(),
-          walletAddress: post.authorWallet, // Points go to the post creator
-          action: 'like_received',
-          points: 10, // 10 points for received like
+          amount: 10, // 10 points for received like
           timestamp: new Date().toISOString(),
-          metadata: {
-            postId: post.id,
-          },
+          action: 'like_received',
+          counterpartyName: username || walletAddress.substring(0, 6),
+          counterpartyWallet: walletAddress
         }));
         
         // Add notification for the post creator
@@ -143,25 +141,21 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
         // Add Aura Points transaction for commenter
         dispatch(addTransaction({
           id: uuidv4(),
-          walletAddress: walletAddress, // Points go to the commenter
-          action: 'comment_made',
-          points: 10, // 10 points for making a comment
+          amount: 10, // 10 points for making a comment
           timestamp: new Date().toISOString(),
-          metadata: {
-            postId: post.id,
-          },
+          action: 'comment_made',
+          counterpartyName: post.authorUsername || post.authorWallet.substring(0, 6),
+          counterpartyWallet: post.authorWallet
         }));
         
         // Add Aura Points transaction for post creator
         dispatch(addTransaction({
           id: uuidv4(),
-          walletAddress: post.authorWallet, // Points go to the post creator
-          action: 'comment_received',
-          points: 10, // 10 points for received comment
+          amount: 10, // 10 points for received comment
           timestamp: new Date().toISOString(),
-          metadata: {
-            postId: post.id,
-          },
+          action: 'comment_received',
+          counterpartyName: username || walletAddress.substring(0, 6),
+          counterpartyWallet: walletAddress
         }));
       }
       
@@ -199,27 +193,11 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
       dispatch(
         addTransaction({
           id: uuidv4(),
-          points: 10,
-          timestamp: new Date().toISOString(),
-          action: 'follow_given',
-          walletAddress: walletAddress,
-          metadata: {
-            followerWallet: post.authorWallet
-          }
-        })
-      );
-      
-      // Add Aura Points for being followed
-      dispatch(
-        addTransaction({
-          id: uuidv4(),
-          points: 10,
+          amount: 10,
           timestamp: new Date().toISOString(),
           action: 'follower_gained',
-          walletAddress: post.authorWallet,
-          metadata: {
-            followerWallet: walletAddress
-          }
+          counterpartyName: post.authorUsername || post.authorWallet.substring(0, 6),
+          counterpartyWallet: post.authorWallet
         })
       );
       
