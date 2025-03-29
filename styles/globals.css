@@ -59,21 +59,22 @@ body {
   backdrop-filter: blur(8px);
 }
 
-/* Dark Mode Specific Styles */
+/* Common Styles */
 .thin-borders {
   border-width: 1px;
 }
 
 .no-shadow {
-  box-shadow: none !important;
+  box-shadow: none;
 }
 
+/* In light mode, ensure backgrounds are not transparent */
 .transparent-bg {
-  background-color: transparent;
+  background-color: white;
 }
 
 .card-outline {
-  border: 1px solid rgba(209, 213, 219, 0.1);
+  border: 1px solid rgba(209, 213, 219, 0.3);
 }
 
 /* Custom Icons Hover Colors */
@@ -119,8 +120,9 @@ body {
   }
 }
 
+/* Dark mode specific overrides */
 .dark .transparent-bg {
-  background-color: rgba(31, 41, 55, 0.5) !important;
+  background-color: transparent !important;
 }
 
 /* Timeline separator */
@@ -149,10 +151,6 @@ body {
 }
 
 /* Open design for dark mode - use direct class selectors to avoid circular references */
-.dark .transparent-bg {
-  background-color: transparent !important;
-}
-
 .dark .thin-borders {
   border-color: rgba(255, 255, 255, 0.1) !important;
 }
@@ -233,7 +231,7 @@ body {
     @apply bg-gray-700 border-gray-600 text-white;
   }
   
-  /* Dark mode overrides */
+  /* Specific dark mode overrides */
   .dark .bg-white {
     @apply bg-gray-800;
   }
@@ -259,6 +257,6 @@ body {
   }
   
   .dark .shadow {
-    @apply shadow-gray-900;
+    @apply shadow-dark;
   }
 } 

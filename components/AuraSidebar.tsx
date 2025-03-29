@@ -58,35 +58,37 @@ const AuraSidebar = () => {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 transparent-bg rounded-lg shadow-md no-shadow p-6 card-outline">
-      <h2 className="text-lg font-bold mb-4 dark:text-white">Your Aura</h2>
-      
-      <div className="bg-[#F6B73C]/10 dark:bg-[#F6B73C]/5 rounded-lg p-4 mb-5">
-        <p className="text-sm text-gray-500 dark:text-gray-400">Total Aura Points</p>
-        <div className="text-2xl font-bold text-[#F6B73C]">
-          <AuraPointsCounter points={totalPoints} />
+    <div className="bg-white dark:bg-gray-800 transparent-bg rounded-lg shadow-md no-shadow card-outline">
+      <div className="p-6">
+        <h2 className="text-lg font-bold mb-4 dark:text-white">Your Aura</h2>
+        
+        <div className="bg-[#F6B73C]/10 dark:bg-[#F6B73C]/5 rounded-lg p-4 mb-5">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Total Aura Points</p>
+          <div className="text-2xl font-bold text-[#F6B73C]">
+            <AuraPointsCounter points={totalPoints} />
+          </div>
         </div>
+        
+        <h3 className="text-md font-medium mb-3 dark:text-white">Recent Activity</h3>
+        
+        {recentTransactions.length > 0 ? (
+          <div className="space-y-3">
+            {recentTransactions.map((tx) => (
+              <div key={tx.id} className="flex justify-between items-center">
+                <div>
+                  <p className="text-sm font-medium dark:text-white">{getActionLabel(tx.action)}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{formatTimestamp(tx.timestamp)}</p>
+                </div>
+                <div className="text-sm font-semibold text-[#F6B73C]">+{tx.amount} AP</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-500 dark:text-gray-400 text-sm">No recent activity. Start interacting to earn Aura Points!</p>
+        )}
       </div>
       
-      <h3 className="text-md font-medium mb-3 dark:text-white">Recent Activity</h3>
-      
-      {recentTransactions.length > 0 ? (
-        <div className="space-y-3">
-          {recentTransactions.map((tx) => (
-            <div key={tx.id} className="flex justify-between items-center">
-              <div>
-                <p className="text-sm font-medium dark:text-white">{getActionLabel(tx.action)}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{formatTimestamp(tx.timestamp)}</p>
-              </div>
-              <div className="text-sm font-semibold text-[#F6B73C]">+{tx.amount} AP</div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-gray-500 dark:text-gray-400 text-sm">No recent activity. Start interacting to earn Aura Points!</p>
-      )}
-      
-      <div className="mt-5 border-t border-gray-200 dark:border-gray-700 thin-borders pt-4">
+      <div className="px-6 pb-6">
         <h3 className="text-md font-medium mb-3 dark:text-white">How to Earn Aura</h3>
         <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-2">
           <li className="flex justify-between">
