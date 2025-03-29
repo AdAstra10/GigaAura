@@ -8,7 +8,7 @@ interface PhantomWallet {
   publicKey: { toString: () => string } | null;
   signMessage?: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
   isPhantom?: boolean;
-  connect: (options?: { onlyIfTrusted: boolean }) => Promise<{ publicKey: { toString: () => string } }>;
+  connect: (options?: { onlyIfTrusted: boolean }) => Promise<{ publicKey: { toString: () => string } | null }>;
   disconnect: () => Promise<void>;
 }
 
@@ -42,6 +42,17 @@ export const useWallet = (): WalletContextProps => {
 interface WalletProviderProps {
   children: ReactNode;
 }
+
+// Helper function to safely get wallet address from publicKey object
+const safeGetAddress = (publicKey: any): string | null => {
+  if (!publicKey) return null;
+  try {
+    return typeof publicKey.toString === 'function' ? publicKey.toString() : null;
+  } catch (error) {
+    console.error("Error getting address from publicKey:", error);
+    return null;
+  }
+};
 
 export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const [walletAddress, setWalletState] = useState<string | null>(null);
@@ -116,8 +127,9 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
           // Check if we're already authorized and connected
           try {
             const response = await provider.connect({ onlyIfTrusted: true });
-            if (response && response.publicKey) {
-              const address = response.publicKey.toString();
+            const address = safeGetAddress(response?.publicKey);
+            
+            if (address) {
               setWalletState(address);
               setWalletConnected(true);
               dispatch(setWalletAddress(address));
@@ -176,10 +188,9 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
 
       try {
         const response = await provider.connect();
+        const address = safeGetAddress(response?.publicKey);
         
-        if (response && response.publicKey) {
-          const address = response.publicKey.toString();
-          
+        if (address) {
           // Set wallet state and dispatch to Redux
           setWalletState(address);
           setWalletConnected(true);
@@ -192,6 +203,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
           console.log("Connected to wallet:", address);
         } else {
           console.error("Failed to get publicKey from wallet connection");
+          alert("Could not connect to wallet. Please try again.");
         }
       } catch (err) {
         console.error("Error during wallet connection:", err);

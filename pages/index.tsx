@@ -1,19 +1,20 @@
 import { useEffect, useState, FormEvent } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
+import { NextPage } from 'next';
+import Head from 'next/head';
+import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'next/router';
+import { useWallet } from '../contexts/WalletContext';
 import { RootState } from '../lib/store';
 import { addPost, loadFromCache, setFeed } from '../lib/slices/postsSlice';
 import { addTransaction } from '../lib/slices/auraPointsSlice';
-import { useWallet } from '../contexts/WalletContext';
-import Head from 'next/head';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
-import PostCard from '../components/PostCard';
+import Feed from '../components/Feed';
 import AuraSidebar from '../components/AuraSidebar';
+import toast from 'react-hot-toast';
+import PostCard from '../components/PostCard';
 import Link from 'next/link';
 import { v4 as uuidv4 } from 'uuid';
-import toast from 'react-hot-toast';
-import Feed from '../components/Feed';
 
 const HomePage = () => {
   const dispatch = useDispatch();
