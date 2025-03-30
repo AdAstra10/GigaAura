@@ -6,6 +6,9 @@ services:
     buildCommand: npm install && npm run build
     startCommand: npm start
     autoDeploy: true
+    domains:
+      - gigaaura.com
+      - www.gigaaura.com
     envVars:
       - key: NODE_ENV
         value: production
