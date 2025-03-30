@@ -2,10 +2,34 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { useDispatch } from 'react-redux';
 import { setWalletAddress, logout, setUser } from '../lib/slices/userSlice';
 import { loadWalletPoints } from '../lib/slices/auraPointsSlice';
-import { WalletContextProps, PhantomWallet } from '../types/wallet';
-import { getPhantomProvider, initWalletDetection } from '../utils/walletHelpers';
 
-// Create context with proper default values
+// Basic interface for the phantom wallet
+interface PhantomWallet {
+  publicKey: { toString: () => string };
+  signMessage?: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
+  isPhantom?: boolean;
+  connect: (options?: { onlyIfTrusted: boolean }) => Promise<{ publicKey: { toString: () => string } }>;
+  disconnect: () => Promise<void>;
+  on: (event: string, callback: () => void) => void;
+}
+
+// Extended Window interface to include Solana and Phantom
+interface WindowWithSolana extends Window {
+  solana?: PhantomWallet;
+  phantom?: {
+    solana?: PhantomWallet;
+  };
+}
+
+interface WalletContextProps {
+  walletAddress: string | null;
+  walletProvider: PhantomWallet | null;
+  connectWallet: () => Promise<void>;
+  disconnectWallet: () => Promise<void>;
+  walletConnected: boolean;
+  isLoading: boolean;
+}
+
 const WalletContext = createContext<WalletContextProps | null>(null);
 
 export const useWallet = (): WalletContextProps => {
@@ -28,19 +52,8 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
 
   const dispatch = useDispatch();
 
-  // Initialize wallet detection when component mounts
-  useEffect(() => {
-    console.log('Initializing wallet detection...');
-    initWalletDetection();
-  }, []);
-
   // Load user profile data from localStorage based on wallet address
   const loadUserProfileData = (address: string) => {
-    if (!address) {
-      console.log('No wallet address provided, skipping profile data load');
-      return;
-    }
-    
     try {
       // Load username
       const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
@@ -61,11 +74,9 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       // Set user data in Redux store
       if (username || avatar || bio || bannerImage) {
         dispatch(setUser({ username, avatar, bio, bannerImage }));
-        console.log('Loaded user profile data:', { username, avatar, bio });
-      } else {
-        console.log('No profile data found for address:', address);
       }
 
+      console.log("Loaded profile data:", { username, avatar, bio, bannerImage });
     } catch (error) {
       console.error("Error loading profile data:", error);
     }
@@ -73,79 +84,51 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
 
   // Initialize wallet connection
   useEffect(() => {
-    let isMounted = true;
-
     const checkIfWalletIsConnected = async () => {
-      console.log('Checking for wallet connection...');
-      
       try {
         setIsLoading(true);
-        
-        // Get Phantom provider safely
-        const provider = getPhantomProvider();
-        console.log('Phantom provider found:', !!provider);
+        // First try to get the provider
+        const { solana } = window as WindowWithSolana;
+        const phantomWindow = window as WindowWithSolana;
+        const provider = solana || phantomWindow.phantom?.solana;
 
-        if (provider) {
+        if (provider?.isPhantom) {
           setWalletProvider(provider);
 
           // Check if we're already authorized and connected
           try {
             const response = await provider.connect({ onlyIfTrusted: true });
-            if (response && response.publicKey) {
-              const address = response.publicKey.toString();
-              console.log('Auto-connected to wallet with address:', address);
-              
-              if (isMounted) {
-                setWalletState(address);
-                setWalletConnected(true);
-                dispatch(setWalletAddress(address));
-                loadWalletAuraPoints(address);
-                loadUserProfileData(address);
-              }
-            }
-          } catch (error: any) {
+            const address = response.publicKey.toString();
+            setWalletState(address);
+            setWalletConnected(true);
+            dispatch(setWalletAddress(address));
+            loadWalletAuraPoints(address);
+            loadUserProfileData(address); // Load profile data here
+            console.log("Auto-connected to wallet:", address);
+          } catch (error) {
             // Not connected yet (normal, will connect later when user clicks)
-            if (error.message && error.message.includes('User rejected')) {
-              console.log("Auto-connection was rejected by user");
-            } else {
-              console.log("Wallet not connected yet (expected):", error.message || error);
-            }
+            console.log("Wallet not connected yet (expected)");
           }
         } else {
           console.log("Phantom wallet not found! Please install Phantom wallet extension.");
         }
       } catch (error) {
-        console.error("Error checking for wallet connection:", error);
+        console.error(error);
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     };
 
-    // Small delay to ensure window and wallet providers are fully initialized
-    const timeoutId = setTimeout(() => {
-      checkIfWalletIsConnected();
-    }, 500);
-    
-    return () => {
-      isMounted = false;
-      clearTimeout(timeoutId);
-    };
-  }, [dispatch]); // Only include dispatch in the dependency array
+    checkIfWalletIsConnected();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load Aura Points from localStorage or initialize to default value
   const loadWalletAuraPoints = (address: string) => {
-    if (!address) {
-      console.log('No wallet address provided, skipping aura points load');
-      return;
-    }
-    
     try {
       const pointsStr = localStorage.getItem(`auraPoints_${address}`);
       const points = pointsStr ? parseInt(pointsStr, 10) : 100;
       dispatch(loadWalletPoints(points));
-      console.log('Loaded aura points:', points, 'for address:', address);
     } catch (error) {
       console.error("Error loading Aura Points:", error);
       dispatch(loadWalletPoints(100)); // Default
@@ -154,53 +137,31 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
 
   // Connect wallet
   const connectWallet = async () => {
-    console.log('Connecting wallet...');
     setIsLoading(true);
-    
     try {
-      // Get Phantom provider safely
-      const provider = getPhantomProvider();
-      console.log('Phantom provider found:', !!provider);
+      const { solana } = window as WindowWithSolana;
+      const phantomWindow = window as WindowWithSolana;
+      const provider = solana || phantomWindow.phantom?.solana;
 
-      if (!provider) {
-        alert("Phantom wallet not found! Please install the Phantom wallet extension from https://phantom.app/");
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        console.log('Requesting wallet connection...');
+      if (provider?.isPhantom) {
         const response = await provider.connect();
+        const address = response.publicKey.toString();
         
-        // Safety check for response and publicKey to prevent toString() of null errors
-        if (response && response.publicKey) {
-          const address = response.publicKey.toString();
-          console.log('Successfully connected to wallet with address:', address);
-          
-          // Set wallet state and dispatch to Redux
-          setWalletState(address);
-          setWalletConnected(true);
-          setWalletProvider(provider);
-          dispatch(setWalletAddress(address));
-          
-          // Load data for this wallet address
-          loadWalletAuraPoints(address);
-          loadUserProfileData(address);
-        } else {
-          console.error("Failed to get public key from Phantom wallet");
-          alert("Failed to connect to Phantom wallet. Please try again.");
-        }
-      } catch (err: any) {
-        // Handle user rejecting the request
-        if (err.message && err.message.includes('User rejected')) {
-          console.log("User rejected the connection request");
-        } else {
-          console.error("Error connecting to Phantom wallet:", err);
-          alert("Failed to connect to Phantom wallet. Please try again.");
-        }
+        // Set wallet state and dispatch to Redux
+        setWalletState(address);
+        setWalletConnected(true);
+        setWalletProvider(provider);
+        dispatch(setWalletAddress(address));
+        
+        // Load data for this wallet address
+        loadWalletAuraPoints(address);
+        loadUserProfileData(address); // Load profile data here
+        console.log("Connected to wallet:", address);
+      } else {
+        alert("Phantom wallet not found! Please install the Phantom wallet extension.");
       }
     } catch (error) {
-      console.error("Unexpected error while connecting to wallet:", error);
+      console.error("Error connecting to wallet:", error);
     } finally {
       setIsLoading(false);
     }
@@ -208,7 +169,6 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
 
   // Disconnect wallet
   const disconnectWallet = async () => {
-    console.log('Disconnecting wallet...');
     try {
       if (walletProvider) {
         await walletProvider.disconnect();
@@ -216,20 +176,10 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         setWalletConnected(false);
         setWalletProvider(null);
         dispatch(logout());
-        console.log("Wallet disconnected successfully");
-      } else {
-        console.log("No wallet provider to disconnect");
-        // Reset state even if no provider
-        setWalletState(null);
-        setWalletConnected(false);
-        dispatch(logout());
+        console.log("Wallet disconnected");
       }
     } catch (error) {
       console.error("Error disconnecting wallet:", error);
-      // Reset state even if there's an error
-      setWalletState(null);
-      setWalletConnected(false);
-      dispatch(logout());
     }
   };
 

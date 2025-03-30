@@ -3,39 +3,23 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
-import { 
-  FaHome, 
-  FaCompass, 
+import {
+  FaHome,
+  FaSearch,
   FaBell, 
-  FaEnvelope, 
-  FaBookmark, 
-  FaUser, 
-  FaCog, 
-  FaInfoCircle 
+  FaEnvelope,
+  FaBookmark,
+  FaUser,
+  FaCog,
+  FaInfoCircle,
+  FaUserAlt
 } from 'react-icons/fa';
-import { 
-  AiFillHome, 
-  AiOutlineHome,
-  AiFillCompass,
-  AiOutlineCompass,
-  AiFillBell,
-  AiOutlineBell,
-  AiFillMail,
-  AiOutlineMail,
-  AiFillSetting,
-  AiOutlineSetting,
-  AiFillInfoCircle,
-  AiOutlineInfoCircle,
-  AiOutlineUser,
-  AiFillProfile
-} from 'react-icons/ai';
-import { BsPerson, BsPersonFill } from 'react-icons/bs';
-import { BiSolidHome, BiHome, BiSolidBell, BiBell } from 'react-icons/bi';
-import { IoSettingsOutline, IoSettingsSharp } from 'react-icons/io5';
-import { IoMdInformationCircle, IoMdInformationCircleOutline } from 'react-icons/io';
-import { HiOutlineHashtag, HiHashtag } from 'react-icons/hi';
-import { RiBookmarkFill, RiBookmarkLine } from 'react-icons/ri';
-import { FiMail, FiUser } from 'react-icons/fi';
+import { RiHome7Fill } from 'react-icons/ri';
+import { IoSearchSharp } from 'react-icons/io5';
+import { IoMdNotifications } from 'react-icons/io';
+import { BsFillEnvelopeFill, BsBookmarkFill } from 'react-icons/bs';
+import { FaGear } from 'react-icons/fa6';
+import { IoInformationCircle } from 'react-icons/io5';
 
 interface SidebarProps {
   className?: string;
@@ -49,96 +33,124 @@ const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   // Truncate wallet address for display
   const truncateWallet = (address: string) => {
     if (!address) return '';
-    return `@${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+    return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
   };
 
   const navigation = [
     { 
       name: 'Home', 
       href: '/', 
-      activeIcon: BiSolidHome, 
-      inactiveIcon: BiHome 
+      icon: FaHome,
+      activeIcon: RiHome7Fill 
     },
     { 
       name: 'Explore', 
       href: '/explore', 
-      activeIcon: HiHashtag, 
-      inactiveIcon: HiOutlineHashtag 
+      icon: FaSearch,
+      activeIcon: IoSearchSharp
     },
     { 
       name: 'Notifications', 
       href: '/notifications', 
-      activeIcon: BiSolidBell, 
-      inactiveIcon: BiBell 
+      icon: FaBell,
+      activeIcon: IoMdNotifications
     },
     { 
       name: 'Messages', 
       href: '/messages', 
-      activeIcon: AiFillMail, 
-      inactiveIcon: FiMail 
+      icon: FaEnvelope,
+      activeIcon: BsFillEnvelopeFill
     },
     { 
       name: 'Bookmarks', 
       href: '/bookmarks', 
-      activeIcon: RiBookmarkFill, 
-      inactiveIcon: RiBookmarkLine 
+      icon: FaBookmark,
+      activeIcon: BsBookmarkFill
     },
     { 
       name: 'Profile', 
       href: '/profile', 
-      activeIcon: BsPersonFill, 
-      inactiveIcon: BsPerson 
+      icon: FaUser,
+      activeIcon: FaUserAlt
     },
     { 
       name: 'Settings', 
       href: '/settings', 
-      activeIcon: IoSettingsSharp, 
-      inactiveIcon: IoSettingsOutline 
+      icon: FaCog,
+      activeIcon: FaGear
     },
     { 
       name: 'About', 
       href: '/about', 
-      activeIcon: IoMdInformationCircle, 
-      inactiveIcon: IoMdInformationCircleOutline 
+      icon: FaInfoCircle,
+      activeIcon: IoInformationCircle
     },
   ];
 
   return (
-    <aside className={`h-full ${className}`}>
-      {/* Logo */}
-      <div className="flex items-center justify-center md:justify-start py-2 px-3 mb-6">
-        <h1 className="text-xl font-bold text-primary">
-          GigaAura
-        </h1>
+    <aside className={`flex flex-col h-full ${className}`}>
+      {/* Logo section */}
+      <div className="flex justify-center py-4 px-3 mb-2 xl:justify-start">
+        <Link href="/">
+          <div className="text-primary font-bold text-2xl">
+            GigaAura
+          </div>
+        </Link>
       </div>
 
       {/* Navigation Links */}
-      <nav className="flex flex-col space-y-1 mb-8">
+      <nav className="space-y-1 mb-4">
         {navigation.map((item) => {
           const isActive = router.pathname === item.href;
-          const IconComponent = isActive ? item.activeIcon : item.inactiveIcon;
           
           return (
             <Link key={item.name} href={item.href}>
-              <div className={`sidebar-nav-item ${isActive ? 'active' : ''}`}>
-                <IconComponent className={`icon`} />
-                <span className={`text`}>{item.name}</span>
+              <div className="group">
+                <div className={`flex items-center xl:px-4 px-3 py-3 text-xl rounded-full 
+                  mx-auto xl:mx-0
+                  transition-colors duration-200
+                  hover:bg-gray-200 dark:hover:bg-gray-800
+                  ${isActive ? 'font-bold' : 'font-normal'}`}
+                >
+                  <div className="min-w-[32px] flex justify-center xl:justify-start">
+                    {isActive ? (
+                      <item.activeIcon className="h-7 w-7 text-black dark:text-white" />
+                    ) : (
+                      <item.icon className="h-7 w-7 text-gray-700 dark:text-gray-200 
+                        group-hover:text-black dark:group-hover:text-white" />
+                    )}
+                  </div>
+                  <span className="hidden xl:block ml-4 text-black dark:text-white">
+                    {item.name}
+                  </span>
+                </div>
               </div>
             </Link>
           );
         })}
       </nav>
 
+      {/* Post button */}
+      <div className="px-3 mb-4">
+        <Link href="/">
+          <button className="bg-primary hover:bg-primary/90 text-white font-bold py-3 px-4 rounded-full w-full">
+            <span className="hidden xl:inline">Post</span>
+            <span className="xl:hidden">+</span>
+          </button>
+        </Link>
+      </div>
+
       {/* User Profile Section */}
-      <div className="mt-auto px-3">
+      <div className="mt-auto pb-4 px-3">
         <Link href="/profile">
-          <div className="flex items-center p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors">
-            <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white overflow-hidden">
+          <div className="flex items-center space-x-3 p-2 rounded-full 
+            hover:bg-gray-200 dark:hover:bg-gray-800 cursor-pointer">
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-primary text-white flex items-center justify-center flex-shrink-0">
               {user.avatar ? (
                 <img 
                   src={user.avatar} 
                   alt={user.username || 'User'} 
-                  className="w-10 h-10 object-cover"
+                  className="w-10 h-10 rounded-full object-cover"
                 />
               ) : (
                 <span className="text-lg font-semibold">
@@ -146,27 +158,16 @@ const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
                 </span>
               )}
             </div>
-            <div className="ml-3">
-              <div className="font-bold text-black dark:text-white text-sm">
+            <div className="hidden xl:block overflow-hidden">
+              <div className="font-bold text-black dark:text-white truncate">
                 {user.username || 'Anonymous User'}
               </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                {truncateWallet(walletAddress || '')}
+              <div className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                @{user.username || truncateWallet(walletAddress || '')}
               </div>
             </div>
           </div>
         </Link>
-
-        <div className="flex mt-2 text-sm px-3 pb-4">
-          <div className="mr-4">
-            <span className="font-semibold text-black dark:text-white">{user.followers?.length || 0}</span>{' '}
-            <span className="text-gray-500 dark:text-gray-400">Followers</span>
-          </div>
-          <div>
-            <span className="font-semibold text-black dark:text-white">{user.following?.length || 0}</span>{' '}
-            <span className="text-gray-500 dark:text-gray-400">Following</span>
-          </div>
-        </div>
       </div>
     </aside>
   );

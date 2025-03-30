@@ -17,35 +17,29 @@ declare module '@lib/store' {
   }
 }
 
-// Type definitions for the GigaAura application - SOLANA ONLY
+// Add window interfaces for Phantom wallet
+interface PhantomProvider {
+  connect: () => Promise<{ publicKey: { toString: () => string } }>;
+  disconnect: () => Promise<void>;
+  on: (event: string, callback: () => void) => void;
+  isPhantom?: boolean;
+  signMessage?: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
+  publicKey?: { toString: () => string };
+}
 
-// Add Phantom wallet integration types to Window
-interface Window {
-  // Solana and Phantom wallet integration
-  solana?: {
-    isPhantom?: boolean;
-    connect?: (options?: { onlyIfTrusted?: boolean }) => Promise<any>;
-    disconnect?: () => Promise<void>;
-    signMessage?: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
-    publicKey?: { toString: () => string };
-    on?: (event: string, callback: (args: any) => void) => void;
-    off?: (event: string, callback: (args: any) => void) => void;
-  };
-  
+interface PhantomWindow extends Window {
+  solana?: PhantomProvider;
   phantom?: {
-    solana?: {
-      isPhantom?: boolean;
-      connect?: (options?: { onlyIfTrusted?: boolean }) => Promise<any>;
-      disconnect?: () => Promise<void>;
-      signMessage?: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
-      publicKey?: { toString: () => string };
-      on?: (event: string, callback: (args: any) => void) => void;
-      off?: (event: string, callback: (args: any) => void) => void;
-    };
+    solana?: PhantomProvider;
   };
-  
-  // Custom events for Phantom wallet detection
-  addEventListener(type: 'phantomReady', listener: (event: CustomEvent) => void): void;
-  dispatchEvent(event: Event): boolean;
-  removeEventListener(type: 'phantomReady', listener: (event: CustomEvent) => void): void;
+}
+
+// Extend the Window interface
+declare global {
+  interface Window {
+    solana?: PhantomProvider;
+    phantom?: {
+      solana?: PhantomProvider;
+    };
+  }
 } 

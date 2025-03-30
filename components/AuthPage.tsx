@@ -1,10 +1,21 @@
 import { useState } from 'react';
 import { useWallet } from '@contexts/WalletContext';
 
-// Extended Window interface to include Solana
+// Use the PhantomProvider interface from types.d.ts
 interface WindowWithSolana extends Window {
   solana?: {
     isPhantom?: boolean;
+    connect: () => Promise<{ publicKey: { toString: () => string } }>;
+    disconnect: () => Promise<void>;
+    on: (event: string, callback: () => void) => void;
+  };
+  phantom?: {
+    solana?: {
+      isPhantom?: boolean;
+      connect: () => Promise<{ publicKey: { toString: () => string } }>;
+      disconnect: () => Promise<void>;
+      on: (event: string, callback: () => void) => void;
+    };
   };
 }
 
