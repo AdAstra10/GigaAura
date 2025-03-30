@@ -15,22 +15,11 @@ import { followUser, unfollowUser } from '../lib/slices/userSlice';
 interface PostCardProps {
   post: Post;
   comments?: Comment[];
-  currentUserWallet?: string | null;
-  onLike?: (postId: string) => void;
-  onComment?: (postId: string, commentText: string) => void;
-  onShare?: (postId: string) => void;
-  onFollow?: (userWallet: string, username: string) => void;
+  onShare?: () => void;
+  onFollow?: () => void;
 }
 
-const PostCard: React.FC<PostCardProps> = ({ 
-  post, 
-  comments = [], 
-  currentUserWallet,
-  onLike,
-  onComment,
-  onShare, 
-  onFollow 
-}) => {
+const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFollow }) => {
   const dispatch = useDispatch();
   const router = useRouter();
   const { connectWallet, walletConnected } = useWallet();
@@ -232,48 +221,7 @@ const PostCard: React.FC<PostCardProps> = ({
     
     // Call the onFollow callback if provided (for Feed component updates)
     if (onFollow) {
-      onFollow(post.authorWallet, post.authorUsername || '');
-    }
-  };
-
-  const handleLikeClick = async () => {
-    // Check if external handler is provided
-    if (onLike) {
-      onLike(post.id);
-      return;
-    }
-    
-    // Use internal like handling if no external handler
-    handleLike();
-  };
-  
-  const handleCommentSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    
-    if (!commentText.trim()) return;
-    
-    // Check if external handler is provided
-    if (onComment) {
-      onComment(post.id, commentText);
-      setCommentText('');
-      return;
-    }
-    
-    // Use internal comment handling if no external handler
-    handleSubmitComment(e);
-  };
-  
-  const handleShareClick = () => {
-    if (onShare) {
-      onShare(post.id);
-    }
-  };
-  
-  const handleFollowClick = () => {
-    if (onFollow && post.authorWallet && post.authorUsername) {
-      onFollow(post.authorWallet, post.authorUsername);
-    } else {
-      handleFollowToggle();
+      onFollow();
     }
   };
 
@@ -314,7 +262,7 @@ const PostCard: React.FC<PostCardProps> = ({
             
             {post.authorWallet !== walletAddress && (
               <button 
-                onClick={handleFollowClick}
+                onClick={handleFollowToggle}
                 className={`ml-auto text-xs font-medium rounded-full px-3 py-1 hover-effect ${
                   isFollowing 
                     ? 'bg-primary/10 text-primary hover:bg-primary/20' 
@@ -349,7 +297,7 @@ const PostCard: React.FC<PostCardProps> = ({
           <div className="flex justify-between mt-3">
             <div className="flex space-x-4">
               <button 
-                onClick={handleLikeClick}
+                onClick={handleLike}
                 className={`flex items-center space-x-1 text-gray-500 dark:text-gray-400 hover-effect ${isLiked ? 'text-red-500 dark:text-red-400' : ''}`}
               >
                 <svg 
@@ -380,7 +328,7 @@ const PostCard: React.FC<PostCardProps> = ({
               </button>
               
               <button 
-                onClick={handleShareClick}
+                onClick={onShare}
                 className="flex items-center space-x-1 text-gray-500 dark:text-gray-400 hover-effect"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -393,7 +341,7 @@ const PostCard: React.FC<PostCardProps> = ({
           
           {showComments && (
             <div className="mt-4">
-              <form onSubmit={handleCommentSubmit} className="mb-4">
+              <form onSubmit={handleSubmitComment} className="mb-4">
                 <div className="flex">
                   <input
                     type="text"

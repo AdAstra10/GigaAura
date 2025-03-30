@@ -8,31 +8,40 @@ class MyDocument extends Document {
 
   render() {
     return (
-      <Html>
+      <Html lang="en">
         <Head>
-          <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+          <meta charSet="utf-8" />
+          <meta name="description" content="GigaAura - Social media platform with crypto wallet integration" />
           <link rel="icon" href="/favicon.ico" />
+          {/* DO NOT attempt to handle wallet providers in _document - let them work natively */}
+          <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
         </Head>
         <body>
           <Main />
           <NextScript />
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `
-                // Add Phantom wallet detection
-                if (typeof window !== 'undefined') {
-                  window.addEventListener('load', function() {
-                    // Check if the phantom wallet extension is installed
-                    const isPhantomInstalled = window.phantom?.solana || window.solana?.isPhantom;
+          {/* Add script to handle wallet provider conflicts */}
+          <script dangerouslySetInnerHTML={{
+            __html: `
+              window.addEventListener('load', function() {
+                // Prevent ethereum property conflicts between wallet providers
+                if (window.ethereum) {
+                  try {
+                    // Save original ethereum object
+                    const originalEthereum = window.ethereum;
                     
-                    if (!isPhantomInstalled) {
-                      console.log('Phantom wallet is not installed');
-                    }
-                  });
+                    // Create a non-writable property
+                    Object.defineProperty(window, 'ethereum', {
+                      value: originalEthereum,
+                      writable: false,
+                      configurable: true
+                    });
+                  } catch (err) {
+                    console.warn('Error setting up ethereum property:', err);
+                  }
                 }
-              `,
-            }}
-          />
+              });
+            `
+          }} />
         </body>
       </Html>
     );

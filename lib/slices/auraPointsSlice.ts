@@ -4,7 +4,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 export interface AuraTransaction {
   id: string;
   amount: number;
-  action: 'post_created' | 'like_received' | 'comment_made' | 'comment_received' | 'follower_gained' | 'post_shared' | 'post_liked' | 'post_commented';
+  action: 'post_created' | 'like_received' | 'comment_made' | 'comment_received' | 'follower_gained' | 'post_shared';
   timestamp: string;
   counterpartyName?: string;
   counterpartyWallet?: string;
@@ -97,4 +97,4 @@ const auraPointsSlice = createSlice({
 
 export const { addTransaction, setTotalPoints, resetPoints, loadWalletPoints } = auraPointsSlice.actions;
 
-export default auraPointsSlice.reducer;
+export default auraPointsSlice.reducer; 

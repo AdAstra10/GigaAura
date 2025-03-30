@@ -17,41 +17,30 @@ interface DarkModeProviderProps {
 }
 
 export const DarkModeProvider: React.FC<DarkModeProviderProps> = ({ children }) => {
-  // Initialize with a default of light mode but will be updated in useEffect
+  // Initialize with a default of light mode
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   
   // Check for stored preference and system preference on mount
   useEffect(() => {
-    console.log('Initializing dark mode...');
     const loadDarkMode = () => {
       // First try to load from localStorage
-      try {
-        const storedDarkMode = localStorage.getItem('darkMode');
-        
-        if (storedDarkMode !== null) {
-          // User has a preference
-          console.log('Found stored dark mode preference:', storedDarkMode);
-          return storedDarkMode === 'true';
-        } else {
-          // No saved preference, check system preference
-          const systemPreference = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-          console.log('Using system dark mode preference:', systemPreference);
-          return systemPreference;
-        }
-      } catch (error) {
-        console.error('Error loading dark mode preference:', error);
-        return false;
+      const storedDarkMode = localStorage.getItem('darkMode');
+      
+      if (storedDarkMode !== null) {
+        // User has a preference
+        return storedDarkMode === 'true';
+      } else {
+        // No saved preference, check system preference
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
       }
     };
     
-    // Set dark mode based on stored preferences or system preference
-    const darkModeValue = loadDarkMode();
-    setIsDarkMode(darkModeValue);
+    // Set dark mode based on stored preferences
+    setIsDarkMode(loadDarkMode());
   }, []);
   
-  // Apply dark mode class to document whenever isDarkMode changes
+  // Apply dark mode class to document
   useEffect(() => {
-    console.log('Applying dark mode classes, isDarkMode:', isDarkMode);
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
     } else {
@@ -59,16 +48,10 @@ export const DarkModeProvider: React.FC<DarkModeProviderProps> = ({ children }) 
     }
     
     // Save preference to localStorage
-    try {
-      localStorage.setItem('darkMode', isDarkMode.toString());
-      console.log('Saved dark mode preference:', isDarkMode);
-    } catch (error) {
-      console.error('Error saving dark mode preference:', error);
-    }
+    localStorage.setItem('darkMode', isDarkMode.toString());
   }, [isDarkMode]);
   
   const toggleDarkMode = () => {
-    console.log('Toggling dark mode from', isDarkMode, 'to', !isDarkMode);
     setIsDarkMode(prev => !prev);
   };
   

@@ -15,12 +15,6 @@ const Header = () => {
   const [isSunHovered, setIsSunHovered] = useState(false);
   const [isMoonHovered, setIsMoonHovered] = useState(false);
 
-  // Helper function to format wallet address
-  const formatWalletAddress = (address: string | null): string => {
-    if (!address) return '';
-    return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
-  };
-
   useEffect(() => {
     const checkIfMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -86,7 +80,7 @@ const Header = () => {
                 <Link href="/profile">
                   <div className="flex items-center cursor-pointer">
                     <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
-                      {user.username || formatWalletAddress(walletAddress)}
+                      {user.username || walletAddress?.substring(0, 4) + '...' + walletAddress?.substring(walletAddress.length - 4)}
                     </div>
                     <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                       {user.avatar ? (
@@ -164,7 +158,7 @@ const Header = () => {
                       )}
                     </div>
                     <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {user.username || formatWalletAddress(walletAddress)}
+                      {user.username || walletAddress?.substring(0, 4) + '...' + walletAddress?.substring(walletAddress.length - 4)}
                     </div>
                   </div>
                 </Link>

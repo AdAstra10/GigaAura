@@ -17,29 +17,19 @@ declare module '@lib/store' {
   }
 }
 
-// Add window interfaces for Phantom wallet
-interface PhantomProvider {
-  connect: () => Promise<{ publicKey: { toString: () => string } }>;
-  disconnect: () => Promise<void>;
-  on: (event: string, callback: () => void) => void;
-  isPhantom?: boolean;
-  signMessage?: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
-  publicKey?: { toString: () => string };
-}
-
-interface PhantomWindow extends Window {
-  solana?: PhantomProvider;
-  phantom?: {
-    solana?: PhantomProvider;
+// Phantom Wallet Types
+interface Window {
+  solana?: {
+    isPhantom?: boolean;
+    connect: () => Promise<{ publicKey: { toString: () => string } }>;
+    disconnect: () => Promise<void>;
+    on: (event: string, callback: () => void) => void;
+    publicKey?: { toString: () => string };
   };
-}
-
-// Extend the Window interface
-declare global {
-  interface Window {
-    solana?: PhantomProvider;
-    phantom?: {
-      solana?: PhantomProvider;
-    };
-  }
+  // Add ethereum interface to prevent conflicts with MetaMask and other EVM wallets
+  ethereum?: {
+    isMetaMask?: boolean;
+    _isCustomProvider?: boolean;
+    [key: string]: any;
+  };
 } 

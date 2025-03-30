@@ -68,39 +68,6 @@
   background-color: rgba(255, 255, 255, 0.05) !important;
 }
 
-/* Sidebar X-style navigation */
-.sidebar-nav-item {
-  @apply flex items-center px-4 py-3 text-xl rounded-full transition-colors;
-}
-
-.sidebar-nav-item:hover {
-  @apply bg-gray-200 dark:bg-gray-800;
-}
-
-.sidebar-nav-item.active {
-  @apply font-bold;
-}
-
-.sidebar-nav-item .icon {
-  @apply mr-4 h-6 w-6;
-}
-
-.sidebar-nav-item.active .icon {
-  @apply text-black dark:text-white;
-}
-
-.sidebar-nav-item:not(.active) .icon {
-  @apply text-gray-700 dark:text-gray-400;
-}
-
-.sidebar-nav-item.active .text {
-  @apply text-black dark:text-white;
-}
-
-.sidebar-nav-item:not(.active) .text {
-  @apply text-gray-700 dark:text-gray-400;
-}
-
 /* Add vertical separators instead of boxes in dark mode */
 @media (min-width: 768px) {
   .dark .sidebar-column {
@@ -253,24 +220,4 @@
   .dark .shadow {
     @apply shadow-dark;
   }
-}
-
-/* Dark mode improvements for sidebar */
-.dark .sidebar-nav-item:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.dark .sidebar-nav-item.active .icon,
-.dark .sidebar-nav-item.active .text {
-  color: #fff;
-}
-
-.dark .sidebar-nav-item:not(.active) .icon,
-.dark .sidebar-nav-item:not(.active) .text {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.dark .sidebar-nav-item:hover:not(.active) .icon,
-.dark .sidebar-nav-item:hover:not(.active) .text {
-  color: rgba(255, 255, 255, 0.9);
 } 

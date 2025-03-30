@@ -1,20 +1,19 @@
-import { useEffect, useState, FormEvent } from 'react';
-import { NextPage } from 'next';
-import Head from 'next/head';
-import { useDispatch, useSelector } from 'react-redux';
+import { useEffect, useState } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import { useRouter } from 'next/router';
-import { useWallet } from '../contexts/WalletContext';
 import { RootState } from '../lib/store';
 import { addPost, loadFromCache, setFeed } from '../lib/slices/postsSlice';
 import { addTransaction } from '../lib/slices/auraPointsSlice';
+import { useWallet } from '../contexts/WalletContext';
+import Head from 'next/head';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
-import Feed from '../components/Feed';
-import AuraSidebar from '../components/AuraSidebar';
-import toast from 'react-hot-toast';
 import PostCard from '../components/PostCard';
+import AuraSidebar from '../components/AuraSidebar';
 import Link from 'next/link';
 import { v4 as uuidv4 } from 'uuid';
+import toast from 'react-hot-toast';
+import Feed from '../components/Feed';
 
 const HomePage = () => {
   const dispatch = useDispatch();
@@ -24,7 +23,7 @@ const HomePage = () => {
   const { feed } = useSelector((state: RootState) => state.posts);
   
   const [postContent, setPostContent] = useState('');
-  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+  const [mediaUrl, setMediaUrl] = useState('');
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingFeed, setIsLoadingFeed] = useState(true);
@@ -51,46 +50,42 @@ const HomePage = () => {
     dispatch(setFeed(sortedFeed));
   };
 
-  const handleCreatePost = async (e: FormEvent) => {
+  const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!walletConnected) {
       const confirmConnect = window.confirm('You need to connect your wallet to create a post. Connect now?');
       if (confirmConnect) {
-        try {
-          await connectWallet();
-          return; // Return and let the user try again after connecting
-        } catch (error) {
-          console.error("Failed to connect wallet:", error);
-          toast.error("Could not connect to wallet. Please try again.");
-          return;
-        }
+        await connectWallet();
+        return; // Return and let the user try again after connecting
       } else {
         return;
       }
     }
     
-    if (!postContent.trim() && !mediaUrl) {
-      toast.error('Please add some content to your post');
+    if (!postContent.trim()) {
+      toast.error('Post content cannot be empty');
       return;
     }
     
     setIsSubmitting(true);
     
     try {
-      // Create and dispatch the new post
-      dispatch(addPost({
+      // Create a new post
+      const newPost = {
         content: postContent,
         authorWallet: walletAddress || '',
         authorUsername: user.username || undefined,
         authorAvatar: user.avatar || undefined,
         mediaUrl: mediaUrl || undefined,
-        mediaType: mediaType || undefined
-      }));
+        mediaType: mediaType || undefined,
+      };
+      
+      dispatch(addPost(newPost));
       
       // Add Aura Points for creating a post
       dispatch(addTransaction({
-        id: `tx_${Date.now()}`,
+        id: uuidv4(),
         amount: 50,
         timestamp: new Date().toISOString(),
         action: 'post_created',
@@ -152,9 +147,9 @@ const HomePage = () => {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-4 grid grid-cols-1 md:grid-cols-12 gap-4">
-        <div className="hidden md:block md:col-span-3 sticky top-16 h-[calc(100vh-4rem)]">
-          <Sidebar className="pt-2" />
+      <main className="container mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-12 gap-6">
+        <div className="hidden md:block md:col-span-3 sidebar-column">
+          <Sidebar className="sticky top-20" />
         </div>
         
         <div className="col-span-1 md:col-span-6 content-column">
