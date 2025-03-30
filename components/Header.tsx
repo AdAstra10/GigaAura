@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useWallet } from '../contexts/WalletContext';
 import { RootState } from '../lib/store';
 import { useDarkMode } from '../contexts/DarkModeContext';
+import { formatWalletAddress } from '../utils/walletHelpers';
 
 const Header = () => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
@@ -32,14 +33,40 @@ const Header = () => {
     };
   }, []);
 
+  // Apply dark mode class to document
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
   const handleConnectWallet = async () => {
     try {
+      console.log('Header: Connecting wallet...');
       await connectWallet();
     } catch (error) {
       console.error('Error connecting wallet:', error);
     }
   };
 
+  const handleToggleDarkMode = () => {
+    console.log('Toggling dark mode, current state:', isDarkMode);
+    toggleDarkMode();
+  };
+
+  const handleDisconnectWallet = async () => {
+    try {
+      console.log('Header: Disconnecting wallet...');
+      await disconnectWallet();
+    } catch (error) {
+      console.error('Error disconnecting wallet:', error);
+    }
+  };
+
+  const displayWalletAddress = formatWalletAddress(walletAddress);
+  
   return (
     <header className="sticky top-0 z-50 bg-white dark:bg-gray-900 header-solid border-b border-gray-200 dark:border-gray-700 thin-borders">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -64,10 +91,11 @@ const Header = () => {
               </div>
             </Link>
             <button
-              onClick={toggleDarkMode}
+              onClick={handleToggleDarkMode}
               className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 hover-effect text-gray-600 dark:text-gray-300"
               onMouseEnter={() => isDarkMode ? setIsSunHovered(true) : setIsMoonHovered(true)}
               onMouseLeave={() => {setIsSunHovered(false); setIsMoonHovered(false)}}
+              aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
             >
               {isDarkMode ? 
                 <FaSun className={isSunHovered ? "text-sunHover" : ""} /> : 
@@ -80,7 +108,7 @@ const Header = () => {
                 <Link href="/profile">
                   <div className="flex items-center cursor-pointer">
                     <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
-                      {user.username || walletAddress?.substring(0, 4) + '...' + walletAddress?.substring(walletAddress.length - 4)}
+                      {user.username || displayWalletAddress}
                     </div>
                     <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                       {user.avatar ? (
@@ -93,6 +121,12 @@ const Header = () => {
                     </div>
                   </div>
                 </Link>
+                <button 
+                  onClick={handleDisconnectWallet}
+                  className="ml-4 text-sm text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400"
+                >
+                  Disconnect
+                </button>
               </div>
             ) : (
               <button 
@@ -123,10 +157,11 @@ const Header = () => {
           <div className="px-2 pt-2 pb-3 space-y-1 bg-white dark:bg-gray-900 transparent-bg border-b border-gray-200 dark:border-gray-700 thin-borders">
             <div className="flex justify-between items-center p-2">
               <button
-                onClick={toggleDarkMode}
+                onClick={handleToggleDarkMode}
                 className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 hover-effect text-gray-600 dark:text-gray-300"
                 onMouseEnter={() => isDarkMode ? setIsSunHovered(true) : setIsMoonHovered(true)}
                 onMouseLeave={() => {setIsSunHovered(false); setIsMoonHovered(false)}}
+                aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
               >
                 {isDarkMode ? 
                   <FaSun className={isSunHovered ? "text-sunHover" : ""} /> : 
@@ -145,7 +180,7 @@ const Header = () => {
               </Link>
             </div>
             {walletConnected ? (
-              <div className="flex items-center p-2">
+              <div className="flex items-center justify-between p-2">
                 <Link href="/profile">
                   <div className="flex items-center cursor-pointer">
                     <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mr-2">
@@ -158,10 +193,16 @@ const Header = () => {
                       )}
                     </div>
                     <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {user.username || walletAddress?.substring(0, 4) + '...' + walletAddress?.substring(walletAddress.length - 4)}
+                      {user.username || displayWalletAddress}
                     </div>
                   </div>
                 </Link>
+                <button 
+                  onClick={handleDisconnectWallet}
+                  className="text-sm text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400"
+                >
+                  Disconnect
+                </button>
               </div>
             ) : (
               <div className="p-2">
