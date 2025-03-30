@@ -78,32 +78,47 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
   return <Component {...pageProps} />;
 };
 
-// Simple Phantom wallet reference updater
+// Additional wallet detection script that runs in the app
 const WalletProviderIsolation = () => {
   return (
     <Head>
       <script
         dangerouslySetInnerHTML={{
           __html: `
+            // Secondary isolation script that runs after initial detection
             (function() {
-              // Simple function to ensure wallet references are captured
-              function updatePhantomRef() {
+              // Re-run phantom detection to ensure we have it
+              function updateSecurePhantomRef() {
                 try {
-                  // Update reference if wallet is available
+                  // Ensure our namespace exists
+                  window.__GIGA_AURA_SECURE_NAMESPACE = window.__GIGA_AURA_SECURE_NAMESPACE || {};
+                  
+                  // Direct detection without touching ethereum
+                  var detected = null;
                   if (window.phantom && window.phantom.solana) {
-                    window._phantomWalletRef = window.phantom.solana;
+                    detected = window.phantom.solana;
                   } else if (window.solana && window.solana.isPhantom) {
-                    window._phantomWalletRef = window.solana;
+                    detected = window.solana;
+                  }
+                  
+                  // Store only if we found something
+                  if (detected) {
+                    window.__GIGA_AURA_SECURE_NAMESPACE.phantomWallet = detected;
                   }
                 } catch (e) {
-                  console.warn('Error tracking wallet:', e);
+                  // Silent error - no logs to console
                 }
               }
               
-              // Run on page load and after short delays
-              window.addEventListener('load', updatePhantomRef);
-              setTimeout(updatePhantomRef, 1000);
-              setTimeout(updatePhantomRef, 2000);
+              // Run on page load and with delays
+              if (document.readyState === 'complete') {
+                updateSecurePhantomRef();
+              } else {
+                window.addEventListener('load', updateSecurePhantomRef);
+              }
+              
+              setTimeout(updateSecurePhantomRef, 1000);
+              setTimeout(updateSecurePhantomRef, 2000);
             })();
           `
         }}

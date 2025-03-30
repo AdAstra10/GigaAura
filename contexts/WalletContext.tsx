@@ -12,14 +12,17 @@ interface PhantomWallet {
   disconnect: () => Promise<void>;
 }
 
-// Extended Window interface to include Solana, Phantom and our custom reference
+// Extended Window interface to include Solana, Phantom and our secure namespace
 interface WindowWithSolana extends Window {
   solana?: PhantomWallet;
   phantom?: {
     solana?: PhantomWallet;
   };
-  getPhantomWallet?: () => PhantomWallet | null;
-  _phantomWalletRef?: PhantomWallet;
+  gigaAuraGetPhantomWallet?: () => PhantomWallet | null;
+  __GIGA_AURA_SECURE_NAMESPACE?: {
+    phantomWallet?: PhantomWallet;
+    getPhantomWallet?: () => PhantomWallet | null;
+  };
 }
 
 interface WalletContextProps {
@@ -65,25 +68,31 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
 
   const dispatch = useDispatch();
 
-  // Helper function to safely get Phantom wallet provider using our isolation technique
+  // Helper function to safely get Phantom wallet provider using our completely isolated approach
   const getPhantomProvider = (): PhantomWallet | null => {
     if (typeof window === 'undefined') return null;
     
     try {
       const windowObj = window as WindowWithSolana;
       
-      // Method 1: Use our direct private reference (preferred)
-      if (windowObj._phantomWalletRef) {
-        return windowObj._phantomWalletRef;
+      // Method 1: Use our secure namespace (preferred)
+      if (windowObj.__GIGA_AURA_SECURE_NAMESPACE?.phantomWallet) {
+        return windowObj.__GIGA_AURA_SECURE_NAMESPACE.phantomWallet;
       }
       
-      // Method 2: Use our custom getter
-      if (typeof windowObj.getPhantomWallet === 'function') {
-        const provider = windowObj.getPhantomWallet();
+      // Method 2: Use our isolation getter from secure namespace
+      if (windowObj.__GIGA_AURA_SECURE_NAMESPACE?.getPhantomWallet) {
+        const provider = windowObj.__GIGA_AURA_SECURE_NAMESPACE.getPhantomWallet();
         if (provider) return provider;
       }
       
-      // Method 3: Traditional phantom detection as fallback
+      // Method 3: Use the window method we created
+      if (typeof windowObj.gigaAuraGetPhantomWallet === 'function') {
+        const provider = windowObj.gigaAuraGetPhantomWallet();
+        if (provider) return provider;
+      }
+      
+      // Method 4: Traditional phantom detection as fallback
       if (windowObj.phantom?.solana) {
         return windowObj.phantom.solana;
       } else if (windowObj.solana?.isPhantom) {
