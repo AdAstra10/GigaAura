@@ -29,27 +29,65 @@ const UserProfilePage = () => {
   // Find user data and posts based on the wallet address
   useEffect(() => {
     if (address && typeof address === 'string' && allPosts.length > 0) {
-      // Find posts by this user
-      const posts = allPosts.filter(post => post.authorWallet === address);
-      setUserPosts(posts);
-      
-      // Get user data from the first post if available
-      if (posts.length > 0) {
-        const firstPost = posts[0];
-        setUserData({
-          username: firstPost.authorUsername || 'Anonymous',
-          bio: 'User on GigaAura',
-          avatar: firstPost.authorAvatar || '',
-          followers: Math.floor(Math.random() * 100), // Mock data
-          following: Math.floor(Math.random() * 100)  // Mock data
-        });
+      try {
+        // Find posts by this user
+        const posts = allPosts.filter(post => post.authorWallet === address);
+        setUserPosts(posts);
+        
+        // Get user data from the first post if available
+        if (posts.length > 0) {
+          const firstPost = posts[0];
+          setUserData({
+            username: firstPost.authorUsername || 'Anonymous',
+            bio: 'User on GigaAura',
+            avatar: firstPost.authorAvatar || '',
+            followers: Math.floor(Math.random() * 100), // Mock data
+            following: Math.floor(Math.random() * 100)  // Mock data
+          });
+        } else {
+          // Try to get profile data from localStorage if no posts
+          try {
+            if (typeof window !== 'undefined') {
+              // Load username
+              const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
+              const username = usernames[address] || null;
+              
+              // Load avatar
+              const profilePictures = JSON.parse(localStorage.getItem('profilePictures') || '{}');
+              const avatar = profilePictures[address] || null;
+              
+              // Load bio
+              const bios = JSON.parse(localStorage.getItem('userBios') || '{}');
+              const bio = bios[address] || null;
+              
+              if (username || avatar || bio) {
+                setUserData({
+                  username: username || 'Anonymous',
+                  bio: bio || 'User on GigaAura',
+                  avatar: avatar || '',
+                  followers: Math.floor(Math.random() * 100), // Mock data
+                  following: Math.floor(Math.random() * 100)  // Mock data
+                });
+              }
+            }
+          } catch (error) {
+            console.error('Error loading profile data from localStorage:', error);
+          }
+        }
+      } catch (error) {
+        console.error('Error processing profile data:', error);
       }
     }
   }, [address, allPosts]);
 
-  const truncateWallet = (addressStr: string | null) => {
+  const truncateWallet = (addressStr: string | null | undefined) => {
     if (!addressStr) return '';
-    return `${addressStr.substring(0, 6)}...${addressStr.substring(addressStr.length - 4)}`;
+    try {
+      return `${addressStr.substring(0, 6)}...${addressStr.substring(addressStr.length - 4)}`;
+    } catch (error) {
+      console.error('Error truncating wallet address:', error);
+      return 'Invalid Address';
+    }
   };
   
   // Handle follow action (mock functionality)
@@ -65,11 +103,22 @@ const UserProfilePage = () => {
     );
   }
   
-  const isOwnProfile = walletAddress === address;
-  if (isOwnProfile) {
-    router.push('/profile');
-    return null;
-  }
+  // Navigate to own profile if viewing own address
+  useEffect(() => {
+    if (walletAddress && address && walletAddress === address) {
+      router.push('/profile');
+    }
+  }, [walletAddress, address, router]);
+  
+  // Safely get first letter for avatar
+  const getAvatarInitial = (text?: string) => {
+    try {
+      if (!text) return '?';
+      return text.charAt(0).toUpperCase();
+    } catch (error) {
+      return '?';
+    }
+  };
   
   return (
     <>
@@ -96,7 +145,7 @@ const UserProfilePage = () => {
                       <img src={userData.avatar} alt={userData.username} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-white text-4xl font-bold">
-                        {userData.username ? userData.username.charAt(0).toUpperCase() : (address as string).substring(0, 2)}
+                        {getAvatarInitial(userData.username || (typeof address === 'string' ? address : ''))}
                       </div>
                     )}
                   </div>
@@ -104,7 +153,7 @@ const UserProfilePage = () => {
                 
                 <div className="flex-1 text-center sm:text-left">
                   <h1 className="text-2xl font-bold mb-1 dark:text-white">{userData.username || 'Anonymous User'}</h1>
-                  <p className="text-gray-500 dark:text-gray-400 mb-3">{truncateWallet(address as string)}</p>
+                  <p className="text-gray-500 dark:text-gray-400 mb-3">{truncateWallet(typeof address === 'string' ? address : undefined)}</p>
                   <p className="mb-4 dark:text-gray-300">{userData.bio || 'No bio yet'}</p>
                   
                   <div className="flex flex-wrap gap-4 mb-4">
@@ -147,7 +196,7 @@ const UserProfilePage = () => {
                       <div className="flex items-start space-x-3">
                         <div className="flex-shrink-0">
                           <div className="w-10 h-10 rounded-full bg-[#60C5D1] flex items-center justify-center text-white">
-                            {userData.username ? userData.username.charAt(0).toUpperCase() : (address as string).substring(0, 2)}
+                            {getAvatarInitial(userData.username || (typeof address === 'string' ? address : ''))}
                           </div>
                         </div>
                         
