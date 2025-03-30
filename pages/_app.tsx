@@ -78,47 +78,60 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
   return <Component {...pageProps} />;
 };
 
-// Additional wallet detection script that runs in the app
+// Script to prevent ethereum provider conflicts
 const WalletProviderIsolation = () => {
   return (
     <Head>
       <script
         dangerouslySetInnerHTML={{
           __html: `
-            // Secondary isolation script that runs after initial detection
             (function() {
-              // Re-run phantom detection to ensure we have it
-              function updateSecurePhantomRef() {
+              // Function to safely handle Phantom wallet providers
+              function safelyHandleProviders() {
                 try {
-                  // Ensure our namespace exists
-                  window.__GIGA_AURA_SECURE_NAMESPACE = window.__GIGA_AURA_SECURE_NAMESPACE || {};
+                  // Create a list to store all providers
+                  window._walletProviders = window._walletProviders || [];
                   
-                  // Direct detection without touching ethereum
-                  var detected = null;
-                  if (window.phantom && window.phantom.solana) {
-                    detected = window.phantom.solana;
-                  } else if (window.solana && window.solana.isPhantom) {
-                    detected = window.solana;
+                  // Create a safe getter for wallet detection
+                  window.getPhantomWallet = function() {
+                    // Look for the Phantom provider in our providers list
+                    for (let provider of window._walletProviders) {
+                      if (provider && provider.isPhantom) {
+                        return provider;
+                      }
+                    }
+                    
+                    // Alternative detection for Phantom
+                    if (window.phantom && window.phantom.solana) {
+                      return window.phantom.solana;
+                    }
+                    
+                    // Alternative backup detection for Solana
+                    if (window.solana && window.solana.isPhantom) {
+                      return window.solana;
+                    }
+                    
+                    return null;
+                  };
+                  
+                  // Track Solana providers
+                  if (window.solana && window.solana.isPhantom && !window._walletProviders.includes(window.solana)) {
+                    window._walletProviders.push(window.solana);
                   }
                   
-                  // Store only if we found something
-                  if (detected) {
-                    window.__GIGA_AURA_SECURE_NAMESPACE.phantomWallet = detected;
+                  if (window.phantom && window.phantom.solana && !window._walletProviders.includes(window.phantom.solana)) {
+                    window._walletProviders.push(window.phantom.solana);
                   }
                 } catch (e) {
-                  // Silent error - no logs to console
+                  console.error('Error in wallet provider isolation:', e);
                 }
               }
               
-              // Run on page load and with delays
-              if (document.readyState === 'complete') {
-                updateSecurePhantomRef();
-              } else {
-                window.addEventListener('load', updateSecurePhantomRef);
-              }
+              // Execute immediately
+              safelyHandleProviders();
               
-              setTimeout(updateSecurePhantomRef, 1000);
-              setTimeout(updateSecurePhantomRef, 2000);
+              // Also run after a delay to catch late injections
+              setTimeout(safelyHandleProviders, 500);
             })();
           `
         }}
