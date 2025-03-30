@@ -78,7 +78,7 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
   return <Component {...pageProps} />;
 };
 
-// Script to prevent wallet provider conflicts
+// Script to track Phantom wallet provider
 const WalletProviderIsolation = () => {
   return (
     <Head>
@@ -86,25 +86,30 @@ const WalletProviderIsolation = () => {
         dangerouslySetInnerHTML={{
           __html: `
             (function() {
-              // Secondary wallet tracking - runs after the main isolation in _document.js
-              function trackWalletProviders() {
+              // Secondary wallet tracking to update references after the initial script
+              function updatePhantomReference() {
                 try {
-                  // Update our wallet reference if available
+                  // Initialize if needed
+                  window._gigaAuraWallets = window._gigaAuraWallets || {};
+                  
+                  // Track Phantom wallet
                   if (window.phantom && window.phantom.solana) {
-                    window._gigaAuraWallets = window._gigaAuraWallets || {};
                     window._gigaAuraWallets.phantomWallet = window.phantom.solana;
                   } else if (window.solana && window.solana.isPhantom) {
-                    window._gigaAuraWallets = window._gigaAuraWallets || {};
                     window._gigaAuraWallets.phantomWallet = window.solana;
                   }
                 } catch (e) {
-                  console.error('Error in wallet provider tracking:', e);
+                  console.error('Error in Phantom wallet tracking:', e);
                 }
               }
               
-              // Run with delay to catch any wallets that inject after page load
-              setTimeout(trackWalletProviders, 1000);
-              setTimeout(trackWalletProviders, 2000);
+              // Run multiple times to catch wallet injections at different points
+              updatePhantomReference();
+              setTimeout(updatePhantomReference, 1000);
+              setTimeout(updatePhantomReference, 2000);
+              
+              // Watch for changes in extensions
+              document.addEventListener('DOMContentLoaded', updatePhantomReference);
             })();
           `
         }}
