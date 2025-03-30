@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import { v4 as uuidv4 } from 'uuid';
 import { useDarkMode } from '../contexts/DarkModeContext';
 import dynamic from 'next/dynamic';
+import { FaImage, FaSmile, FaCalendarAlt, FaMapMarkerAlt } from 'react-icons/fa';
 
 // Import the emoji picker dynamically to avoid SSR issues
 const EmojiPicker = dynamic(
@@ -28,12 +29,19 @@ const Feed = () => {
   const comments = useSelector((state: RootState) => state.posts.comments);
   const user = useSelector((state: RootState) => state.user);
   
+  // Active tab state
+  const [activeTab, setActiveTab] = useState<'for-you' | 'following'>('for-you');
+  
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Hover states
+  const [hoverPost, setHoverPost] = useState<string | null>(null);
   
   // Post creation states
   const [newPostContent, setNewPostContent] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFilePreview, setSelectedFilePreview] = useState<string | null>(null);
   const [selectedFileType, setSelectedFileType] = useState<'image' | 'video' | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -76,6 +84,20 @@ const Feed = () => {
     
     setSelectedFile(file);
     setSelectedFileType(isImage ? 'image' : 'video');
+    
+    // Create a preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setSelectedFilePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+  
+  // Handle emoji selection
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    setNewPostContent(prev => prev + emojiData.emoji);
+    setShowEmojiPicker(false);
+    textareaRef.current?.focus();
   };
   
   // Handle post creation
@@ -136,6 +158,7 @@ const Feed = () => {
       // Reset form and state
       setNewPostContent('');
       setSelectedFile(null);
+      setSelectedFilePreview(null);
       setSelectedFileType(undefined);
       setLocation(null);
       setShowEmojiPicker(false);
@@ -208,11 +231,46 @@ const Feed = () => {
   const getPostComments = (postId: string) => {
     return comments.filter(comment => comment.postId === postId);
   };
+
+  // Filter feed based on active tab
+  const filteredFeed = activeTab === 'following' ? 
+    feed.filter(post => user.following?.includes(post.authorWallet)) : 
+    feed;
   
   return (
-    <div className="feed-container space-y-4">
+    <div className="feed-container border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 dark:border-gray-700">
+        <button 
+          className={`flex-1 py-4 text-center font-bold text-lg relative ${
+            activeTab === 'for-you' 
+              ? 'text-black dark:text-white' 
+              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+          }`}
+          onClick={() => setActiveTab('for-you')}
+        >
+          For you
+          {activeTab === 'for-you' && (
+            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-1 bg-primary rounded-full"></div>
+          )}
+        </button>
+        <button 
+          className={`flex-1 py-4 text-center font-bold text-lg relative ${
+            activeTab === 'following' 
+              ? 'text-black dark:text-white' 
+              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+          }`}
+          onClick={() => setActiveTab('following')}
+        >
+          Following
+          {activeTab === 'following' && (
+            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-1 bg-primary rounded-full"></div>
+          )}
+        </button>
+      </div>
+
       {/* Create Post */}
-      <div className="bg-white dark:bg-gray-800 transparent-bg rounded-lg shadow-md no-shadow card-outline p-4">
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex space-x-4">
           <div className="flex-shrink-0">
             <div className="h-10 w-10 rounded-full overflow-hidden bg-primary">
@@ -234,200 +292,126 @@ const Feed = () => {
           <div className="flex-1">
             <textarea
               ref={textareaRef}
-              className={`w-full p-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary resize-none ${
+              className={`w-full p-2 text-lg border-none focus:outline-none focus:ring-0 resize-none ${
                 isDarkMode
-                  ? 'bg-gray-700 text-white border-gray-600'
-                  : 'bg-gray-50 text-gray-900 border-gray-300'
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-white text-gray-900'
               }`}
-              placeholder="What's happening in your aura today?"
+              placeholder="What's happening?"
               rows={2}
               value={newPostContent}
               onChange={(e) => setNewPostContent(e.target.value)}
               maxLength={280}
             />
 
-            <div className="mt-2">
-              {selectedFile && (
-                <div className="relative mt-2">
-                  {selectedFileType === 'image' ? (
-                    <img
-                      src={URL.createObjectURL(selectedFile)}
-                      alt="Selected"
-                      className="max-h-40 rounded-lg"
-                    />
-                  ) : (
-                    <video
-                      src={URL.createObjectURL(selectedFile)}
-                      className="max-h-40 rounded-lg"
-                      controls
-                    />
-                  )}
-                  <button
-                    onClick={() => setSelectedFile(null)}
-                    className="absolute top-1 right-1 bg-gray-800/70 text-white p-1 rounded-full hover:bg-gray-900/90"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between mt-2">
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-2 text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary hover-effect rounded-full"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
-                  </button>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    accept="image/*,video/*"
-                    onChange={handleFileChange}
-                  />
-                  <button
-                    className="p-2 text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary hover-effect rounded-full"
-                    onClick={() => {
-                      if (navigator.geolocation) {
-                        navigator.geolocation.getCurrentPosition(
-                          (position) => {
-                            setLocation({
-                              lat: position.coords.latitude,
-                              lng: position.coords.longitude,
-                            });
-                            toast.success('Location added to your post');
-                          },
-                          () => {
-                            toast.error('Unable to retrieve your location');
-                          }
-                        );
-                      }
-                    }}
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
-                  </button>
-                  <button
-                    className="p-2 text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary hover-effect rounded-full"
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                  </button>
-                </div>
+            {selectedFilePreview && (
+              <div className="mt-2 relative rounded-2xl overflow-hidden">
+                {selectedFileType === 'image' ? (
+                  <img src={selectedFilePreview} alt="Selected" className="w-full h-auto rounded-2xl" />
+                ) : (
+                  <video src={selectedFilePreview} controls className="w-full rounded-2xl"></video>
+                )}
                 <button
-                  onClick={handleCreatePost}
-                  disabled={isSubmitting || (!newPostContent.trim() && !selectedFile)}
-                  className={`px-4 py-1.5 rounded-full text-white font-medium hover-effect ${
-                    isSubmitting || (!newPostContent.trim() && !selectedFile)
-                      ? 'bg-primary/60 cursor-not-allowed'
-                      : 'bg-primary hover:bg-primary/90'
-                  }`}
+                  onClick={() => {
+                    setSelectedFile(null);
+                    setSelectedFilePreview(null);
+                    setSelectedFileType(undefined);
+                  }}
+                  className="absolute top-2 right-2 bg-black/50 text-white p-1 rounded-full"
                 >
-                  {isSubmitting ? 'Posting...' : 'Post'}
+                  ✕
                 </button>
               </div>
-            </div>
-            {showEmojiPicker && (
-              <div className="absolute z-10 mt-1">
-                {/* @ts-ignore */}
-                <EmojiPicker
-                  onEmojiClick={(emojiData: EmojiClickData) => {
-                    setNewPostContent(
-                      (prev: string) => prev + emojiData.emoji
-                    );
-                    setShowEmojiPicker(false);
-                  }}
-                  width={300}
-                  height={350}
+            )}
+
+            <div className="mt-3 flex items-center justify-between">
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2 text-primary rounded-full hover:bg-primary/10 transition-colors"
+                >
+                  <FaImage />
+                </button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept="image/*,video/*"
+                  className="hidden"
                 />
+                <button
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  className="p-2 text-primary rounded-full hover:bg-primary/10 transition-colors"
+                >
+                  <FaSmile />
+                </button>
+                <button
+                  className="p-2 text-primary rounded-full hover:bg-primary/10 transition-colors"
+                >
+                  <FaCalendarAlt />
+                </button>
+                <button
+                  className="p-2 text-primary rounded-full hover:bg-primary/10 transition-colors"
+                >
+                  <FaMapMarkerAlt />
+                </button>
+              </div>
+              <button
+                onClick={handleCreatePost}
+                disabled={(!newPostContent.trim() && !selectedFile) || isSubmitting}
+                className={`px-4 py-1.5 rounded-full font-bold ${
+                  !newPostContent.trim() && !selectedFile
+                    ? 'bg-primary/50 text-white cursor-not-allowed'
+                    : 'bg-primary text-white hover:bg-primary/90'
+                } transition-colors`}
+              >
+                {isSubmitting ? 'Posting...' : 'Post'}
+              </button>
+            </div>
+
+            {showEmojiPicker && (
+              <div className="absolute z-10 mt-2">
+                <EmojiPicker onEmojiClick={handleEmojiClick} />
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Posts Feed */}
+      {/* Feed */}
       {isLoading ? (
-        <div className="bg-white dark:bg-gray-800 transparent-bg rounded-lg shadow-md no-shadow card-outline p-6 text-center">
-          <div className="flex justify-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-          </div>
-          <p className="text-gray-500 dark:text-gray-400 mt-4">Loading posts...</p>
+        <div className="flex justify-center p-6">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
         </div>
-      ) : feed.length === 0 ? (
-        <div className="bg-white dark:bg-gray-800 transparent-bg rounded-lg shadow-md no-shadow card-outline p-6 text-center">
-          <p className="text-gray-500 dark:text-gray-400">No posts yet.</p>
-          <p className="mt-2 dark:text-gray-300">Be the first to share an update!</p>
+      ) : filteredFeed.length === 0 ? (
+        <div className="p-6 text-center">
+          <p className="text-gray-500 dark:text-gray-400">
+            {activeTab === 'following'
+              ? "You're not following anyone yet, or they haven't posted anything."
+              : "No posts yet. Be the first to post!"}
+          </p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {feed.map((post) => (
-            <PostCard 
-              key={post.id} 
-              post={post}
-              comments={getPostComments(post.id)}
-              onShare={() => handleSharePost(post.id)}
-              onFollow={() => post.authorWallet && handleFollowUser(post.authorWallet, post.authorUsername || '')}
-            />
-          ))}
+        <div>
+          {filteredFeed
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .map((post) => (
+              <div 
+                key={post.id}
+                className={`border-b border-gray-200 dark:border-gray-700 ${
+                  hoverPost === post.id ? 'bg-gray-50 dark:bg-gray-800/50' : ''
+                } transition-colors`}
+                onMouseEnter={() => setHoverPost(post.id)}
+                onMouseLeave={() => setHoverPost(null)}
+              >
+                <PostCard
+                  post={post}
+                  comments={getPostComments(post.id)}
+                  onShare={() => handleSharePost(post.id)}
+                  onFollow={() => post.authorWallet && handleFollowUser(post.authorWallet, post.authorUsername || '')}
+                />
+              </div>
+            ))}
         </div>
       )}
     </div>
