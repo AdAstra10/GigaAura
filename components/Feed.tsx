@@ -53,19 +53,29 @@ const Feed = () => {
   
   // Load posts from cache or initialize with mock data
   useEffect(() => {
-    const cachedPosts = localStorage.getItem('cachedPosts');
-    if (cachedPosts) {
-      dispatch(setFeed(JSON.parse(cachedPosts)));
-    } else {
+    try {
+      const cachedPosts = localStorage.getItem('cachedPosts');
+      if (cachedPosts) {
+        dispatch(setFeed(JSON.parse(cachedPosts)));
+      } else {
+        dispatch(setFeed([]));
+      }
+    } catch (error) {
+      console.error('Error loading cached posts:', error);
       dispatch(setFeed([]));
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, [dispatch]);
   
   // Save posts to cache whenever they change
   useEffect(() => {
-    if (feed.length > 0) {
-      localStorage.setItem('cachedPosts', JSON.stringify(feed));
+    if (feed && feed.length > 0) {
+      try {
+        localStorage.setItem('cachedPosts', JSON.stringify(feed));
+      } catch (error) {
+        console.error('Error caching posts:', error);
+      }
     }
   }, [feed]);
   
@@ -236,6 +246,31 @@ const Feed = () => {
   const filteredFeed = activeTab === 'following' ? 
     feed.filter(post => user.following?.includes(post.authorWallet)) : 
     feed;
+    
+  // Create a new sorted array without mutating the original
+  const getSortedFeed = () => {
+    // First ensure feed exists and has items
+    if (!filteredFeed || filteredFeed.length === 0) {
+      return [];
+    }
+    
+    try {
+      // Create a new array with the spread operator to avoid mutating the original
+      return [...filteredFeed].sort((a, b) => {
+        // Safely handle potentially invalid dates
+        const dateA = new Date(a.createdAt || 0).getTime();
+        const dateB = new Date(b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+    } catch (error) {
+      console.error('Error sorting feed:', error);
+      // Return unsorted feed as fallback
+      return filteredFeed;
+    }
+  };
+  
+  // Get the sorted feed
+  const sortedFeed = getSortedFeed();
   
   return (
     <div className="feed-container border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
@@ -393,25 +428,23 @@ const Feed = () => {
         </div>
       ) : (
         <div>
-          {filteredFeed
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-            .map((post) => (
-              <div 
-                key={post.id}
-                className={`border-b border-gray-200 dark:border-gray-700 ${
-                  hoverPost === post.id ? 'bg-gray-50 dark:bg-gray-800/50' : ''
-                } transition-colors`}
-                onMouseEnter={() => setHoverPost(post.id)}
-                onMouseLeave={() => setHoverPost(null)}
-              >
-                <PostCard
-                  post={post}
-                  comments={getPostComments(post.id)}
-                  onShare={() => handleSharePost(post.id)}
-                  onFollow={() => post.authorWallet && handleFollowUser(post.authorWallet, post.authorUsername || '')}
-                />
-              </div>
-            ))}
+          {sortedFeed.map((post) => (
+            <div 
+              key={post.id}
+              className={`border-b border-gray-200 dark:border-gray-700 ${
+                hoverPost === post.id ? 'bg-gray-50 dark:bg-gray-800/50' : ''
+              } transition-colors`}
+              onMouseEnter={() => setHoverPost(post.id)}
+              onMouseLeave={() => setHoverPost(null)}
+            >
+              <PostCard
+                post={post}
+                comments={getPostComments(post.id)}
+                onShare={() => handleSharePost(post.id)}
+                onFollow={() => post.authorWallet && handleFollowUser(post.authorWallet, post.authorUsername || '')}
+              />
+            </div>
+          ))}
         </div>
       )}
     </div>

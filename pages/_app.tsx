@@ -9,10 +9,27 @@ import { loadWalletPoints } from '../lib/slices/auraPointsSlice';
 import { updateProfile } from '../lib/slices/userSlice';
 import '../styles/globals.css';
 
+// Error boundary component to catch React errors
+const ErrorFallback = ({ error }: { error: Error }) => {
+  return (
+    <div className="w-full h-screen flex flex-col items-center justify-center p-4 text-center">
+      <h1 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h1>
+      <p className="text-gray-700 dark:text-gray-300 mb-4">Please try refreshing the page</p>
+      <button 
+        onClick={() => window.location.href = '/home'} 
+        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+      >
+        Go to Home
+      </button>
+    </div>
+  );
+};
+
 // Wrapper component to access wallet context inside app
 const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Component']; pageProps: AppProps['pageProps'] }) => {
   const { walletAddress } = useWallet();
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
   
   useEffect(() => {
     if (walletAddress) {
@@ -26,58 +43,90 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
       // Load wallet-specific data when wallet connects
       console.log("Loading data for wallet:", walletAddress);
       
-      // Load Aura Points
       try {
-        // Try to load aura points from localStorage or set default
-        const pointsStr = localStorage.getItem(`auraPoints_${walletAddress}`);
-        const points = pointsStr ? parseInt(pointsStr, 10) : 100;
-        store.dispatch(loadWalletPoints(points));
-      } catch (error) {
-        console.error("Error loading aura points:", error);
-        store.dispatch(loadWalletPoints(100)); // Default
+        // Load Aura Points
+        try {
+          // Try to load aura points from localStorage or set default
+          const pointsStr = localStorage.getItem(`auraPoints_${walletAddress}`);
+          const points = pointsStr ? parseInt(pointsStr, 10) : 100;
+          store.dispatch(loadWalletPoints(points));
+        } catch (error) {
+          console.error("Error loading aura points:", error);
+          store.dispatch(loadWalletPoints(100)); // Default
+        }
+        
+        // Load profile data from localStorage
+        try {
+          // Load profile picture
+          const profilePictures = JSON.parse(localStorage.getItem('profilePictures') || '{}');
+          const avatar = profilePictures[walletAddress] || null;
+          
+          // Load banner image
+          const bannerImages = JSON.parse(localStorage.getItem('bannerImages') || '{}');
+          const bannerImage = bannerImages[walletAddress] || null;
+          
+          // Load username
+          const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
+          const username = usernames[walletAddress] || null;
+          
+          // Load bio
+          const bios = JSON.parse(localStorage.getItem('userBios') || '{}');
+          const bio = bios[walletAddress] || null;
+          
+          // Update profile in Redux store
+          store.dispatch(updateProfile({
+            username,
+            bio,
+            avatar,
+            bannerImage
+          }));
+          
+          console.log("Loaded profile data:", { username, avatar });
+        } catch (error) {
+          console.error('Error loading profile data:', error);
+        }
+        
+        setLoaded(true);
+      } catch (err) {
+        console.error("Error in wallet data loading:", err);
+        setError(err instanceof Error ? err : new Error(String(err)));
       }
-      
-      // Load profile data from localStorage
-      try {
-        // Load profile picture
-        const profilePictures = JSON.parse(localStorage.getItem('profilePictures') || '{}');
-        const avatar = profilePictures[walletAddress] || null;
-        
-        // Load banner image
-        const bannerImages = JSON.parse(localStorage.getItem('bannerImages') || '{}');
-        const bannerImage = bannerImages[walletAddress] || null;
-        
-        // Load username
-        const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
-        const username = usernames[walletAddress] || null;
-        
-        // Load bio
-        const bios = JSON.parse(localStorage.getItem('userBios') || '{}');
-        const bio = bios[walletAddress] || null;
-        
-        // Update profile in Redux store
-        store.dispatch(updateProfile({
-          username,
-          bio,
-          avatar,
-          bannerImage
-        }));
-        
-        console.log("Loaded profile data:", { username, avatar });
-      } catch (error) {
-        console.error('Error loading profile data:', error);
-      }
-      
-      setLoaded(true);
     } else if (!walletAddress) {
       setLoaded(false);
     }
   }, [walletAddress, loaded]);
   
+  if (error) {
+    return <ErrorFallback error={error} />;
+  }
+  
   return <Component {...pageProps} />;
 };
 
 function MyApp({ Component, pageProps }: AppProps) {
+  // Global error handling
+  const [hasError, setHasError] = useState(false);
+  
+  useEffect(() => {
+    // Add global error handler
+    const handleError = (event: ErrorEvent) => {
+      console.error('Global error caught:', event.error);
+      setHasError(true);
+      // Prevent default error handling
+      event.preventDefault();
+    };
+    
+    window.addEventListener('error', handleError);
+    
+    return () => {
+      window.removeEventListener('error', handleError);
+    };
+  }, []);
+  
+  if (hasError) {
+    return <ErrorFallback error={new Error('Application crashed')} />;
+  }
+  
   return (
     <Provider store={store}>
       <DarkModeProvider>
