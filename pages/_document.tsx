@@ -31,13 +31,23 @@ class MyDocument extends Document {
             content="default-src 'self'; font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:;"
           />
           
-          {/* Add script to handle Phantom wallet */}
+          {/* Add script to completely block ethereum property access and handle Phantom wallet only */}
           <script
             dangerouslySetInnerHTML={{
               __html: `
-                // Prevent wallet provider conflicts
+                // Block ethereum property and focus on Phantom wallet only
                 (function() {
                   try {
+                    // Prevent any access to ethereum property by creating a null getter
+                    // This prevents conflicts with Chrome extensions like MetaMask
+                    if (!Object.getOwnPropertyDescriptor(window, 'ethereum')) {
+                      Object.defineProperty(window, 'ethereum', {
+                        configurable: false,
+                        enumerable: false,
+                        get: function() { return null; }
+                      });
+                    }
+                    
                     // Store original solana if it exists
                     const originalSolanaGetter = Object.getOwnPropertyDescriptor(window, 'solana');
                     
@@ -50,7 +60,7 @@ class MyDocument extends Document {
                       });
                     }
                   } catch (e) {
-                    console.warn('Error setting up Phantom wallet protection:', e);
+                    console.warn('Error setting up wallet protection:', e);
                   }
                 })();
               `

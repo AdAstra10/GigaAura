@@ -112,13 +112,17 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
           try {
             const response = await provider.connect({ onlyIfTrusted: true });
             if (response && response.publicKey) {
-              const address = response.publicKey.toString();
-              setWalletState(address);
-              setWalletConnected(true);
-              dispatch(setWalletAddress(address));
-              loadWalletAuraPoints(address);
-              loadUserProfileData(address); // Load profile data here
-              console.log("Auto-connected to wallet:", address);
+              try {
+                const address = response.publicKey.toString();
+                setWalletState(address);
+                setWalletConnected(true);
+                dispatch(setWalletAddress(address));
+                loadWalletAuraPoints(address);
+                loadUserProfileData(address); // Load profile data here
+                console.log("Auto-connected to wallet:", address);
+              } catch (error) {
+                console.error("Error converting publicKey to string:", error);
+              }
             }
           } catch (error) {
             // Not connected yet (normal, will connect later when user clicks)
@@ -176,20 +180,29 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       const provider = getProvider();
 
       if (provider) {
-        const response = await provider.connect();
-        if (response && response.publicKey) {
-          const address = response.publicKey.toString();
-          
-          // Set wallet state and dispatch to Redux
-          setWalletState(address);
-          setWalletConnected(true);
-          setWalletProvider(provider);
-          dispatch(setWalletAddress(address));
-          
-          // Load data for this wallet address
-          loadWalletAuraPoints(address);
-          loadUserProfileData(address); // Load profile data here
-          console.log("Connected to wallet:", address);
+        try {
+          const response = await provider.connect();
+          if (response && response.publicKey) {
+            try {
+              const address = response.publicKey.toString();
+              
+              // Set wallet state and dispatch to Redux
+              setWalletState(address);
+              setWalletConnected(true);
+              setWalletProvider(provider);
+              dispatch(setWalletAddress(address));
+              
+              // Load data for this wallet address
+              loadWalletAuraPoints(address);
+              loadUserProfileData(address); // Load profile data here
+              console.log("Connected to wallet:", address);
+            } catch (error) {
+              console.error("Error converting publicKey to string:", error);
+            }
+          }
+        } catch (error) {
+          console.error("Error connecting to wallet:", error);
+          // This might be a user rejection, which is fine
         }
       } else {
         alert("Compatible wallet not found! Please install the Phantom wallet extension.");
