@@ -17,19 +17,35 @@ declare module '@lib/store' {
   }
 }
 
-// Phantom Wallet Types
+// Type definitions for the GigaAura application - SOLANA ONLY
+
+// Add Phantom wallet integration types to Window
 interface Window {
+  // Solana and Phantom wallet integration
   solana?: {
     isPhantom?: boolean;
-    connect: () => Promise<{ publicKey: { toString: () => string } }>;
-    disconnect: () => Promise<void>;
-    on: (event: string, callback: () => void) => void;
+    connect?: (options?: { onlyIfTrusted?: boolean }) => Promise<any>;
+    disconnect?: () => Promise<void>;
+    signMessage?: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
     publicKey?: { toString: () => string };
+    on?: (event: string, callback: (args: any) => void) => void;
+    off?: (event: string, callback: (args: any) => void) => void;
   };
-  // Add ethereum interface to prevent conflicts with MetaMask and other EVM wallets
-  ethereum?: {
-    isMetaMask?: boolean;
-    _isCustomProvider?: boolean;
-    [key: string]: any;
+  
+  phantom?: {
+    solana?: {
+      isPhantom?: boolean;
+      connect?: (options?: { onlyIfTrusted?: boolean }) => Promise<any>;
+      disconnect?: () => Promise<void>;
+      signMessage?: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
+      publicKey?: { toString: () => string };
+      on?: (event: string, callback: (args: any) => void) => void;
+      off?: (event: string, callback: (args: any) => void) => void;
+    };
   };
+  
+  // Custom events for Phantom wallet detection
+  addEventListener(type: 'phantomReady', listener: (event: CustomEvent) => void): void;
+  dispatchEvent(event: Event): boolean;
+  removeEventListener(type: 'phantomReady', listener: (event: CustomEvent) => void): void;
 } 

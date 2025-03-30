@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { useDispatch } from 'react-redux';
 import { setWalletAddress, logout, setUser } from '../lib/slices/userSlice';
 import { loadWalletPoints } from '../lib/slices/auraPointsSlice';
-import { WalletContextProps, PhantomWallet, WindowWithSolana } from '../types/wallet';
+import { WalletContextProps, PhantomWallet } from '../types/wallet';
+import { getPhantomProvider, initWalletDetection } from '../utils/walletHelpers';
 
 // Create context with proper default values
 const WalletContext = createContext<WalletContextProps | null>(null);
@@ -27,8 +28,15 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
 
   const dispatch = useDispatch();
 
+  // Initialize wallet detection when component mounts
+  useEffect(() => {
+    initWalletDetection();
+  }, []);
+
   // Load user profile data from localStorage based on wallet address
   const loadUserProfileData = (address: string) => {
+    if (!address) return;
+    
     try {
       // Load username
       const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
@@ -62,44 +70,55 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     const checkIfWalletIsConnected = async () => {
       try {
         setIsLoading(true);
-        // First try to get the provider
-        const { solana } = window as WindowWithSolana;
-        const phantomWindow = window as WindowWithSolana;
-        const provider = solana || phantomWindow.phantom?.solana;
+        
+        // Get Phantom provider safely
+        const provider = getPhantomProvider();
 
-        if (provider?.isPhantom) {
+        if (provider) {
           setWalletProvider(provider);
 
           // Check if we're already authorized and connected
           try {
             const response = await provider.connect({ onlyIfTrusted: true });
-            const address = response.publicKey.toString();
-            setWalletState(address);
-            setWalletConnected(true);
-            dispatch(setWalletAddress(address));
-            loadWalletAuraPoints(address);
-            loadUserProfileData(address); // Load profile data here
-            console.log("Auto-connected to wallet:", address);
-          } catch (error) {
+            if (response && response.publicKey) {
+              const address = response.publicKey.toString();
+              setWalletState(address);
+              setWalletConnected(true);
+              dispatch(setWalletAddress(address));
+              loadWalletAuraPoints(address);
+              loadUserProfileData(address);
+              console.log("Auto-connected to Phantom wallet:", address);
+            }
+          } catch (error: any) {
             // Not connected yet (normal, will connect later when user clicks)
-            console.log("Wallet not connected yet (expected)");
+            if (error.message && error.message.includes('User rejected')) {
+              console.log("Auto-connection was rejected by user");
+            } else {
+              console.log("Wallet not connected yet (expected)");
+            }
           }
         } else {
           console.log("Phantom wallet not found! Please install Phantom wallet extension.");
         }
       } catch (error) {
-        console.error(error);
+        console.error("Error checking for wallet connection:", error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    checkIfWalletIsConnected();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // Small delay to ensure window and wallet providers are fully initialized
+    const timeoutId = setTimeout(() => {
+      checkIfWalletIsConnected();
+    }, 300);
+    
+    return () => clearTimeout(timeoutId);
+  }, [dispatch]); // Only include dispatch in the dependency array
 
   // Load Aura Points from localStorage or initialize to default value
   const loadWalletAuraPoints = (address: string) => {
+    if (!address) return;
+    
     try {
       const pointsStr = localStorage.getItem(`auraPoints_${address}`);
       const points = pointsStr ? parseInt(pointsStr, 10) : 100;
@@ -114,29 +133,47 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const connectWallet = async () => {
     setIsLoading(true);
     try {
-      const { solana } = window as WindowWithSolana;
-      const phantomWindow = window as WindowWithSolana;
-      const provider = solana || phantomWindow.phantom?.solana;
+      // Get Phantom provider safely
+      const provider = getPhantomProvider();
 
-      if (provider?.isPhantom) {
+      if (!provider) {
+        alert("Phantom wallet not found! Please install the Phantom wallet extension from https://phantom.app/");
+        setIsLoading(false);
+        return;
+      }
+
+      try {
         const response = await provider.connect();
-        const address = response.publicKey.toString();
         
-        // Set wallet state and dispatch to Redux
-        setWalletState(address);
-        setWalletConnected(true);
-        setWalletProvider(provider);
-        dispatch(setWalletAddress(address));
-        
-        // Load data for this wallet address
-        loadWalletAuraPoints(address);
-        loadUserProfileData(address); // Load profile data here
-        console.log("Connected to wallet:", address);
-      } else {
-        alert("Phantom wallet not found! Please install the Phantom wallet extension.");
+        // Safety check for response and publicKey to prevent toString() of null errors
+        if (response && response.publicKey) {
+          const address = response.publicKey.toString();
+          
+          // Set wallet state and dispatch to Redux
+          setWalletState(address);
+          setWalletConnected(true);
+          setWalletProvider(provider);
+          dispatch(setWalletAddress(address));
+          
+          // Load data for this wallet address
+          loadWalletAuraPoints(address);
+          loadUserProfileData(address);
+          console.log("Connected to Phantom wallet:", address);
+        } else {
+          console.error("Failed to get public key from Phantom wallet");
+          alert("Failed to connect to Phantom wallet. Please try again.");
+        }
+      } catch (err: any) {
+        // Handle user rejecting the request
+        if (err.message && err.message.includes('User rejected')) {
+          console.log("User rejected the connection request");
+        } else {
+          console.error("Error connecting to Phantom wallet:", err);
+          alert("Failed to connect to Phantom wallet. Please try again.");
+        }
       }
     } catch (error) {
-      console.error("Error connecting to wallet:", error);
+      console.error("Unexpected error while connecting to wallet:", error);
     } finally {
       setIsLoading(false);
     }

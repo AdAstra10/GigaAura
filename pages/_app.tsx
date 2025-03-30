@@ -7,8 +7,14 @@ import { WalletProvider, useWallet } from '../contexts/WalletContext';
 import { DarkModeProvider } from '../contexts/DarkModeContext';
 import { loadWalletPoints } from '../lib/slices/auraPointsSlice';
 import { updateProfile } from '../lib/slices/userSlice';
+import { initWalletDetection } from '../utils/walletHelpers';
 import '../styles/globals.css';
-import Head from 'next/head';
+
+// Initialize wallet detection early to avoid conflicts
+if (typeof window !== 'undefined') {
+  // Initialize Phantom wallet detection
+  initWalletDetection();
+}
 
 // Wrapper component to access wallet context inside app
 const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Component']; pageProps: AppProps['pageProps'] }) => {
@@ -78,74 +84,28 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
   return <Component {...pageProps} />;
 };
 
-// Script to prevent ethereum provider conflicts
-const WalletProviderIsolation = () => {
-  return (
-    <Head>
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-            (function() {
-              // Function to safely handle Phantom wallet providers
-              function safelyHandleProviders() {
-                try {
-                  // Create a list to store all providers
-                  window._walletProviders = window._walletProviders || [];
-                  
-                  // Create a safe getter for wallet detection
-                  window.getPhantomWallet = function() {
-                    // Look for the Phantom provider in our providers list
-                    for (let provider of window._walletProviders) {
-                      if (provider && provider.isPhantom) {
-                        return provider;
-                      }
-                    }
-                    
-                    // Alternative detection for Phantom
-                    if (window.phantom && window.phantom.solana) {
-                      return window.phantom.solana;
-                    }
-                    
-                    // Alternative backup detection for Solana
-                    if (window.solana && window.solana.isPhantom) {
-                      return window.solana;
-                    }
-                    
-                    return null;
-                  };
-                  
-                  // Track Solana providers
-                  if (window.solana && window.solana.isPhantom && !window._walletProviders.includes(window.solana)) {
-                    window._walletProviders.push(window.solana);
-                  }
-                  
-                  if (window.phantom && window.phantom.solana && !window._walletProviders.includes(window.phantom.solana)) {
-                    window._walletProviders.push(window.phantom.solana);
-                  }
-                } catch (e) {
-                  console.error('Error in wallet provider isolation:', e);
-                }
-              }
-              
-              // Execute immediately
-              safelyHandleProviders();
-              
-              // Also run after a delay to catch late injections
-              setTimeout(safelyHandleProviders, 500);
-            })();
-          `
-        }}
-      />
-    </Head>
-  );
-};
-
 function MyApp({ Component, pageProps }: AppProps) {
+  // Use a state to delay rendering the app until we're ready
+  const [isReady, setIsReady] = useState(false);
+  
+  useEffect(() => {
+    // Short delay to make sure everything is initialized
+    const timer = setTimeout(() => {
+      setIsReady(true);
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []);
+  
+  // Don't render on first pass to avoid hydration issues
+  if (!isReady && typeof window !== 'undefined') {
+    return null;
+  }
+  
   return (
     <Provider store={store}>
       <DarkModeProvider>
         <WalletProvider>
-          <WalletProviderIsolation />
           <AppWithWallet Component={Component} pageProps={pageProps} />
           <Toaster position="bottom-center" />
         </WalletProvider>

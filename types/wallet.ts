@@ -1,17 +1,17 @@
-// Basic interface for the phantom wallet
+// Basic interface for the Phantom wallet
 export interface PhantomWallet {
-  publicKey: { toString: () => string };
+  publicKey: { toString: () => string } | null;
   signMessage?: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
-  isPhantom?: boolean;
-  connect: (options?: { onlyIfTrusted: boolean }) => Promise<{ publicKey: { toString: () => string } }>;
+  isPhantom: boolean; // This is guaranteed to be true for Phantom
+  connect: (options?: { onlyIfTrusted?: boolean }) => Promise<{ publicKey: { toString: () => string } }>;
   disconnect: () => Promise<void>;
 }
 
 // Extended Window interface to include Solana and Phantom
 export interface WindowWithSolana extends Window {
-  solana?: PhantomWallet;
+  solana?: PhantomWallet; // Legacy way Phantom injects itself
   phantom?: {
-    solana?: PhantomWallet;
+    solana?: PhantomWallet; // Modern way Phantom injects itself (preferred)
   };
 }
 
