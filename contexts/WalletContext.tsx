@@ -19,8 +19,9 @@ interface WindowWithSolana extends Window {
     solana?: PhantomWallet;
   };
   getPhantomWallet?: () => PhantomWallet | null;
-  _walletProviders?: any[];
-  _phantomWalletRef?: PhantomWallet;
+  _gigaAuraWallets?: {
+    phantomWallet?: PhantomWallet;
+  };
 }
 
 interface WalletContextProps {
@@ -74,8 +75,8 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       const windowObj = window as WindowWithSolana;
       
       // Method 1: Use our direct reference (preferred)
-      if (windowObj._phantomWalletRef) {
-        return windowObj._phantomWalletRef;
+      if (windowObj._gigaAuraWallets?.phantomWallet) {
+        return windowObj._gigaAuraWallets.phantomWallet;
       }
       
       // Method 2: Use our custom isolation getter
