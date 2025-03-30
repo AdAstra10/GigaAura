@@ -7,14 +7,7 @@ import { WalletProvider, useWallet } from '../contexts/WalletContext';
 import { DarkModeProvider } from '../contexts/DarkModeContext';
 import { loadWalletPoints } from '../lib/slices/auraPointsSlice';
 import { updateProfile } from '../lib/slices/userSlice';
-import { initWalletDetection } from '../utils/walletHelpers';
 import '../styles/globals.css';
-
-// Initialize wallet detection early to avoid conflicts
-if (typeof window !== 'undefined') {
-  // Initialize Phantom wallet detection
-  initWalletDetection();
-}
 
 // Wrapper component to access wallet context inside app
 const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Component']; pageProps: AppProps['pageProps'] }) => {
@@ -85,23 +78,6 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
 };
 
 function MyApp({ Component, pageProps }: AppProps) {
-  // Use a state to delay rendering the app until we're ready
-  const [isReady, setIsReady] = useState(false);
-  
-  useEffect(() => {
-    // Short delay to make sure everything is initialized
-    const timer = setTimeout(() => {
-      setIsReady(true);
-    }, 100);
-    
-    return () => clearTimeout(timer);
-  }, []);
-  
-  // Don't render on first pass to avoid hydration issues
-  if (!isReady && typeof window !== 'undefined') {
-    return null;
-  }
-  
   return (
     <Provider store={store}>
       <DarkModeProvider>
