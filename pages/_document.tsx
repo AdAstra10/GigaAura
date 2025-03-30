@@ -18,34 +18,31 @@ class MyDocument extends Document {
           {/* Add meta tags for better mobile handling */}
           <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
           <meta name="theme-color" content="#6366F1" />
+          <meta name="mobile-web-app-capable" content="yes" />
           <meta name="apple-mobile-web-app-capable" content="yes" />
           
           {/* Add preconnect for better performance */}
           <link rel="preconnect" href="https://www.gigaaura.com" />
           <link rel="preconnect" href="https://gigaaura.onrender.com" />
           
-          {/* Add script to handle wallet provider conflicts */}
+          {/* Add Content Security Policy for better security */}
+          <meta
+            httpEquiv="Content-Security-Policy"
+            content="default-src 'self'; font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:;"
+          />
+          
+          {/* Add script to handle Phantom wallet */}
           <script
             dangerouslySetInnerHTML={{
               __html: `
                 // Prevent wallet provider conflicts
                 (function() {
                   try {
-                    // Store the original window.ethereum getter if it exists
-                    const originalEthereumGetter = Object.getOwnPropertyDescriptor(window, 'ethereum');
-                    
                     // Store original solana if it exists
                     const originalSolanaGetter = Object.getOwnPropertyDescriptor(window, 'solana');
                     
-                    // Protect these properties from being overwritten or redefined
-                    // This will allow first extension to set them but prevent conflicts
-                    if (originalEthereumGetter) {
-                      Object.defineProperty(window, 'ethereum', {
-                        configurable: false,
-                        ...originalEthereumGetter
-                      });
-                    }
-                    
+                    // Protect this property from being overwritten or redefined
+                    // This will allow Phantom to set it but prevent conflicts
                     if (originalSolanaGetter) {
                       Object.defineProperty(window, 'solana', {
                         configurable: false,
@@ -53,7 +50,7 @@ class MyDocument extends Document {
                       });
                     }
                   } catch (e) {
-                    console.warn('Error setting up wallet provider protection:', e);
+                    console.warn('Error setting up Phantom wallet protection:', e);
                   }
                 })();
               `

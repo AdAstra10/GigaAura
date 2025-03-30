@@ -26,10 +26,13 @@ interface Window {
     on: (event: string, callback: () => void) => void;
     publicKey?: { toString: () => string };
   };
-  // Add ethereum interface to prevent conflicts with MetaMask and other EVM wallets
-  ethereum?: {
-    isMetaMask?: boolean;
-    _isCustomProvider?: boolean;
-    [key: string]: any;
+  phantom?: {
+    solana?: {
+      isPhantom?: boolean;
+      connect: () => Promise<{ publicKey: { toString: () => string } }>;
+      disconnect: () => Promise<void>;
+      on: (event: string, callback: () => void) => void;
+      publicKey?: { toString: () => string };
+    };
   };
 } 
