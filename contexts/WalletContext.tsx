@@ -12,16 +12,14 @@ interface PhantomWallet {
   disconnect: () => Promise<void>;
 }
 
-// Extended Window interface to include Solana, Phantom and our custom provider list
+// Extended Window interface to include Solana, Phantom and our custom reference
 interface WindowWithSolana extends Window {
   solana?: PhantomWallet;
   phantom?: {
     solana?: PhantomWallet;
   };
   getPhantomWallet?: () => PhantomWallet | null;
-  _gigaAuraWallets?: {
-    phantomWallet?: PhantomWallet;
-  };
+  _phantomWalletRef?: PhantomWallet;
 }
 
 interface WalletContextProps {
@@ -74,12 +72,12 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     try {
       const windowObj = window as WindowWithSolana;
       
-      // Method 1: Use our direct reference (preferred)
-      if (windowObj._gigaAuraWallets?.phantomWallet) {
-        return windowObj._gigaAuraWallets.phantomWallet;
+      // Method 1: Use our direct private reference (preferred)
+      if (windowObj._phantomWalletRef) {
+        return windowObj._phantomWalletRef;
       }
       
-      // Method 2: Use our custom isolation getter
+      // Method 2: Use our custom getter
       if (typeof windowObj.getPhantomWallet === 'function') {
         const provider = windowObj.getPhantomWallet();
         if (provider) return provider;
