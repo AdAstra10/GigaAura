@@ -18,7 +18,7 @@ const nextConfig = {
   },
   // Optimize for production build
   productionBrowserSourceMaps: false,
-  // Add proper security headers
+  // Complete security headers configuration
   async headers() {
     return [
       {
@@ -48,6 +48,10 @@ const nextConfig = {
           {
             key: 'Referrer-Policy',
             value: 'origin-when-cross-origin'
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https://*.solana.com https://*.gigaaura.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com;"
           }
         ]
       }

@@ -10,50 +10,29 @@ class MyDocument extends Document {
     return (
       <Html lang="en">
         <Head>
-          {/* Compatibility script for Solana dApps - preserves window.solana for Phantom */}
+          {/* Safe toString for null values - this is essential to prevent the toString error */}
           <script
             dangerouslySetInnerHTML={{
               __html: `
-                // Solana-focused script that preserves Phantom while blocking other wallets
+                // Safe toString implementation to prevent null reference errors
                 try {
-                  // Only modify ethereum property if it doesn't exist yet
-                  if (!window.hasOwnProperty('ethereum')) {
-                    // Create a dummy ethereum property that doesn't interfere with Phantom
-                    Object.defineProperty(window, 'ethereum', {
-                      value: null,
-                      writable: true,
-                      configurable: true
-                    });
-                    console.log("Added placeholder ethereum property");
-                  }
-                  
-                  // Only modify web3 property if it doesn't exist yet
-                  if (!window.hasOwnProperty('web3')) {
-                    // Create a dummy web3 property
-                    Object.defineProperty(window, 'web3', {
-                      value: null,
-                      writable: true,
-                      configurable: true
-                    });
-                    console.log("Added placeholder web3 property");
-                  }
-                  
-                  // Safe toString implementation to prevent null reference errors
-                  const originalToString = Object.prototype.toString;
-                  Object.prototype.toString = function() {
-                    try {
-                      if (this === null || this === undefined) {
-                        return "[object SafeNull]";
+                  if (Object.prototype.toString) {
+                    const originalToString = Object.prototype.toString;
+                    Object.prototype.toString = function() {
+                      try {
+                        // Only handle null/undefined cases
+                        if (this === null || this === undefined) {
+                          return "[object SafeNull]";
+                        }
+                        return originalToString.call(this);
+                      } catch(e) {
+                        return "[object Protected]";
                       }
-                      return originalToString.call(this);
-                    } catch(e) {
-                      return "[object Protected]";
-                    }
-                  };
-                  
-                  console.log("Solana compatibility layer active");
+                    };
+                    console.log("toString protection enabled");
+                  }
                 } catch(e) {
-                  console.warn("Compatibility layer error:", e);
+                  console.warn("Error applying toString protection:", e);
                 }
               `
             }}

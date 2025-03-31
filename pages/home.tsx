@@ -38,6 +38,27 @@ const HomePage = () => {
         </div>
         
         <div className="p-6">
+          {/* Post Input with proper form IDs */}
+          <div className="mb-6">
+            <form className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+              <input 
+                type="text" 
+                id="postInput"
+                name="postInput"
+                placeholder="What's on your mind?"
+                className="w-full p-2 mb-3 border border-gray-200 dark:border-gray-700 rounded-lg"
+              />
+              <button 
+                type="button"
+                id="submitPost"
+                name="submitPost"
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg"
+              >
+                Post
+              </button>
+            </form>
+          </div>
+          
           <div className="mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
             <div className="flex items-center mb-3">
               <div className="h-10 w-10 rounded-full bg-indigo-500 flex items-center justify-center text-white mr-3">
@@ -50,13 +71,13 @@ const HomePage = () => {
             </div>
             <p className="mb-3">Welcome to GigaAura! We're working on making this platform the best it can be.</p>
             <div className="flex space-x-4 text-gray-500 dark:text-gray-400">
-              <button className="flex items-center">
+              <button className="flex items-center" id="likeBtn1" name="likeBtn1">
                 <span className="mr-1">❤️</span> Like
               </button>
-              <button className="flex items-center">
+              <button className="flex items-center" id="commentBtn1" name="commentBtn1">
                 <span className="mr-1">💬</span> Comment
               </button>
-              <button className="flex items-center">
+              <button className="flex items-center" id="shareBtn1" name="shareBtn1">
                 <span className="mr-1">🔄</span> Share
               </button>
             </div>
@@ -74,13 +95,13 @@ const HomePage = () => {
             </div>
             <p className="mb-3">We're excited to see what you'll create with GigaAura! Share your thoughts and ideas.</p>
             <div className="flex space-x-4 text-gray-500 dark:text-gray-400">
-              <button className="flex items-center">
+              <button className="flex items-center" id="likeBtn2" name="likeBtn2">
                 <span className="mr-1">❤️</span> Like
               </button>
-              <button className="flex items-center">
+              <button className="flex items-center" id="commentBtn2" name="commentBtn2">
                 <span className="mr-1">💬</span> Comment
               </button>
-              <button className="flex items-center">
+              <button className="flex items-center" id="shareBtn2" name="shareBtn2">
                 <span className="mr-1">🔄</span> Share
               </button>
             </div>
