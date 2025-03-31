@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useRouter } from 'next/router';
 import { RootState } from '../lib/store';
@@ -15,15 +15,12 @@ import { v4 as uuidv4 } from 'uuid';
 import toast from 'react-hot-toast';
 import dynamic from 'next/dynamic';
 
-// Dynamically import Feed with no SSR to avoid hydration issues
-const Feed = dynamic(() => import('../components/Feed'), { 
-  ssr: false,
-  loading: () => (
-    <div className="w-full h-64 flex items-center justify-center">
-      <div className="animate-spin h-12 w-12 border-4 border-t-indigo-500 border-indigo-200 rounded-full"></div>
-    </div>
-  )
-});
+// Loading fallback for Feed component
+const FeedLoading = () => (
+  <div className="w-full border border-gray-200 dark:border-gray-700 rounded-lg h-64 flex items-center justify-center">
+    <div className="animate-spin h-12 w-12 border-4 border-t-indigo-500 border-indigo-200 rounded-full"></div>
+  </div>
+);
 
 // Error fallback component
 const ErrorFallback = () => (
@@ -38,6 +35,17 @@ const ErrorFallback = () => (
     </button>
   </div>
 );
+
+// Dynamically import Feed with no SSR to avoid hydration issues
+// Use a custom loading component with proper styling
+const Feed = dynamic(() => import('../components/Feed').catch(err => {
+  console.error('Failed to load Feed component:', err);
+  // Return a simple component that renders the error fallback
+  return () => <ErrorFallback />;
+}), { 
+  ssr: false,
+  loading: () => <FeedLoading />
+});
 
 const HomePage = () => {
   const dispatch = useDispatch();
@@ -97,7 +105,9 @@ const HomePage = () => {
           {hasError ? (
             <ErrorFallback />
           ) : (
-            <Feed />
+            <Suspense fallback={<FeedLoading />}>
+              <Feed />
+            </Suspense>
           )}
         </div>
         

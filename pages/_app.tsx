@@ -9,8 +9,9 @@ import { loadWalletPoints } from '../lib/slices/auraPointsSlice';
 import { updateProfile } from '../lib/slices/userSlice';
 import '../styles/globals.css';
 import Router, { useRouter } from 'next/router';
+import { ErrorBoundary } from 'react-error-boundary';
 
-// Add this helper function near the top of the file
+// Add these helper functions for safe data handling
 function safeToString(value: any): string {
   if (value === null || value === undefined) {
     return '';
@@ -20,6 +21,16 @@ function safeToString(value: any): string {
   } catch (e) {
     console.warn('Failed to convert value to string:', e);
     return '';
+  }
+}
+
+// Safe JSON parse function
+function safeJSONParse(jsonString: string, fallback: any = null) {
+  try {
+    return JSON.parse(jsonString);
+  } catch (e) {
+    console.warn('Failed to parse JSON:', e);
+    return fallback;
   }
 }
 
@@ -117,18 +128,21 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
   return <Component {...pageProps} />;
 };
 
+// Modify the main App component to include better error handling
 function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const [hasError, setHasError] = useState(false);
-  
-  // Global error handler for toString and other critical errors
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Global error handler for React errors
   useEffect(() => {
+    // Protect Object.prototype.toString
     const originalToString = Object.prototype.toString;
     
-    // Safe toString that handles nulls
+    // Override toString to prevent errors
     Object.prototype.toString = function() {
       try {
-        // If this is null/undefined, return a safe value instead of throwing
+        // Handle null/undefined
         if (this === null || this === undefined) {
           console.warn('Prevented toString() call on null/undefined');
           return '[object SafeNull]';
@@ -139,61 +153,97 @@ function MyApp({ Component, pageProps }: AppProps) {
         return '[object Protected]';
       }
     };
-
-    // Protect against React state errors
+    
+    // Handle unhandled exceptions
     const handleError = (event: ErrorEvent) => {
-      if (event.error && event.error.message && 
-          (event.error.message.includes("toString") || 
-           event.error.message.includes("Cannot read properties of null") ||
-           event.error.message.includes("Minified React error #423"))) {
+      console.error('Global error caught:', event.error);
+      
+      // Check for toString or wallet-related errors
+      if (event.error && 
+          (event.error.message?.includes('toString') || 
+           event.error.message?.includes('ethereum') ||
+           event.error.message?.includes('null'))) {
         
-        console.warn('Caught critical React error, redirecting to safety');
-        event.preventDefault();
+        setErrorMessage(safeToString(event.error.message));
         setHasError(true);
         
-        // Only redirect if not already on the error page
-        if (router.pathname !== '/error' && router.pathname !== '/home') {
-          router.push('/home');
-        }
+        // Prevent default error handling 
+        event.preventDefault();
       }
     };
-
-    window.addEventListener('error', handleError);
     
+    // Handle promise rejection errors
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      console.error('Unhandled promise rejection:', event);
+      
+      const errorMessage = event.reason?.message || 'Promise rejection';
+      
+      // If it's a wallet error, show error UI
+      if (errorMessage.includes('ethereum') || 
+          errorMessage.includes('wallet') ||
+          errorMessage.includes('null')) {
+        
+        setErrorMessage(safeToString(errorMessage));
+        setHasError(true);
+        event.preventDefault();
+      }
+    };
+    
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleRejection);
+    
+    // Clean up
     return () => {
-      // Restore original toString when component unmounts
       Object.prototype.toString = originalToString;
       window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleRejection);
     };
-  }, [router]);
-
-  // If we have an error, show error view
+  }, []);
+  
+  // If we've encountered an error, show the error UI
   if (hasError) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-100 dark:bg-gray-900">
-        <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+        <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md">
           <h1 className="text-2xl font-bold text-red-500 mb-4">Something went wrong</h1>
-          <p className="mb-4 text-gray-700 dark:text-gray-300">The application encountered an error.</p>
+          {errorMessage && (
+            <p className="mb-4 text-gray-700 dark:text-gray-300 text-sm">
+              Error: {errorMessage.substring(0, 100)}
+              {errorMessage.length > 100 ? '...' : ''}
+            </p>
+          )}
           <button 
             onClick={() => {
               setHasError(false);
+              setErrorMessage('');
               router.push('/home');
             }}
-            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 mr-2"
           >
             Go to Home
+          </button>
+          <button 
+            onClick={() => {
+              window.location.reload();
+            }}
+            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 mt-2 sm:mt-0"
+          >
+            Reload Page
           </button>
         </div>
       </div>
     );
   }
   
+  // Render the normal app
   return (
     <Provider store={store}>
       <DarkModeProvider>
         <WalletProvider>
-          <AppWithWallet Component={Component} pageProps={pageProps} />
-          <Toaster position="bottom-center" />
+          <ErrorBoundary FallbackComponent={ErrorFallback}>
+            <AppWithWallet Component={Component} pageProps={pageProps} />
+            <Toaster position="bottom-center" />
+          </ErrorBoundary>
         </WalletProvider>
       </DarkModeProvider>
     </Provider>

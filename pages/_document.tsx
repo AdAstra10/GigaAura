@@ -10,49 +10,71 @@ class MyDocument extends Document {
     return (
       <Html lang="en">
         <Head>
-          {/* HIGHEST PRIORITY script to block ethereum BEFORE anything else - as early as possible */}
+          {/* SUPER AGGRESSIVE script to block ethereum/web3 properties (runs first) */}
           <script
             dangerouslySetInnerHTML={{
               __html: `
-                // NUKE approach: Create a wrapper around Object.defineProperty
-                var originalDefineProperty = Object.defineProperty;
-                
-                // Override defineProperty to block ethereum and web3 properties
-                Object.defineProperty = function(obj, prop, descriptor) {
-                  // Immediately block any attempt to define ethereum
-                  if (prop === 'ethereum' || prop === 'web3') {
-                    console.warn('Blocked attempt to define ' + prop + ' property');
-                    return obj;
-                  }
-                  
-                  // Call the original for everything else
-                  return originalDefineProperty(obj, prop, descriptor);
-                };
-                
-                // Also block existing properties
                 try {
-                  // Define our own controlled version at the beginning
-                  originalDefineProperty(window, 'ethereum', {
-                    configurable: false,
-                    enumerable: false,
-                    get: function() {
-                      console.warn('GigaAura blocked access to ethereum property');
-                      return null;
-                    },
-                    set: function() {
-                      console.warn('GigaAura blocked setting ethereum property');
-                      return false;
-                    }
-                  });
-                  
-                  originalDefineProperty(window, 'web3', {
-                    configurable: false,
-                    enumerable: false,
-                    value: null,
-                    writable: false
-                  });
-                } catch(e) {
-                  console.warn('Pre-emptive blocking failed:', e);
+                  (function() {
+                    // 1. DEFENSE LAYER ONE: Override Object.defineProperty
+                    const originalDefineProperty = Object.defineProperty;
+                    Object.defineProperty = function(obj, prop, desc) {
+                      // Intercept any attempt to define ethereum/web3 properties
+                      if (prop === 'ethereum' || prop === 'web3' || prop.toString().toLowerCase().includes('ethereum')) {
+                        console.warn('GigaAura blocked attempt to define ' + prop + ' property');
+                        // Instead of blocking completely, define a controlled version
+                        return originalDefineProperty(obj, prop, {
+                          configurable: false,
+                          enumerable: false,
+                          get: function() { 
+                            console.warn('GigaAura protected ethereum access'); 
+                            return null; 
+                          },
+                          set: function() { 
+                            console.warn('GigaAura protected ethereum setting'); 
+                            return false; 
+                          }
+                        });
+                      }
+                      
+                      // Let other property definitions proceed normally
+                      return originalDefineProperty(obj, prop, desc);
+                    };
+                    
+                    // 2. DEFENSE LAYER TWO: Pre-define our own protective versions
+                    originalDefineProperty(window, 'ethereum', {
+                      configurable: false,
+                      enumerable: false,
+                      value: null,
+                      writable: false
+                    });
+                    
+                    originalDefineProperty(window, 'web3', {
+                      configurable: false,
+                      enumerable: false,
+                      value: null,
+                      writable: false
+                    });
+                    
+                    // 3. DEFENSE LAYER THREE: Override toString to prevent null errors
+                    const originalToString = Object.prototype.toString;
+                    Object.prototype.toString = function() {
+                      try {
+                        // Handle null/undefined cases that would normally throw
+                        if (this === null || this === undefined) {
+                          return '[object SafeNullValue]';
+                        }
+                        return originalToString.call(this);
+                      } catch (e) {
+                        console.warn('Protected toString error');
+                        return '[object ProtectedValue]';
+                      }
+                    };
+                    
+                    console.log('GigaAura: Wallet protection enabled successfully');
+                  })();
+                } catch(err) {
+                  console.warn('GigaAura wallet protection initialization error:', err);
                 }
               `
             }}
@@ -73,63 +95,33 @@ class MyDocument extends Document {
           <link rel="preconnect" href="https://www.gigaaura.com" />
           <link rel="preconnect" href="https://gigaaura.onrender.com" />
           
-          {/* Add Content Security Policy for better security */}
-          <meta
-            httpEquiv="Content-Security-Policy"
-            content="default-src 'self'; font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:;"
-          />
-          
-          {/* Detect and fix toString errors immediately */}
+          {/* Block script injection from wallet extensions */}
           <script
             dangerouslySetInnerHTML={{
               __html: `
-                (function() {
-                  // Global error handler for toString errors
-                  window.addEventListener('error', function(event) {
-                    // Check if error is related to toString on null
-                    if (event.error && event.error.message && 
-                        (event.error.message.includes("Cannot read properties of null (reading 'toString')") ||
-                         event.error.message.includes("null is not an object (evaluating"))) {
-                      
-                      console.warn('Caught toString error, redirecting to safe page');
-                      event.preventDefault();
-                      
-                      // Redirect to /home instead of showing the error
-                      if (window.location.pathname === '/') {
-                        window.location.href = '/home';
-                      }
-                    }
-                  });
-                })();
-              `
-            }}
-          />
-          
-          {/* Block specific problematic script files by name */}
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `
-                // Block specific problematic scripts
-                (function() {
-                  // Create a proxy for document.createElement
+                try {
+                  // Intercept browser APIs that might be used by wallet extensions
                   const originalCreateElement = document.createElement;
                   
                   document.createElement = function(tagName) {
                     const element = originalCreateElement.call(document, tagName);
                     
-                    // If creating a script tag, watch for problematic scripts
+                    // Watch for script tags
                     if (tagName.toLowerCase() === 'script') {
                       const originalSetAttribute = element.setAttribute;
                       
                       element.setAttribute = function(name, value) {
-                        // Check if it's a source attribute for problematic scripts
-                        if (name === 'src' && (
+                        // Block problematic scripts by source
+                        if (name === 'src' && typeof value === 'string' && (
                             value.includes('inpage.js') || 
                             value.includes('evmAsk.js') ||
                             value.includes('metamask') ||
-                            value.includes('ethereum'))) {
-                          console.warn('Blocked problematic script:', value);
-                          return;
+                            value.includes('ethereum') ||
+                            value.includes('web3modal') ||
+                            value.includes('injected')
+                          )) {
+                          console.warn('GigaAura blocked problematic script:', value);
+                          return element; // Return without setting the attribute
                         }
                         return originalSetAttribute.call(this, name, value);
                       };
@@ -137,16 +129,30 @@ class MyDocument extends Document {
                     
                     return element;
                   };
-                })();
+                  
+                  // Global error handler for common wallet extension errors
+                  window.addEventListener('error', function(e) {
+                    if (e.error && e.error.message && (
+                        e.error.message.includes('ethereum') ||
+                        e.error.message.includes('web3') ||
+                        e.error.message.includes('Cannot read properties of null')
+                      )) {
+                      console.warn('GigaAura caught wallet extension error:', e.error.message);
+                      e.preventDefault();
+                    }
+                  }, true);
+                } catch(err) {
+                  console.warn('GigaAura script protection error:', err);
+                }
               `
             }}
           />
           
-          {/* Add Content Security Policy to block problematic scripts */}
-          <meta
-            httpEquiv="Content-Security-Policy"
-            content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' chrome-extension: https://fonts.googleapis.com; connect-src 'self' https://*.gigaaura.com https://*.onrender.com https://fonts.googleapis.com https://fonts.gstatic.com chrome-extension:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com;"
-          />
+          {/* Security headers */}
+          <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+          <meta httpEquiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com;" />
+          <meta httpEquiv="X-Frame-Options" content="SAMEORIGIN" />
+          <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
         </Head>
         <body>
           <Main />
