@@ -10,6 +10,9 @@ class MyDocument extends Document {
     return (
       <Html lang="en">
         <Head>
+          {/* Ethereum shim to prevent errors when using only Solana/Phantom wallet */}
+          <script src="/ethereum-shim.js" />
+          
           {/* ULTRA-SIMPLE wallet protection script - simple but effective approach */}
           <script
             dangerouslySetInnerHTML={{
