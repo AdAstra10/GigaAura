@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../lib/store';
 import { setFeed, addPost, Post, addComment, setComments } from '../lib/slices/postsSlice';
+import { useWallet } from '../contexts/WalletContext';
 import { addTransaction } from '../lib/slices/auraPointsSlice';
 import PostCard from './PostCard';
 import toast from 'react-hot-toast';
@@ -92,20 +93,11 @@ const getSafeArray = <T,>(array: T[] | undefined | null): T[] => {
 const Feed = () => {
   try {
     const dispatch = useDispatch();
+    const { walletAddress } = useWallet();
     const { isDarkMode } = useDarkMode();
     const feed = useSelector((state: RootState) => state.posts.feed || []);
     const comments = useSelector((state: RootState) => state.posts.comments || []);
     const user = useSelector((state: RootState) => state.user || {});
-    
-    // Get username from localStorage
-    const [username, setUsername] = useState<string>('Guest User');
-    
-    useEffect(() => {
-      const storedUsername = localStorage.getItem('username');
-      if (storedUsername) {
-        setUsername(storedUsername);
-      }
-    }, []);
     
     // Active tab state
     const [activeTab, setActiveTab] = useState<'for-you' | 'following'>('for-you');
@@ -210,8 +202,8 @@ const Feed = () => {
     
     // Handle post creation
     const handleCreatePost = async () => {
-      if (!username) {
-        toast.error('Please log in to create a post');
+      if (!walletAddress) {
+        toast.error('Please connect your wallet to create a post');
         return;
       }
       
@@ -236,8 +228,8 @@ const Feed = () => {
         const newPost: Partial<Post> = {
           id: uuidv4(),
           content: newPostContent,
-          authorWallet: username, // Use username instead of wallet
-          authorUsername: user.username || username,
+          authorWallet: walletAddress,
+          authorUsername: user.username || undefined,
           authorAvatar: user.avatar || undefined,
           createdAt: new Date().toISOString(),
           likes: 0,
@@ -282,8 +274,8 @@ const Feed = () => {
     
     const handleSharePost = (postId: string) => {
       try {
-        if (!username) {
-          toast.error('Please log in to share posts');
+        if (!walletAddress) {
+          toast.error('Please connect your wallet to share posts');
           return;
         }
         
@@ -316,12 +308,12 @@ const Feed = () => {
     
     const handleFollowUser = (userWallet: string, username: string) => {
       try {
-        if (!username) {
-          toast.error('Please log in to follow users');
+        if (!walletAddress) {
+          toast.error('Please connect your wallet to follow users');
           return;
         }
         
-        if (userWallet === username) {
+        if (userWallet === walletAddress) {
           toast.error('You cannot follow yourself');
           return;
         }
@@ -425,27 +417,6 @@ const Feed = () => {
     // Get the sorted feed
     const sortedFeed = getSortedFeed(filteredFeed);
     
-    // Get the user avatar for the post form
-    const getUserAvatar = () => {
-      if (user.avatar) {
-        return (
-          <img
-            src={user.avatar}
-            alt={user.username || username}
-            className="h-10 w-10 object-cover"
-          />
-        );
-      } else {
-        return (
-          <div className="h-10 w-10 flex items-center justify-center text-white">
-            {username
-              ? username.charAt(0).toUpperCase()
-              : 'G'}
-          </div>
-        );
-      }
-    };
-    
     return (
       <FeedErrorBoundary>
         <div className="feed-container border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
@@ -484,7 +455,19 @@ const Feed = () => {
             <div className="flex space-x-4">
               <div className="flex-shrink-0">
                 <div className="h-10 w-10 rounded-full overflow-hidden bg-primary">
-                  {getUserAvatar()}
+                  {user.avatar ? (
+                    <img
+                      src={user.avatar}
+                      alt={user.username || 'User'}
+                      className="h-10 w-10 object-cover"
+                    />
+                  ) : (
+                    <div className="h-10 w-10 flex items-center justify-center text-white">
+                      {user.username
+                        ? user.username.charAt(0).toUpperCase()
+                        : walletAddress?.substring(0, 2)}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex-1">

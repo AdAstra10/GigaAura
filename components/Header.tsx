@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
-import { FaSun, FaMoon, FaBell, FaEnvelope, FaUser } from 'react-icons/fa';
+import { FaSun, FaMoon, FaBell, FaEnvelope } from 'react-icons/fa';
 import { useSelector } from 'react-redux';
 import Link from 'next/link';
+import { useWallet } from '../contexts/WalletContext';
 import { RootState } from '../lib/store';
 import { useDarkMode } from '../contexts/DarkModeContext';
 
 const Header = () => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
+  const { connectWallet, disconnectWallet, walletConnected, walletAddress } = useWallet();
   const user = useSelector((state: RootState) => state.user);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -29,6 +31,14 @@ const Header = () => {
       window.removeEventListener('resize', checkIfMobile);
     };
   }, []);
+
+  const handleConnectWallet = async () => {
+    try {
+      await connectWallet();
+    } catch (error) {
+      console.error('Error connecting wallet:', error);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-50 bg-white dark:bg-gray-900 header-solid border-b border-gray-200 dark:border-gray-700 thin-borders">
@@ -65,22 +75,33 @@ const Header = () => {
               }
             </button>
             
-            <div className="flex items-center">
-              <Link href="/profile">
-                <div className="flex items-center cursor-pointer">
-                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
-                    {user.username || 'Guest User'}
+            {walletConnected ? (
+              <div className="flex items-center">
+                <Link href="/profile">
+                  <div className="flex items-center cursor-pointer">
+                    <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
+                      {user.username || walletAddress?.substring(0, 4) + '...' + walletAddress?.substring(walletAddress.length - 4)}
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                      {user.avatar ? (
+                        <img src={user.avatar} alt={user.username || 'User'} className="w-8 h-8 rounded-full" />
+                      ) : (
+                        <span className="text-gray-500 dark:text-gray-300 text-sm">
+                          {(user.username && user.username.charAt(0)) || (walletAddress && walletAddress.substring(0, 2))}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                    {user.avatar ? (
-                      <img src={user.avatar} alt={user.username || 'User'} className="w-8 h-8 rounded-full" />
-                    ) : (
-                      <FaUser className="text-gray-500 dark:text-gray-300 text-sm" />
-                    )}
-                  </div>
-                </div>
-              </Link>
-            </div>
+                </Link>
+              </div>
+            ) : (
+              <button 
+                onClick={handleConnectWallet}
+                className="bg-primary hover:bg-primary/90 rounded-full border-none text-white font-medium py-2 px-4 cursor-pointer"
+              >
+                Connect Wallet
+              </button>
+            )}
           </div>
 
           <div className="md:hidden flex items-center">
@@ -123,22 +144,35 @@ const Header = () => {
                 </div>
               </Link>
             </div>
-            <div className="flex items-center p-2">
-              <Link href="/profile">
-                <div className="flex items-center cursor-pointer">
-                  <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mr-2">
-                    {user.avatar ? (
-                      <img src={user.avatar} alt={user.username || 'User'} className="w-8 h-8 rounded-full" />
-                    ) : (
-                      <FaUser className="text-gray-500 dark:text-gray-300 text-sm" />
-                    )}
+            {walletConnected ? (
+              <div className="flex items-center p-2">
+                <Link href="/profile">
+                  <div className="flex items-center cursor-pointer">
+                    <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mr-2">
+                      {user.avatar ? (
+                        <img src={user.avatar} alt={user.username || 'User'} className="w-8 h-8 rounded-full" />
+                      ) : (
+                        <span className="text-gray-500 dark:text-gray-300 text-sm">
+                          {(user.username && user.username.charAt(0)) || (walletAddress && walletAddress.substring(0, 2))}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {user.username || walletAddress?.substring(0, 4) + '...' + walletAddress?.substring(walletAddress.length - 4)}
+                    </div>
                   </div>
-                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {user.username || 'Guest User'}
-                  </div>
-                </div>
-              </Link>
-            </div>
+                </Link>
+              </div>
+            ) : (
+              <div className="p-2">
+                <button 
+                  onClick={handleConnectWallet}
+                  className="bg-primary hover:bg-primary/90 rounded-full border-none text-white font-medium py-2 px-4 w-full"
+                >
+                  Connect Wallet
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

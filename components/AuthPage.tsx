@@ -1,39 +1,34 @@
 import { useState } from 'react';
-import { useRouter } from 'next/router';
+import { useWallet } from '@contexts/WalletContext';
+
+// Extended Window interface to include Solana
+interface WindowWithSolana extends Window {
+  solana?: {
+    isPhantom?: boolean;
+  };
+}
 
 const AuthPage = () => {
-  const [username, setUsername] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const { connectWallet, isLoading, walletProvider } = useWallet();
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleConnect = async (e: React.MouseEvent) => {
     e.preventDefault();
     setError(null);
     
-    if (!username.trim()) {
-      setError('Please enter a username');
+    const windowWithSolana = window as WindowWithSolana;
+    const hasPhantomWallet = !!walletProvider || (typeof window !== 'undefined' && !!windowWithSolana.solana?.isPhantom);
+    
+    if (!hasPhantomWallet) {
+      setError('Phantom wallet not detected. Please install the Phantom browser extension.');
       return;
     }
     
-    setIsLoading(true);
-    
     try {
-      // Store username in localStorage
-      localStorage.setItem('username', username);
-      
-      // Simple mock profile data
-      const profilePictures = JSON.parse(localStorage.getItem('profilePictures') || '{}');
-      profilePictures[username] = 'https://i.pravatar.cc/300?img=2';
-      localStorage.setItem('profilePictures', JSON.stringify(profilePictures));
-      
-      // Redirect to home page
-      router.push('/home');
+      await connectWallet();
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      setError('An error occurred while connecting to your wallet.');
       console.error(err);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -45,7 +40,7 @@ const AuthPage = () => {
             Giga<span className="text-accent">Aura</span>
           </h1>
           <p className="text-gray-600">
-            Join the community and start earning Aura Points
+            Connect your Phantom Wallet to start earning Aura Points
           </p>
         </div>
 
@@ -79,42 +74,38 @@ const AuthPage = () => {
           {error && (
             <div className="bg-error/10 border border-error text-error px-4 py-3 rounded-lg text-sm">
               {error}
+              {!walletProvider && (
+                <div className="mt-2">
+                  <a 
+                    href="https://phantom.app/" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    Install Phantom Wallet
+                  </a>
+                </div>
+              )}
             </div>
           )}
 
-          <form onSubmit={handleLogin}>
-            <div className="mb-4">
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-                Username
-              </label>
-              <input
-                type="text"
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary"
-                placeholder="Enter your username"
-              />
-            </div>
-            
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-3 px-4 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-            >
-              {isLoading ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Logging in...
-                </>
-              ) : (
-                'Login with Username'
-              )}
-            </button>
-          </form>
+          <button
+            onClick={handleConnect}
+            disabled={isLoading}
+            className="w-full py-3 px-4 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+          >
+            {isLoading ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Connecting...
+              </>
+            ) : (
+              'Connect Phantom Wallet'
+            )}
+          </button>
         </div>
       </div>
     </div>
