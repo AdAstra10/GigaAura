@@ -9,7 +9,7 @@ interface WindowWithSolana extends Window {
 }
 
 const AuthPage = () => {
-  const { connectWallet, isLoading, walletProvider } = useWallet();
+  const { connectWallet, connecting, connected } = useWallet();
   const [error, setError] = useState<string | null>(null);
 
   const handleConnect = async (e: React.MouseEvent) => {
@@ -17,7 +17,7 @@ const AuthPage = () => {
     setError(null);
     
     const windowWithSolana = window as WindowWithSolana;
-    const hasPhantomWallet = !!walletProvider || (typeof window !== 'undefined' && !!windowWithSolana.solana?.isPhantom);
+    const hasPhantomWallet = (typeof window !== 'undefined' && !!windowWithSolana.phantom?.solana);
     
     if (!hasPhantomWallet) {
       setError('Phantom wallet not detected. Please install the Phantom browser extension.');
@@ -74,7 +74,7 @@ const AuthPage = () => {
           {error && (
             <div className="bg-error/10 border border-error text-error px-4 py-3 rounded-lg text-sm">
               {error}
-              {!walletProvider && (
+              {!window.phantom?.solana && (
                 <div className="mt-2">
                   <a 
                     href="https://phantom.app/" 
@@ -91,10 +91,10 @@ const AuthPage = () => {
 
           <button
             onClick={handleConnect}
-            disabled={isLoading}
+            disabled={connecting}
             className="w-full py-3 px-4 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
           >
-            {isLoading ? (
+            {connecting ? (
               <>
                 <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
