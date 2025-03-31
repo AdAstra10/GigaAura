@@ -9,7 +9,7 @@ interface CreatePostFormProps {
 }
 
 const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
-  const { connectWallet, connected, walletAddress } = useWallet();
+  const { connectWallet, walletConnected, walletAddress } = useWallet();
   const [content, setContent] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [mediaFile, setMediaFile] = useState<File | null>(null);
@@ -27,11 +27,11 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
     // Allow posting with just media and no content
     if (!content.trim() && !mediaFile) return;
     
-    if (!connected) {
+    if (!walletConnected) {
       const confirm = window.confirm('Please connect your wallet to post. Would you like to connect now?');
       if (confirm) {
         await connectWallet();
-        if (!connected) return; // If still not connected after attempt, return
+        if (!walletConnected) return; // If still not connected after attempt, return
       } else {
         return;
       }

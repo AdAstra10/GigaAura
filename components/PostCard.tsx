@@ -23,7 +23,7 @@ interface PostCardProps {
 const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFollow }) => {
   const dispatch = useDispatch();
   const router = useRouter();
-  const { connectWallet, connected } = useWallet();
+  const { connectWallet, walletConnected } = useWallet();
   const { walletAddress, username } = useSelector((state: RootState) => state.user as {
     walletAddress: string | null;
     username: string | null;
@@ -67,7 +67,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
   };
   
   const handleLike = async () => {
-    if (!connected) {
+    if (!walletConnected) {
       const shouldConnect = window.confirm('You need to connect a wallet to like posts. Connect now?');
       if (shouldConnect) {
         try {
@@ -119,7 +119,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
     
     if (!commentText.trim()) return;
     
-    if (!connected) {
+    if (!walletConnected) {
       const shouldConnect = window.confirm('You need to connect a wallet to comment. Connect now?');
       if (shouldConnect) {
         try {

@@ -2,71 +2,49 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  webpack(config) {
-    config.module.rules.push({
-      test: /\.svg$/,
-      use: ["@svgr/webpack"]
-    });
-    return config;
-  },
   images: {
-    domains: [
-      'i.pravatar.cc',
-      'picsum.photos',
-      'images.unsplash.com',
-    ],
+    domains: ['cloudinary.com', 's3.amazonaws.com', 'i.pravatar.cc', 'images.unsplash.com', 'picsum.photos'],
+    unoptimized: true,
   },
   // Optimize for production build
   productionBrowserSourceMaps: false,
-  // Complete security headers configuration
+  // Handle custom domain and security headers
   async headers() {
     return [
       {
-        // Apply these headers to all routes
+        // Apply to all routes
         source: '/:path*',
         headers: [
           {
-            key: 'X-DNS-Prefetch-Control',
-            value: 'on'
-          },
-          {
-            key: 'Strict-Transport-Security',
-            value: 'max-age=63072000; includeSubDomains; preload'
-          },
-          {
-            key: 'X-XSS-Protection',
-            value: '1; mode=block'
-          },
-          {
             key: 'X-Frame-Options',
-            value: 'SAMEORIGIN'
+            value: 'DENY',
           },
           {
             key: 'X-Content-Type-Options',
-            value: 'nosniff'
+            value: 'nosniff',
           },
           {
             key: 'Referrer-Policy',
-            value: 'origin-when-cross-origin'
+            value: 'strict-origin-when-cross-origin',
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https://*.solana.com https://*.gigaaura.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com;"
-          }
-        ]
-      }
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' chrome-extension:; connect-src 'self' https://*.gigaaura.com https://*.onrender.com https://fonts.googleapis.com https://fonts.gstatic.com chrome-extension:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com;",
+          },
+        ],
+      },
     ]
   },
-  // Add redirect from root to /home
+  // Force redirect from / to /home
   async redirects() {
     return [
       {
         source: '/',
         destination: '/home',
-        permanent: true,
+        permanent: false,
       },
     ]
-  }
+  },
 };
 
 module.exports = nextConfig; 

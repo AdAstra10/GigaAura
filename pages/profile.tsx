@@ -18,7 +18,7 @@ import { format } from 'date-fns';
 const ProfilePage = () => {
   const dispatch = useDispatch();
   const router = useRouter();
-  const { walletAddress, connectWallet, connecting } = useWallet();
+  const { walletAddress, connectWallet, isLoading } = useWallet();
   const { isDarkMode } = useDarkMode();
   const user = useSelector((state: RootState) => state.user);
   const { userPosts } = useSelector((state: RootState) => state.posts);
@@ -196,10 +196,10 @@ const ProfilePage = () => {
               
               <button
                 onClick={handleConnectWallet}
-                disabled={connecting}
+                disabled={isLoading}
                 className="px-6 py-3 bg-primary text-white font-medium rounded-full shadow-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors w-full"
               >
-                {connecting ? 'Connecting...' : 'Connect Wallet'}
+                {isLoading ? 'Connecting...' : 'Connect Wallet'}
               </button>
               
               <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
