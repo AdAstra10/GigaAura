@@ -3,6 +3,7 @@ import { useDispatch } from 'react-redux';
 import { setWalletAddress, logout, setUser } from '../slices/userSlice';
 import { loadWalletPoints } from '../slices/auraPointsSlice';
 import { toast } from 'react-hot-toast';
+import { AnyAction } from 'redux';
 
 // Base interface to ensure we have proper typing
 interface WalletContextType {
@@ -88,7 +89,7 @@ interface WalletProviderProps {
 }
 
 export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
-  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [walletAddress, setWalletAddressState] = useState<string | null>(null);
   const [connected, setConnected] = useState<boolean>(false);
   const [connecting, setConnecting] = useState<boolean>(false);
 
@@ -138,9 +139,10 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
             const address = safeGetAddress(response.publicKey);
             
             if (address) {
-              setWalletAddress(address);
+              setWalletAddressState(address);
               setConnected(true);
-              dispatch(setWalletAddress(address));
+              // Cast the action to AnyAction to resolve TypeScript error
+              dispatch(setWalletAddress(address) as unknown as AnyAction);
               loadWalletAuraPoints(address);
               loadUserProfileData(address); // Load profile data here
               console.log('Auto-connected to wallet:', address);
@@ -191,9 +193,10 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         const address = safeGetAddress(response.publicKey);
         
         if (address) {
-          setWalletAddress(address);
+          setWalletAddressState(address);
           setConnected(true);
-          dispatch(setWalletAddress(address));
+          // Cast the action to AnyAction to resolve TypeScript error
+          dispatch(setWalletAddress(address) as unknown as AnyAction);
           loadWalletAuraPoints(address);
           loadUserProfileData(address); // Load profile data here
           toast.success('Wallet connected!');
@@ -220,9 +223,9 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const disconnectWallet = () => {
     try {
       window.phantom?.solana?.disconnect();
-      setWalletAddress(null);
+      setWalletAddressState(null);
       setConnected(false);
-      dispatch(logout());
+      dispatch(logout() as unknown as AnyAction);
       toast.success('Wallet disconnected.');
     } catch (error) {
       console.error('Error disconnecting wallet:', error);
