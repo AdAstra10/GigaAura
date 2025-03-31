@@ -1,280 +1,304 @@
 /**
- * GigaAura NUCLEAR Wallet Protection System v2.0
+ * GigaAura Ethereum Protection System v3.0
  * 
- * Absolutely guaranteed to block ALL MetaMask and other Ethereum wallet extension issues
+ * Compatible with React and prevents wallet injection errors
+ * without breaking application functionality
  */
 
 (function() {
   'use strict';
-  
+
+  // Only proceed if we have a window object
+  if (typeof window === 'undefined') return;
+
   try {
-    // NUCLEAR OPTION PART 1: Inject an early-loaded CSP meta tag to block all extension scripts
-    // This must happen before any other scripts run
-    const cspMeta = document.createElement('meta');
-    cspMeta.httpEquiv = 'Content-Security-Policy';
-    cspMeta.content = "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; object-src 'none'; connect-src *";
-    
-    // Insert it as the first element in head
-    const head = document.head || document.getElementsByTagName('head')[0];
-    if (head.firstChild) {
-      head.insertBefore(cspMeta, head.firstChild);
-    } else {
-      head.appendChild(cspMeta);
-    }
-    
-    // NUCLEAR OPTION PART 2: Create invisible iframe to load pure environment
-    // This is a radical solution but it will be 100% effective
-    const createCleanBoundary = function() {
-      console.log('[GigaAura] Creating protected boundary...');
-      
-      // Create sandbox iframe (with 'allow-scripts' to allow our own scripts)
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.sandbox = 'allow-same-origin allow-scripts';
-      document.documentElement.appendChild(iframe);
-      
-      // Get clean/pure window and document from iframe 
-      const clean = {
-        window: iframe.contentWindow,
-        document: iframe.contentDocument,
-        Element: iframe.contentWindow.Element,
-        Object: iframe.contentWindow.Object,
-        defineProperty: iframe.contentWindow.Object.defineProperty,
-        Reflect: iframe.contentWindow.Reflect
-      };
-      
-      return clean;
-    };
-    
-    // Get clean environment
-    const clean = createCleanBoundary();
-    
-    // NUCLEAR OPTION PART 3: Use Object.defineProperty from the CLEAN iframe
-    // This guarantees no extension has tampered with it
-    clean.defineProperty.call(Object, window, 'ethereum', {
-      configurable: false,
-      writable: false,
-      value: null
-    });
-    
-    clean.defineProperty.call(Object, window, 'web3', {
-      configurable: false,
-      writable: false,
-      value: null
-    });
-    
-    // NUCLEAR OPTION PART 4: Aggressively override ethereum property using ALL known methods
-    // This creates multiple redundant layers of protection
-    const killEthereum = function() {
-      try {
-        // 1. Delete in case it's already there
-        delete window.ethereum;
-        delete window.web3;
-        
-        // 2. Use iframe's Object.defineProperty directly to avoid any monkeypatching
-        clean.defineProperty.call(Object, window, 'ethereum', {
-          configurable: false,
-          value: null,
-          writable: false
-        });
-        
-        clean.defineProperty.call(Object, window, 'web3', {
-          configurable: false,
-          value: null,
-          writable: false
-        });
-        
-        // 3. Also add a dummy function to handle property access attempts
-        window.__defineGetter__('ethereum', function() { return null; });
-        window.__defineGetter__('web3', function() { return null; });
-        
-        // 4. Freeze window object to prevent additions (extreme measure, might break things)
-        // We don't actually freeze window because that's too aggressive
-        // But we make this layer available if needed
-      } catch (e) {
-        console.warn('[GigaAura] Error in killEthereum:', e);
-      }
-    };
-    
-    // Run ethereum killer immediately
-    killEthereum();
-    
-    // NUCLEAR OPTION PART 5: Disable all extension content script injection points
-    // This targets the specific injection methods used by wallet extensions
-    const disableInjectionPoints = function() {
-      try {
-        // Save the real console methods
-        const realConsole = {
-          log: console.log,
-          warn: console.warn,
-          error: console.error
-        };
-        
-        // Override addEventListener to block specific event hijacking
-        const originalAddEventListener = window.addEventListener;
-        window.addEventListener = function(type, listener, options) {
-          // Block DOMContentLoaded and load listeners from extensions
-          if ((type === 'DOMContentLoaded' || type === 'load') && 
-              listener.toString().includes('ethereum')) {
-            realConsole.warn('[GigaAura] Blocked extension event listener:', type);
-            return;
-          }
-          return originalAddEventListener.call(this, type, listener, options);
-        };
-        
-        // Block document.documentElement access which extensions use
-        let documentElementGetter = Object.getOwnPropertyDescriptor(Document.prototype, 'documentElement').get;
-        Object.defineProperty(document, 'documentElement', {
-          get: function() {
-            // Allow legitimate access but track suspicious access
-            const stack = new Error().stack;
-            if (stack && (
-              stack.includes('ethereum') ||
-              stack.includes('inpage.js') ||
-              stack.includes('evmAsk.js') ||
-              stack.includes('metamask')
-            )) {
-              realConsole.warn('[GigaAura] Suspicious documentElement access blocked');
-              // Return a dummy element instead
-              return document.createElement('div');
-            }
-            return documentElementGetter.call(this);
-          }
-        });
-      } catch (e) {
-        console.warn('[GigaAura] Error in disableInjectionPoints:', e);
-      }
-    };
-    
-    // Disable known injection points
-    disableInjectionPoints();
-    
-    // NUCLEAR OPTION PART 6: Completely disable script injection
-    // This will prevent wallet extensions from injecting their scripts
-    const disableScriptInjection = function() {
-      try {
-        // Create dummy element that will be returned instead of scripts
-        const dummyElement = document.createElement('script');
-        dummyElement.type = 'text/plain';
-        
-        // Override createElement to prevent script creation
-        const originalCreateElement = document.createElement;
-        document.createElement = function(tagName, options) {
-          if (tagName.toLowerCase() === 'script') {
-            // Try to detect if this is from a wallet extension
-            const stack = new Error().stack || '';
-            if (stack.includes('ethereum') || 
-                stack.includes('inpage.js') || 
-                stack.includes('evmAsk.js') || 
-                stack.includes('metamask')) {
-              console.warn('[GigaAura] Blocked script creation from extension');
-              return dummyElement;
-            }
-          }
-          return originalCreateElement.call(document, tagName, options);
-        };
-        
-        // Override appendChild to block script injection
-        const originalAppendChild = Node.prototype.appendChild;
-        Node.prototype.appendChild = function(node) {
-          if (node.nodeName === 'SCRIPT') {
-            const src = node.src || '';
-            const text = node.textContent || '';
-            if (src.includes('inpage.js') || 
-                src.includes('evmAsk.js') || 
-                src.includes('metamask') || 
-                src.includes('ethereum') ||
-                text.includes('ethereum') ||
-                text.includes('MetaMask') ||
-                text.includes('web3')) {
-              console.warn('[GigaAura] Blocked appendingc script:', src);
-              return dummyElement;
-            }
-          }
-          return originalAppendChild.call(this, node);
-        };
-      } catch (e) {
-        console.warn('[GigaAura] Error in disableScriptInjection:', e);
-      }
-    };
-    
-    // Run script injection blocker
-    disableScriptInjection();
-    
-    // NUCLEAR OPTION PART 7: Add a MutationObserver to catch any attempts to add scripts
-    const observer = new MutationObserver(function(mutations) {
-      mutations.forEach(function(mutation) {
-        if (mutation.type === 'childList') {
-          mutation.addedNodes.forEach(function(node) {
-            if (node.tagName === 'SCRIPT') {
-              const src = node.src || '';
-              const text = node.textContent || '';
-              if (src.includes('inpage.js') || 
-                  src.includes('evmAsk.js') || 
-                  src.includes('metamask') || 
-                  src.includes('ethereum') ||
-                  text.includes('ethereum') ||
-                  text.includes('MetaMask') ||
-                  text.includes('web3')) {
-                console.warn('[GigaAura] Neutralizing injected script:', src);
-                node.type = 'text/plain';
-                node.removeAttribute('src');
-                node.textContent = '// [GigaAura] Extension script neutralized';
-              }
-            }
-          });
+    console.log('[GigaAura] Activating wallet protection system v3.0');
+
+    // Save original methods before they can be tampered with
+    const originalDefineProperty = Object.defineProperty;
+    const originalGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+    const originalPreventExtensions = Object.preventExtensions;
+    const originalReflectDefineProperty = Reflect.defineProperty;
+
+    // Create a stub ethereum object that returns safe values
+    // Instead of null, we provide harmless implementations
+    const createSafeEthereumStub = () => {
+      return {
+        isMetaMask: false,
+        chainId: null,
+        networkVersion: null,
+        selectedAddress: null,
+        _metamask: {
+          isUnlocked: () => false,
+          isEnabled: () => false,
+          isApproved: () => false
+        },
+        request: async (req) => {
+          console.warn('[GigaAura] Blocked ethereum request:', req);
+          throw new Error('Ethereum functionality is disabled');
+        },
+        enable: async () => {
+          console.warn('[GigaAura] Blocked ethereum.enable()');
+          throw new Error('Ethereum functionality is disabled');
+        },
+        on: (eventName, callback) => {
+          console.warn('[GigaAura] Blocked ethereum.on():', eventName);
+          return false;
+        },
+        removeListener: () => false,
+        isConnected: () => false,
+        sendAsync: (payload, callback) => {
+          if (callback) callback(new Error('Ethereum functionality is disabled'), null);
+        },
+        send: (payload, callback) => {
+          if (callback) callback(new Error('Ethereum functionality is disabled'), null);
+          return null;
         }
-      });
-    });
-    
-    // Observe DOM for changes
-    observer.observe(document, { childList: true, subtree: true });
-    
-    // NUCLEAR OPTION PART 8: Global error handler to swallow any errors
+      };
+    };
+
+    // Create our ethereum stub
+    const ethereumStub = createSafeEthereumStub();
+
+    // Create empty web3 stub
+    const web3Stub = {};
+
+    // Function to safely create property that can't be altered
+    const defineProtectedProperty = (obj, prop, value, writable = false) => {
+      try {
+        // First try to delete the property if it exists
+        // This may fail if the property is non-configurable, which is fine
+        delete obj[prop];
+
+        // Check existing property
+        const existingDescriptor = originalGetOwnPropertyDescriptor(obj, prop);
+        
+        // If the property already exists and can't be configured, we're done
+        if (existingDescriptor && !existingDescriptor.configurable) {
+          return false;
+        }
+
+        // Otherwise, make a new descriptor
+        originalDefineProperty(obj, prop, {
+          value: value,
+          writable: writable,
+          enumerable: true, 
+          configurable: false
+        });
+        
+        return true;
+      } catch (e) {
+        console.warn(`[GigaAura] Failed to define ${prop}:`, e);
+        return false;
+      }
+    };
+
+    // Global error handler to catch and suppress wallet-related errors
+    // Placed early in code so it catches errors during initialization
     window.addEventListener('error', function(e) {
-      if (e && (
-        (e.message && (
-          e.message.includes('ethereum') ||
-          e.message.includes('web3') ||
-          e.message.includes('MetaMask') ||
-          e.message.includes('inpage') ||
-          e.message.includes('evmAsk') ||
-          e.message.includes('Cannot redefine property') ||
-          e.message.includes('Cannot set property')
+      if (e && e.error && (
+        (e.error.message && (
+          e.error.message.includes('ethereum') ||
+          e.error.message.includes('web3') ||
+          e.error.message.includes('MetaMask') ||
+          e.error.message.includes('Cannot redefine property') ||
+          e.error.message.includes('Cannot set property')
         )) ||
         (e.filename && (
           e.filename.includes('inpage.js') ||
           e.filename.includes('evmAsk.js')
         ))
       )) {
-        console.warn('[GigaAura] Suppressed error:', e.message);
+        console.warn('[GigaAura] Suppressed wallet-related error:', e.error ? e.error.message : e.message);
         e.preventDefault();
         e.stopPropagation();
         return true;
       }
     }, true);
+
+    // Define ethereum and web3 with immediate protection
+    if (!window.hasOwnProperty('ethereum') || window.ethereum === undefined) {
+      defineProtectedProperty(window, 'ethereum', ethereumStub);
+    }
     
-    // Periodically re-apply protection
-    const reapplyProtection = function() {
-      killEthereum();
-      console.log('[GigaAura] Protection refreshed');
+    if (!window.hasOwnProperty('web3') || window.web3 === undefined) {
+      defineProtectedProperty(window, 'web3', web3Stub);
+    }
+
+    // Setup script blocking
+    const blockEthereumScripts = () => {
+      try {
+        // Keep track of original document functions
+        const originalCreateElement = document.createElement;
+        const originalAppendChild = Node.prototype.appendChild;
+        const originalInsertBefore = Node.prototype.insertBefore;
+
+        // Create a noop script element for returning
+        const createNoopScript = () => {
+          const script = originalCreateElement.call(document, 'script');
+          script.type = 'text/plain'; // Prevents execution
+          script.setAttribute('data-blocked-by', 'gigaaura');
+          return script;
+        };
+
+        // Block suspicious scripts
+        const isEthereumScript = (src, content) => {
+          src = (src || '').toLowerCase();
+          content = (content || '').toLowerCase();
+          
+          return (
+            src.includes('inpage.js') ||
+            src.includes('evmask.js') ||
+            src.includes('metamask') ||
+            src.includes('web3modal') ||
+            content.includes('window.ethereum') ||
+            (content.includes('ethereum') && content.includes('inject'))
+          );
+        };
+
+        // Override script tag creation but don't break React
+        document.createElement = function(tagName, options) {
+          const element = originalCreateElement.call(document, tagName, options);
+          
+          if (tagName.toLowerCase() === 'script') {
+            // Save original setAttribute
+            const originalSetAttribute = element.setAttribute;
+            
+            // Override setAttribute
+            element.setAttribute = function(name, value) {
+              if (name === 'src' && isEthereumScript(value, '')) {
+                console.warn('[GigaAura] Blocked script src:', value);
+                return element;
+              }
+              return originalSetAttribute.call(this, name, value);
+            };
+          }
+          
+          return element;
+        };
+
+        // Override appendChild to prevent injected scripts
+        Node.prototype.appendChild = function(node) {
+          if (node.nodeName === 'SCRIPT') {
+            const src = node.src || '';
+            const content = node.textContent || node.innerText || '';
+            
+            if (isEthereumScript(src, content)) {
+              console.warn('[GigaAura] Blocked appending script:', src);
+              return createNoopScript();
+            }
+          }
+          return originalAppendChild.call(this, node);
+        };
+
+        // Override insertBefore to prevent injected scripts
+        Node.prototype.insertBefore = function(node, referenceNode) {
+          if (node.nodeName === 'SCRIPT') {
+            const src = node.src || '';
+            const content = node.textContent || node.innerText || '';
+            
+            if (isEthereumScript(src, content)) {
+              console.warn('[GigaAura] Blocked inserting script:', src);
+              return createNoopScript();
+            }
+          }
+          return originalInsertBefore.call(this, node, referenceNode);
+        };
+      } catch (e) {
+        console.error('[GigaAura] Error in script blocking:', e);
+      }
     };
+
+    // Apply script blocking
+    blockEthereumScripts();
+
+    // Monitor for late property definition attempts
+    const monitorEthereumProperties = () => {
+      try {
+        // Override Object.defineProperty to prevent ethereum redefinition
+        Object.defineProperty = function(obj, prop, descriptor) {
+          if (obj === window && (prop === 'ethereum' || prop === 'web3')) {
+            console.warn(`[GigaAura] Blocked attempt to redefine ${prop}`);
+            return obj;
+          }
+          
+          // Enforce our override protection
+          if (obj === Object && prop === 'defineProperty') {
+            console.warn('[GigaAura] Blocked attempt to redefine Object.defineProperty');
+            return Object;
+          }
+          
+          return originalDefineProperty.call(Object, obj, prop, descriptor);
+        };
+        
+        // Also override Reflect.defineProperty for the same reason
+        Reflect.defineProperty = function(obj, prop, descriptor) {
+          if (obj === window && (prop === 'ethereum' || prop === 'web3')) {
+            console.warn(`[GigaAura] Blocked Reflect.defineProperty attempt on ${prop}`);
+            return false;
+          }
+          return originalReflectDefineProperty.call(Reflect, obj, prop, descriptor);
+        };
+      } catch (e) {
+        console.error('[GigaAura] Error in property monitoring:', e);
+      }
+    };
+
+    // Apply property monitoring
+    monitorEthereumProperties();
+
+    // Keep applying protection periodically at a lower interval
+    // Only protect when needed and less aggressively to avoid React issues
+    const protectionInterval = setInterval(() => {
+      try {
+        // Check if protection still applied
+        const ethDesc = Object.getOwnPropertyDescriptor(window, 'ethereum');
+        const web3Desc = Object.getOwnPropertyDescriptor(window, 'web3');
+        
+        // Only reapply if values are missing or have been changed to something dangerous
+        if (!ethDesc || (
+          ethDesc.value !== ethereumStub && 
+          ethDesc.configurable === true
+        )) {
+          console.log('[GigaAura] Reapplying ethereum protection');
+          defineProtectedProperty(window, 'ethereum', ethereumStub);
+        }
+        
+        if (!web3Desc || (
+          web3Desc.value !== web3Stub && 
+          web3Desc.configurable === true
+        )) {
+          console.log('[GigaAura] Reapplying web3 protection');
+          defineProtectedProperty(window, 'web3', web3Stub);
+        }
+      } catch (e) {
+        console.warn('[GigaAura] Error in protection interval:', e);
+      }
+    }, 5000); // Check every 5 seconds instead of 1 second
+
+    console.log('[GigaAura] Protection system activated successfully');
+  } catch (e) {
+    console.error('[GigaAura] Failed to initialize protection system:', e);
     
-    // Run it immediately and then every 1000ms just to be sure
-    reapplyProtection();
-    const protectionInterval = setInterval(reapplyProtection, 1000);
-    
-    console.log('[GigaAura] NUCLEAR wallet protection activated with 8 defense layers');
-  } catch (error) {
-    console.error('[GigaAura] Protection system error:', error);
-    
-    // Even if we fail, try one last basic protection
+    // Emergency fallback - try simpler protection
     try {
-      Object.defineProperty(window, 'ethereum', { 
-        value: null, 
-        writable: false, 
-        configurable: false 
+      const emergencyStub = {
+        isMetaMask: false,
+        request: () => Promise.reject(new Error('Ethereum disabled')),
+        on: () => {},
+        removeListener: () => {},
+        isConnected: () => false
+      };
+      
+      Object.defineProperty(window, 'ethereum', {
+        value: emergencyStub,
+        writable: false,
+        configurable: false
       });
-    } catch (e) {}
+      
+      console.log('[GigaAura] Emergency protection applied');
+    } catch (fallbackError) {
+      console.error('[GigaAura] Emergency protection failed:', fallbackError);
+    }
   }
 })(); 
