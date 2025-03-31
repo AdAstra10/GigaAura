@@ -82,6 +82,14 @@ const FeedFallback = () => (
   </div>
 );
 
+// Safe wrapper for array operations
+const getSafeArray = <T,>(array: T[] | undefined | null): T[] => {
+  if (!array || !Array.isArray(array)) {
+    return [];
+  }
+  return array;
+};
+
 const Feed = () => {
   try {
     const dispatch = useDispatch();
@@ -118,10 +126,16 @@ const Feed = () => {
       try {
         const cachedPosts = localStorage.getItem('cachedPosts');
         if (cachedPosts) {
-          const parsedPosts = JSON.parse(cachedPosts);
-          if (Array.isArray(parsedPosts)) {
-            dispatch(setFeed(parsedPosts));
-          } else {
+          try {
+            const parsedPosts = JSON.parse(cachedPosts);
+            if (Array.isArray(parsedPosts)) {
+              dispatch(setFeed(parsedPosts));
+            } else {
+              console.warn('Cached posts are not an array, resetting feed');
+              dispatch(setFeed([]));
+            }
+          } catch (e) {
+            console.error('Error parsing cached posts:', e);
             dispatch(setFeed([]));
           }
         } else {
@@ -326,7 +340,10 @@ const Feed = () => {
     // Get comments for a specific post
     const getPostComments = (postId: string) => {
       try {
-        return comments.filter(comment => comment.postId === postId);
+        if (!comments || !Array.isArray(comments)) {
+          return [];
+        }
+        return comments.filter(comment => comment && comment.postId === postId);
       } catch (error) {
         console.error('Error getting post comments:', error);
         return [];
@@ -334,9 +351,22 @@ const Feed = () => {
     };
 
     // Filter feed based on active tab
-    const filteredFeed = activeTab === 'following' && Array.isArray(user.following) ? 
-      feed.filter(post => user.following?.includes(post.authorWallet)) : 
-      feed;
+    const filteredFeed = (() => {
+      try {
+        if (activeTab === 'following') {
+          const following = getSafeArray(user.following);
+          if (following.length === 0) return [];
+          
+          return getSafeArray(feed).filter(post => 
+            post && post.authorWallet && following.includes(post.authorWallet)
+          );
+        }
+        return getSafeArray(feed);
+      } catch (e) {
+        console.error('Error filtering feed:', e);
+        return [];
+      }
+    })();
       
     // Modify the getSortedFeed function to be more defensive
     const getSortedFeed = (posts: Post[]) => {
@@ -548,26 +578,36 @@ const Feed = () => {
                 sortedFeed.map((post) => {
                   // Skip rendering if post is invalid
                   if (!post || typeof post !== 'object' || !post.id) {
+                    console.warn('Invalid post detected in feed:', post);
                     return null;
                   }
                   
-                  return (
-                    <div 
-                      key={post.id}
-                      className={`border-b border-gray-200 dark:border-gray-700 ${
-                        hoverPost === post.id ? 'bg-gray-50 dark:bg-gray-800/50' : ''
-                      } transition-colors`}
-                      onMouseEnter={() => setHoverPost(post.id)}
-                      onMouseLeave={() => setHoverPost(null)}
-                    >
-                      <PostCard
-                        post={post}
-                        comments={getPostComments(post.id)}
-                        onShare={() => handleSharePost(post.id)}
-                        onFollow={() => post.authorWallet && handleFollowUser(post.authorWallet, post.authorUsername || '')}
-                      />
-                    </div>
-                  );
+                  try {
+                    return (
+                      <div 
+                        key={post.id}
+                        className={`border-b border-gray-200 dark:border-gray-700 ${
+                          hoverPost === post.id ? 'bg-gray-50 dark:bg-gray-800/50' : ''
+                        } transition-colors`}
+                        onMouseEnter={() => setHoverPost(post.id)}
+                        onMouseLeave={() => setHoverPost(null)}
+                      >
+                        <PostCard
+                          post={post}
+                          comments={getPostComments(post.id)}
+                          onShare={() => handleSharePost(post.id)}
+                          onFollow={() => post.authorWallet && handleFollowUser(post.authorWallet, post.authorUsername || '')}
+                        />
+                      </div>
+                    );
+                  } catch (renderError) {
+                    console.error('Error rendering post card:', renderError, post);
+                    return (
+                      <div key={post.id || 'fallback-key'} className="p-4 border-b border-gray-200 dark:border-gray-700">
+                        <p className="text-red-500">There was an error displaying this post</p>
+                      </div>
+                    );
+                  }
                 })
               )}
             </div>

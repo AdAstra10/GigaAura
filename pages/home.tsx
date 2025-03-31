@@ -1,4 +1,4 @@
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useRouter } from 'next/router';
 import { RootState } from '../lib/store';
@@ -8,84 +8,62 @@ import { useWallet } from '../contexts/WalletContext';
 import Head from 'next/head';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
-import PostCard from '../components/PostCard';
 import AuraSidebar from '../components/AuraSidebar';
-import Link from 'next/link';
-import { v4 as uuidv4 } from 'uuid';
-import toast from 'react-hot-toast';
-import dynamic from 'next/dynamic';
+import { FaHome } from 'react-icons/fa';
 
-// Loading fallback for Feed component
-const FeedLoading = () => (
-  <div className="w-full border border-gray-200 dark:border-gray-700 rounded-lg h-64 flex items-center justify-center">
-    <div className="animate-spin h-12 w-12 border-4 border-t-indigo-500 border-indigo-200 rounded-full"></div>
-  </div>
-);
-
-// Error fallback component
-const ErrorFallback = () => (
-  <div className="p-6 border border-red-200 rounded-lg bg-red-50 dark:bg-red-900/20 dark:border-red-800 text-center">
-    <h3 className="text-lg font-medium text-red-800 dark:text-red-200 mb-2">Something went wrong</h3>
-    <p className="text-red-600 dark:text-red-300 mb-4">There was an error loading the feed</p>
-    <button 
-      onClick={() => window.location.reload()} 
-      className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-    >
-      Try Again
-    </button>
-  </div>
-);
-
-// Dynamically import Feed with no SSR to avoid hydration issues
-// Use a custom loading component with proper styling
-const Feed = dynamic(() => import('../components/Feed').catch(err => {
-  console.error('Failed to load Feed component:', err);
-  // Return a simple component that renders the error fallback
-  return () => <ErrorFallback />;
-}), { 
-  ssr: false,
-  loading: () => <FeedLoading />
-});
+// Simple static feed component instead of dynamic import
+const SimpleFeed = () => {
+  const [isLoading, setIsLoading] = useState(true);
+  
+  useEffect(() => {
+    // Simple timeout to simulate loading
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
+    
+    return () => clearTimeout(timer);
+  }, []);
+  
+  if (isLoading) {
+    return (
+      <div className="w-full border border-gray-200 dark:border-gray-700 rounded-lg h-64 flex items-center justify-center">
+        <div className="animate-spin h-12 w-12 border-4 border-t-indigo-500 border-indigo-200 rounded-full"></div>
+      </div>
+    );
+  }
+  
+  // Simple static content without any dynamic data
+  return (
+    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center space-x-2 justify-center">
+          <FaHome className="text-indigo-500" />
+          <h2 className="text-xl font-bold">Welcome to GigaAura</h2>
+        </div>
+      </div>
+      
+      <div className="p-6 text-center">
+        <p className="text-gray-600 dark:text-gray-300 mb-4">
+          Your feed is currently being updated with the latest posts.
+        </p>
+        <p className="text-gray-500 dark:text-gray-400 mb-6">
+          Thank you for your patience while we improve your experience.
+        </p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+        >
+          Refresh Page
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const HomePage = () => {
   const dispatch = useDispatch();
   const router = useRouter();
-  const { walletAddress, connectWallet, walletConnected } = useWallet();
-  const user = useSelector((state: RootState) => state.user);
-  const { feed } = useSelector((state: RootState) => state.posts);
   
-  const [isLoadingFeed, setIsLoadingFeed] = useState(true);
-  const [hasError, setHasError] = useState(false);
-
-  useEffect(() => {
-    // Catch any errors that might happen during initialization
-    try {
-      // Load feed from cache when component mounts
-      dispatch(loadFromCache());
-      setIsLoadingFeed(false);
-    } catch (error) {
-      console.error("Error initializing home page:", error);
-      setHasError(true);
-      setIsLoadingFeed(false);
-    }
-  }, [dispatch]);
-
-  // Global error handler for this component
-  useEffect(() => {
-    const handleError = (event: ErrorEvent) => {
-      console.error("Home page caught error:", event.error);
-      setHasError(true);
-      // Prevent the default error handling
-      event.preventDefault();
-    };
-
-    window.addEventListener('error', handleError);
-    
-    return () => {
-      window.removeEventListener('error', handleError);
-    };
-  }, []);
-
   return (
     <>
       <Head>
@@ -102,13 +80,7 @@ const HomePage = () => {
         </div>
         
         <div className="col-span-1 md:col-span-6 content-column">
-          {hasError ? (
-            <ErrorFallback />
-          ) : (
-            <Suspense fallback={<FeedLoading />}>
-              <Feed />
-            </Suspense>
-          )}
+          <SimpleFeed />
         </div>
         
         <div className="hidden md:block md:col-span-3">

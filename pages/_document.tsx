@@ -10,37 +10,27 @@ class MyDocument extends Document {
     return (
       <Html lang="en">
         <Head>
-          {/* ULTRA-SIMPLE wallet protection script - simple but effective approach */}
+          {/* Critical minimum script to manage toString errors */}
           <script
             dangerouslySetInnerHTML={{
               __html: `
-                (function() {
-                  // Super simple approach - define ethereum as null without any complexity
-                  try {
-                    // Simple direct property assignments - no defineProperty tricks
-                    window.ethereum = null;
-                    window.web3 = null;
-                    
-                    // Basic toString protection
-                    if (Object.prototype.toString !== undefined) {
-                      var originalToString = Object.prototype.toString;
-                      Object.prototype.toString = function() {
-                        try {
-                          if (this === null || this === undefined) {
-                            return "[object SafeNull]";
-                          }
-                          return originalToString.call(this);
-                        } catch(e) {
-                          return "[object Protected]";
-                        }
-                      };
+                // Override toString to prevent null errors
+                try {
+                  const originalToString = Object.prototype.toString;
+                  Object.prototype.toString = function() {
+                    try {
+                      if (this === null || this === undefined) {
+                        return "[object SafeNull]";
+                      }
+                      return originalToString.call(this);
+                    } catch(e) {
+                      return "[object Protected]";
                     }
-                    
-                    console.log("Simple wallet protection applied");
-                  } catch(e) {
-                    console.warn("Couldn't apply wallet protection:", e);
-                  }
-                })();
+                  };
+                  console.log("toString protection applied");
+                } catch(e) {
+                  console.warn("toString protection failed:", e);
+                }
               `
             }}
           />
@@ -116,8 +106,8 @@ class MyDocument extends Document {
           {/* Security headers */}
           <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
           <meta httpEquiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com;" />
-          <meta name="X-Frame-Options" content="SAMEORIGIN" />
-          <meta name="X-Content-Type-Options" content="nosniff" />
+          <meta httpEquiv="X-Frame-Options" content="SAMEORIGIN" />
+          <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
         </Head>
         <body>
           <Main />
