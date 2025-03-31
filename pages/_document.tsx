@@ -10,63 +10,37 @@ class MyDocument extends Document {
     return (
       <Html lang="en">
         <Head>
-          {/* ULTRA AGGRESSIVE wallet protection script - blocks at the highest level possible */}
+          {/* ULTRA-SIMPLE wallet protection script - simple but effective approach */}
           <script
             dangerouslySetInnerHTML={{
               __html: `
-                // Disable wallet extension properties immediately with absolute top priority
-                // This must run before ANY other scripts
-                try {
-                  // Directly set properties to null - simplest and most aggressive approach
-                  Object.defineProperty(window, 'ethereum', {
-                    value: null,
-                    configurable: false, // Make it impossible to redefine
-                    writable: false      // Make it impossible to change
-                  });
-                  
-                  Object.defineProperty(window, 'web3', {
-                    value: null,
-                    configurable: false,
-                    writable: false
-                  });
-                  
-                  // Block inpage.js and evmAsk.js scripts completely
-                  const originalCreateElement = document.createElement;
-                  document.createElement = function() {
-                    const element = originalCreateElement.apply(document, arguments);
-                    if (arguments[0].toLowerCase() === 'script') {
-                      const originalSetAttribute = element.setAttribute;
-                      element.setAttribute = function(name, value) {
-                        if (name === 'src' && typeof value === 'string' && 
-                            (value.includes('inpage.js') || 
-                             value.includes('evmAsk.js') ||
-                             value.includes('metamask'))) {
-                          console.log('Blocked script:', value);
-                          return element;
+                (function() {
+                  // Super simple approach - define ethereum as null without any complexity
+                  try {
+                    // Simple direct property assignments - no defineProperty tricks
+                    window.ethereum = null;
+                    window.web3 = null;
+                    
+                    // Basic toString protection
+                    if (Object.prototype.toString !== undefined) {
+                      var originalToString = Object.prototype.toString;
+                      Object.prototype.toString = function() {
+                        try {
+                          if (this === null || this === undefined) {
+                            return "[object SafeNull]";
+                          }
+                          return originalToString.call(this);
+                        } catch(e) {
+                          return "[object Protected]";
                         }
-                        return originalSetAttribute.apply(this, arguments);
                       };
                     }
-                    return element;
-                  };
-                  
-                  // Safe toString implementation to prevent null reference errors
-                  const originalToString = Object.prototype.toString;
-                  Object.prototype.toString = function() {
-                    try {
-                      if (this === null || this === undefined) {
-                        return "[object SafeNull]";
-                      }
-                      return originalToString.call(this);
-                    } catch(e) {
-                      return "[object Protected]";
-                    }
-                  };
-                  
-                  console.log("Site protection active - wallet extensions blocked");
-                } catch(e) {
-                  console.warn("Protection mechanism error:", e);
-                }
+                    
+                    console.log("Simple wallet protection applied");
+                  } catch(e) {
+                    console.warn("Couldn't apply wallet protection:", e);
+                  }
+                })();
               `
             }}
           />
@@ -86,11 +60,64 @@ class MyDocument extends Document {
           <link rel="preconnect" href="https://www.gigaaura.com" />
           <link rel="preconnect" href="https://gigaaura.onrender.com" />
           
-          {/* Security headers properly formatted */}
+          {/* Block script injection from wallet extensions */}
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                try {
+                  // Intercept browser APIs that might be used by wallet extensions
+                  const originalCreateElement = document.createElement;
+                  
+                  document.createElement = function(tagName) {
+                    const element = originalCreateElement.call(document, tagName);
+                    
+                    // Watch for script tags
+                    if (tagName.toLowerCase() === 'script') {
+                      const originalSetAttribute = element.setAttribute;
+                      
+                      element.setAttribute = function(name, value) {
+                        // Block problematic scripts by source
+                        if (name === 'src' && typeof value === 'string' && (
+                            value.includes('inpage.js') || 
+                            value.includes('evmAsk.js') ||
+                            value.includes('metamask') ||
+                            value.includes('ethereum') ||
+                            value.includes('web3modal') ||
+                            value.includes('injected')
+                          )) {
+                          console.warn('GigaAura blocked problematic script:', value);
+                          return element; // Return without setting the attribute
+                        }
+                        return originalSetAttribute.call(this, name, value);
+                      };
+                    }
+                    
+                    return element;
+                  };
+                  
+                  // Global error handler for common wallet extension errors
+                  window.addEventListener('error', function(e) {
+                    if (e.error && e.error.message && (
+                        e.error.message.includes('ethereum') ||
+                        e.error.message.includes('web3') ||
+                        e.error.message.includes('Cannot read properties of null')
+                      )) {
+                      console.warn('GigaAura caught wallet extension error:', e.error.message);
+                      e.preventDefault();
+                    }
+                  }, true);
+                } catch(err) {
+                  console.warn('GigaAura script protection error:', err);
+                }
+              `
+            }}
+          />
+          
+          {/* Security headers */}
           <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
           <meta httpEquiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com;" />
-          <meta httpEquiv="X-Frame-Options" content="SAMEORIGIN" />
-          <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
+          <meta name="X-Frame-Options" content="SAMEORIGIN" />
+          <meta name="X-Content-Type-Options" content="nosniff" />
         </Head>
         <body>
           <Main />
