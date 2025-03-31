@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { useDispatch } from 'react-redux';
 import { setWalletAddress, logout, setUser } from '../lib/slices/userSlice';
 import { loadWalletPoints } from '../lib/slices/auraPointsSlice';
+import { toast } from 'react-hot-toast';
 
 // Basic interface for the phantom wallet
 interface PhantomWallet {
@@ -43,17 +44,37 @@ interface WalletProviderProps {
   children: ReactNode;
 }
 
-// Helper function to safely extract address from publicKey
-const safeGetAddress = (publicKey: any): string | null => {
+// Safe function to get address from public key
+const safeGetAddress = (publicKey: any): string => {
+  if (!publicKey) return '';
+  
   try {
-    // Multiple checks to ensure we don't crash
-    if (!publicKey) return null;
-    if (typeof publicKey !== 'object') return null;
-    if (typeof publicKey.toString !== 'function') return null;
+    // Multiple safety checks
+    if (typeof publicKey === 'string') return publicKey;
     
-    return publicKey.toString();
+    if (publicKey && typeof publicKey.toString === 'function') {
+      return publicKey.toString();
+    }
+    
+    return String(publicKey) || '';
   } catch (error) {
-    console.error("Error extracting address from publicKey:", error);
+    console.warn('Error getting address from public key:', error);
+    return '';
+  }
+};
+
+// Add this helper function to get the provider
+const getProvider = () => {
+  try {
+    const windowObj = window as WindowWithSolana;
+    if (windowObj.solana?.isPhantom) {
+      return windowObj.solana;
+    } else if (windowObj.phantom?.solana?.isPhantom) {
+      return windowObj.phantom.solana;
+    }
+    return null;
+  } catch (err) {
+    console.error("Error accessing wallet provider:", err);
     return null;
   }
 };
@@ -103,21 +124,6 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         setIsLoading(true);
         
         // Try to safely get the provider without conflicting with other wallet extensions
-        const getProvider = () => {
-          try {
-            const windowObj = window as WindowWithSolana;
-            if (windowObj.solana?.isPhantom) {
-              return windowObj.solana;
-            } else if (windowObj.phantom?.solana?.isPhantom) {
-              return windowObj.phantom.solana;
-            }
-            return null;
-          } catch (err) {
-            console.error("Error accessing wallet provider:", err);
-            return null;
-          }
-        };
-        
         const provider = getProvider();
 
         if (provider) {
@@ -177,63 +183,41 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
 
   // Connect wallet
   const connectWallet = async () => {
-    setIsLoading(true);
     try {
-      // Try to safely get the provider without conflicting with other wallet extensions
-      const getProvider = () => {
-        try {
-          const windowObj = window as WindowWithSolana;
-          if (windowObj.solana?.isPhantom) {
-            return windowObj.solana;
-          } else if (windowObj.phantom?.solana?.isPhantom) {
-            return windowObj.phantom.solana;
-          }
-          return null;
-        } catch (err) {
-          console.error("Error accessing wallet provider:", err);
-          return null;
-        }
-      };
+      setIsLoading(true);
       
+      // Check if phantom is installed
       const provider = getProvider();
-
-      if (provider) {
-        try {
-          const response = await provider.connect();
-          
-          // Guard against null publicKey with our helper function
-          if (response && response.publicKey) {
-            const address = safeGetAddress(response.publicKey);
-            
-            if (address) {
-              // Set wallet state and dispatch to Redux
-              setWalletState(address);
-              setWalletConnected(true);
-              setWalletProvider(provider);
-              dispatch(setWalletAddress(address));
-              
-              // Load data for this wallet address
-              loadWalletAuraPoints(address);
-              loadUserProfileData(address); // Load profile data here
-              console.log("Connected to wallet:", address);
-            } else {
-              console.error("Couldn't extract address from publicKey");
-              alert("There was an issue connecting to your wallet. Please try again.");
-            }
-          } else {
-            console.error("No publicKey in connect response");
-            alert("There was an issue connecting to your wallet. Please try again.");
-          }
-        } catch (error) {
-          console.error("Error connecting to wallet:", error);
-          // This might be a user rejection, which is fine
-        }
-      } else {
-        alert("Compatible wallet not found! Please install the Phantom wallet extension.");
+      
+      if (!provider) {
+        toast.error("Phantom wallet not found. Please install Phantom wallet extension.");
+        setIsLoading(false);
+        return;
       }
+      
+      // Connect to phantom
+      const response = await provider.connect();
+      
+      // Safely get the wallet address
+      const walletAddress = safeGetAddress(response.publicKey);
+      
+      // Update wallet contexts
+      setWalletState(walletAddress);
+      setWalletConnected(true);
+      setWalletProvider(provider);
+      dispatch(setWalletAddress(walletAddress));
+      
+      // Load data for this wallet address
+      loadWalletAuraPoints(walletAddress);
+      loadUserProfileData(walletAddress); // Load profile data here
+      
+      localStorage.setItem('walletConnected', 'true');
+      
+      setIsLoading(false);
+      
     } catch (error) {
-      console.error("Error connecting to wallet:", error);
-    } finally {
+      console.error('Error connecting to wallet:', error);
+      toast.error("Failed to connect to wallet. Please try again.");
       setIsLoading(false);
     }
   };

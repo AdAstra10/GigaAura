@@ -21,6 +21,17 @@ interface EmojiClickData {
   emoji: string;
 }
 
+// Safely get the sort date value to prevent toString errors
+const getSafeDate = (dateStr: string | undefined) => {
+  if (!dateStr) return 0;
+  try {
+    return new Date(dateStr).getTime();
+  } catch (e) {
+    console.warn('Invalid date string:', dateStr);
+    return 0;
+  }
+};
+
 const Feed = () => {
   const dispatch = useDispatch();
   const { walletAddress } = useWallet();
@@ -247,30 +258,36 @@ const Feed = () => {
     feed.filter(post => user.following?.includes(post.authorWallet)) : 
     feed;
     
-  // Create a new sorted array without mutating the original
-  const getSortedFeed = () => {
+  // Replace the getSortedFeed function with this improved version
+  // that has better null handling
+  const getSortedFeed = (posts: Post[]) => {
     // First ensure feed exists and has items
-    if (!filteredFeed || filteredFeed.length === 0) {
+    if (!posts || !Array.isArray(posts) || posts.length === 0) {
       return [];
     }
     
     try {
-      // Create a new array with the spread operator to avoid mutating the original
-      return [...filteredFeed].sort((a, b) => {
-        // Safely handle potentially invalid dates
-        const dateA = new Date(a.createdAt || 0).getTime();
-        const dateB = new Date(b.createdAt || 0).getTime();
+      // Make a defensive copy to avoid modifying the original
+      const safePosts = [...posts].filter(post => 
+        // Filter out any potentially invalid posts
+        post && typeof post === 'object' && post.id
+      );
+      
+      return safePosts.sort((a, b) => {
+        // Extra safe date comparison
+        const dateA = getSafeDate(a.createdAt);
+        const dateB = getSafeDate(b.createdAt);
         return dateB - dateA;
       });
     } catch (error) {
       console.error('Error sorting feed:', error);
-      // Return unsorted feed as fallback
-      return filteredFeed;
+      // Return the original posts as fallback
+      return posts;
     }
   };
   
   // Get the sorted feed
-  const sortedFeed = getSortedFeed();
+  const sortedFeed = getSortedFeed(filteredFeed);
   
   return (
     <div className="feed-container border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
@@ -428,22 +445,24 @@ const Feed = () => {
         </div>
       ) : (
         <div>
-          {sortedFeed.map((post) => (
-            <div 
-              key={post.id}
-              className={`border-b border-gray-200 dark:border-gray-700 ${
-                hoverPost === post.id ? 'bg-gray-50 dark:bg-gray-800/50' : ''
-              } transition-colors`}
-              onMouseEnter={() => setHoverPost(post.id)}
-              onMouseLeave={() => setHoverPost(null)}
-            >
-              <PostCard
-                post={post}
-                comments={getPostComments(post.id)}
-                onShare={() => handleSharePost(post.id)}
-                onFollow={() => post.authorWallet && handleFollowUser(post.authorWallet, post.authorUsername || '')}
-              />
-            </div>
+          {sortedFeed && Array.isArray(sortedFeed) && sortedFeed.map((post) => (
+            post && post.id ? (
+              <div 
+                key={post.id}
+                className={`border-b border-gray-200 dark:border-gray-700 ${
+                  hoverPost === post.id ? 'bg-gray-50 dark:bg-gray-800/50' : ''
+                } transition-colors`}
+                onMouseEnter={() => setHoverPost(post.id)}
+                onMouseLeave={() => setHoverPost(null)}
+              >
+                <PostCard
+                  post={post}
+                  comments={getPostComments(post.id)}
+                  onShare={() => handleSharePost(post.id)}
+                  onFollow={() => post.authorWallet && handleFollowUser(post.authorWallet, post.authorUsername || '')}
+                />
+              </div>
+            ) : null
           ))}
         </div>
       )}

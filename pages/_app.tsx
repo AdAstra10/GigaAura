@@ -8,7 +8,20 @@ import { DarkModeProvider } from '../contexts/DarkModeContext';
 import { loadWalletPoints } from '../lib/slices/auraPointsSlice';
 import { updateProfile } from '../lib/slices/userSlice';
 import '../styles/globals.css';
-import Router from 'next/router';
+import Router, { useRouter } from 'next/router';
+
+// Add this helper function near the top of the file
+function safeToString(value: any): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  try {
+    return String(value);
+  } catch (e) {
+    console.warn('Failed to convert value to string:', e);
+    return '';
+  }
+}
 
 // Error boundary component to catch React errors
 const ErrorFallback = ({ error }: { error: Error }) => {
@@ -105,79 +118,74 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
 };
 
 function MyApp({ Component, pageProps }: AppProps) {
-  // Global error handling
+  const router = useRouter();
   const [hasError, setHasError] = useState(false);
   
-  // This prevents toString errors from crashing the app
-  const fixEthereumConflicts = () => {
-    // Ensure window.ethereum is always either null or a valid object but never undefined
-    try {
-      if (typeof window !== 'undefined') {
-        Object.defineProperty(window, 'ethereum', {
-          value: null,
-          writable: false,
-          configurable: false
-        });
-      }
-    } catch (e) {
-      console.warn('Error setting up ethereum property protection', e);
-    }
-  };
-  
+  // Global error handler for toString and other critical errors
   useEffect(() => {
-    // Fix ethereum conflicts when app loads
-    fixEthereumConflicts();
+    const originalToString = Object.prototype.toString;
     
-    // Add global error handler
-    const handleError = (event: ErrorEvent) => {
-      // Check if it's a toString error or ethereum related
-      if (event.error && 
-          (event.error.message?.includes('toString') || 
-           event.error.message?.includes('ethereum') ||
-           event.error.message?.includes('Cannot read properties of null'))) {
-        
-        console.error('Global error caught:', event.error);
-        setHasError(true);
-        
-        // Redirect to home page if on root
-        if (window.location.pathname === '/') {
-          Router.replace('/home');
+    // Safe toString that handles nulls
+    Object.prototype.toString = function() {
+      try {
+        // If this is null/undefined, return a safe value instead of throwing
+        if (this === null || this === undefined) {
+          console.warn('Prevented toString() call on null/undefined');
+          return '[object SafeNull]';
         }
-        
-        // Prevent default error handling
-        event.preventDefault();
+        return originalToString.call(this);
+      } catch (e) {
+        console.warn('Protected toString error:', e);
+        return '[object Protected]';
       }
     };
-    
+
+    // Protect against React state errors
+    const handleError = (event: ErrorEvent) => {
+      if (event.error && event.error.message && 
+          (event.error.message.includes("toString") || 
+           event.error.message.includes("Cannot read properties of null") ||
+           event.error.message.includes("Minified React error #423"))) {
+        
+        console.warn('Caught critical React error, redirecting to safety');
+        event.preventDefault();
+        setHasError(true);
+        
+        // Only redirect if not already on the error page
+        if (router.pathname !== '/error' && router.pathname !== '/home') {
+          router.push('/home');
+        }
+      }
+    };
+
     window.addEventListener('error', handleError);
     
-    // Catch unhandled promise rejections
-    const handleRejection = (event: PromiseRejectionEvent) => {
-      console.error('Unhandled promise rejection:', event.reason);
-      // Only redirect if it's a known wallet error
-      if (event.reason?.message && 
-          (event.reason.message.includes('ethereum') || 
-           event.reason.message.includes('wallet') ||
-           event.reason.message.includes('toString'))) {
-        setHasError(true);
-        // Redirect to home page if on root
-        if (window.location.pathname === '/') {
-          Router.replace('/home');
-        }
-      }
-      event.preventDefault();
-    };
-    
-    window.addEventListener('unhandledrejection', handleRejection);
-    
     return () => {
+      // Restore original toString when component unmounts
+      Object.prototype.toString = originalToString;
       window.removeEventListener('error', handleError);
-      window.removeEventListener('unhandledrejection', handleRejection);
     };
-  }, []);
-  
+  }, [router]);
+
+  // If we have an error, show error view
   if (hasError) {
-    return <ErrorFallback error={new Error('Application crashed')} />;
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-100 dark:bg-gray-900">
+        <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+          <h1 className="text-2xl font-bold text-red-500 mb-4">Something went wrong</h1>
+          <p className="mb-4 text-gray-700 dark:text-gray-300">The application encountered an error.</p>
+          <button 
+            onClick={() => {
+              setHasError(false);
+              router.push('/home');
+            }}
+            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+          >
+            Go to Home
+          </button>
+        </div>
+      </div>
+    );
   }
   
   return (
