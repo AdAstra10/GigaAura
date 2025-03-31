@@ -175,15 +175,33 @@ export const postsSlice = createSlice({
     },
     // New action to load data from cache
     loadFromCache: (state) => {
-      const cachedFeed = getCachedFeed();
-      const cachedUserPosts = getCachedUserPosts();
-      
-      if (cachedFeed) {
-        state.feed = cachedFeed;
-      }
-      
-      if (cachedUserPosts) {
-        state.userPosts = cachedUserPosts;
+      try {
+        // Get cached data with safety checks
+        const cachedFeed = getCachedFeed();
+        const cachedUserPosts = getCachedUserPosts();
+        
+        // Only set feed if valid array
+        if (cachedFeed && Array.isArray(cachedFeed)) {
+          // Additional safety: filter out any invalid posts
+          const validPosts = cachedFeed.filter(post => 
+            post && typeof post === 'object' && post.id
+          );
+          
+          state.feed = validPosts;
+        }
+        
+        // Only set user posts if valid array
+        if (cachedUserPosts && Array.isArray(cachedUserPosts)) {
+          // Additional safety: filter out any invalid posts
+          const validUserPosts = cachedUserPosts.filter(post => 
+            post && typeof post === 'object' && post.id
+          );
+          
+          state.userPosts = validUserPosts;
+        }
+      } catch (error) {
+        console.error('Error loading from cache:', error);
+        // If there's an error, don't modify state
       }
     },
   },

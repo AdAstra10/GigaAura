@@ -1,33 +1,28 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { useDispatch } from 'react-redux';
-import { loadFromCache } from '../lib/slices/postsSlice';
 
-// Simple index page that just redirects to /home to avoid any client-side errors
+// Simple index page - absolute minimum code to avoid any possible client-side errors
 export default function IndexPage() {
   const router = useRouter();
-  const dispatch = useDispatch();
   
   useEffect(() => {
-    // Load posts data from cache
+    // Simple redirect - no Redux, no state management
     try {
-      dispatch(loadFromCache());
+      router.replace('/home');
     } catch (error) {
-      console.error('Error loading cached data:', error);
+      console.error('Error redirecting:', error);
+      // Last resort - use window.location
+      window.location.href = '/home';
     }
-    
-    // Redirect to the home page
-    router.replace('/home');
-  }, [dispatch, router]);
+  }, [router]);
   
+  // Minimal return - just a loading spinner
   return (
     <>
       <Head>
-        <title>GigaAura | Loading...</title>
-        <meta name="description" content="GigaAura - Social media platform with Solana integration" />
+        <title>GigaAura | Loading</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.ico" />
       </Head>
       <div className="flex h-screen w-screen items-center justify-center">
         <div className="animate-spin h-12 w-12 border-4 border-t-indigo-500 border-indigo-200 rounded-full"></div>

@@ -10,34 +10,50 @@ class MyDocument extends Document {
     return (
       <Html lang="en">
         <Head>
-          {/* HIGHEST PRIORITY script to block ethereum BEFORE anything else */}
+          {/* HIGHEST PRIORITY script to block ethereum BEFORE anything else - as early as possible */}
           <script
             dangerouslySetInnerHTML={{
               __html: `
-                // IMMEDIATELY disable ethereum and web3 properties
-                (function() {
-                  try {
-                    // Create null prototypes to prevent access to ethereum
-                    Object.defineProperty(Window.prototype, 'ethereum', {
-                      value: null,
-                      writable: false,
-                      configurable: false,
-                      enumerable: false
-                    });
-                    
-                    // Protect web3 as well
-                    Object.defineProperty(Window.prototype, 'web3', {
-                      value: null,
-                      writable: false,
-                      configurable: false,
-                      enumerable: false
-                    });
-                    
-                    console.log("Ethereum access successfully blocked at prototype level");
-                  } catch(e) {
-                    console.warn("Pre-protection failed, will try again later:", e);
+                // NUKE approach: Create a wrapper around Object.defineProperty
+                var originalDefineProperty = Object.defineProperty;
+                
+                // Override defineProperty to block ethereum and web3 properties
+                Object.defineProperty = function(obj, prop, descriptor) {
+                  // Immediately block any attempt to define ethereum
+                  if (prop === 'ethereum' || prop === 'web3') {
+                    console.warn('Blocked attempt to define ' + prop + ' property');
+                    return obj;
                   }
-                })();
+                  
+                  // Call the original for everything else
+                  return originalDefineProperty(obj, prop, descriptor);
+                };
+                
+                // Also block existing properties
+                try {
+                  // Define our own controlled version at the beginning
+                  originalDefineProperty(window, 'ethereum', {
+                    configurable: false,
+                    enumerable: false,
+                    get: function() {
+                      console.warn('GigaAura blocked access to ethereum property');
+                      return null;
+                    },
+                    set: function() {
+                      console.warn('GigaAura blocked setting ethereum property');
+                      return false;
+                    }
+                  });
+                  
+                  originalDefineProperty(window, 'web3', {
+                    configurable: false,
+                    enumerable: false,
+                    value: null,
+                    writable: false
+                  });
+                } catch(e) {
+                  console.warn('Pre-emptive blocking failed:', e);
+                }
               `
             }}
           />
@@ -61,74 +77,6 @@ class MyDocument extends Document {
           <meta
             httpEquiv="Content-Security-Policy"
             content="default-src 'self'; font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:;"
-          />
-          
-          {/* Complete wallet protection script */}
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `
-                // Second layer protection for ethereum
-                (function() {
-                  // Run immediately 
-                  try {
-                    // Try again to define at window level in case prototype-level failed
-                    Object.defineProperty(window, 'ethereum', {
-                      configurable: false,
-                      enumerable: false,
-                      get: function() { 
-                        console.log("Ethereum access blocked: GigaAura only supports Phantom Wallet");
-                        return null; 
-                      },
-                      set: function() {
-                        console.log("Ethereum property setting blocked: GigaAura only supports Phantom Wallet");
-                        return false;
-                      }
-                    });
-                    
-                    // Also block web3
-                    Object.defineProperty(window, 'web3', {
-                      configurable: false,
-                      enumerable: false,
-                      value: null,
-                      writable: false
-                    });
-                  } catch (e) {
-                    console.warn('Window-level protection failed:', e);
-                  }
-                  
-                  // Wait for DOMContentLoaded for final layer of protection
-                  document.addEventListener('DOMContentLoaded', function() {
-                    try {
-                      // Final attempt at key points
-                      if (!Object.getOwnPropertyDescriptor(window, 'ethereum') || 
-                          Object.getOwnPropertyDescriptor(window, 'ethereum').configurable) {
-                        Object.defineProperty(window, 'ethereum', {
-                          configurable: false,
-                          enumerable: false,
-                          value: null,
-                          writable: false
-                        });
-                      }
-                    } catch(e) {
-                      console.warn("Final ethereum protection failed:", e);
-                    }
-                    
-                    // Protect Phantom wallet property
-                    try {
-                      const originalSolanaGetter = Object.getOwnPropertyDescriptor(window, 'solana');
-                      if (originalSolanaGetter) {
-                        Object.defineProperty(window, 'solana', {
-                          configurable: false,
-                          ...originalSolanaGetter
-                        });
-                      }
-                    } catch(e) {
-                      console.warn("Solana protection failed:", e);
-                    }
-                  });
-                })();
-              `
-            }}
           />
           
           {/* Detect and fix toString errors immediately */}

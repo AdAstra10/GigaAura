@@ -32,6 +32,39 @@ const getSafeDate = (dateStr: string | undefined) => {
   }
 };
 
+// Add this robust fallback error boundary component inside the Feed.tsx file
+const FeedErrorBoundary = ({ children }: { children: React.ReactNode }) => {
+  const [hasError, setHasError] = useState(false);
+  
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      console.error("Feed caught error:", event.error);
+      setHasError(true);
+      event.preventDefault();
+    };
+    
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
+  }, []);
+  
+  if (hasError) {
+    return (
+      <div className="p-6 border border-red-200 rounded-lg bg-red-50 dark:bg-red-900/20 dark:border-red-800">
+        <h3 className="text-lg font-bold text-red-800 dark:text-red-200 mb-2">Something went wrong</h3>
+        <p className="text-red-600 dark:text-red-300 mb-4">There was an error loading your feed. We're working on fixing it.</p>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+        >
+          Refresh Page
+        </button>
+      </div>
+    );
+  }
+  
+  return <>{children}</>;
+};
+
 const Feed = () => {
   const dispatch = useDispatch();
   const { walletAddress } = useWallet();
@@ -290,183 +323,185 @@ const Feed = () => {
   const sortedFeed = getSortedFeed(filteredFeed);
   
   return (
-    <div className="feed-container border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-      {/* Tabs */}
-      <div className="flex border-b border-gray-200 dark:border-gray-700">
-        <button 
-          className={`flex-1 py-4 text-center font-bold text-lg relative ${
-            activeTab === 'for-you' 
-              ? 'text-black dark:text-white' 
-              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-          }`}
-          onClick={() => setActiveTab('for-you')}
-        >
-          For you
-          {activeTab === 'for-you' && (
-            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-1 bg-primary rounded-full"></div>
-          )}
-        </button>
-        <button 
-          className={`flex-1 py-4 text-center font-bold text-lg relative ${
-            activeTab === 'following' 
-              ? 'text-black dark:text-white' 
-              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-          }`}
-          onClick={() => setActiveTab('following')}
-        >
-          Following
-          {activeTab === 'following' && (
-            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-1 bg-primary rounded-full"></div>
-          )}
-        </button>
-      </div>
+    <FeedErrorBoundary>
+      <div className="feed-container border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+        {/* Tabs */}
+        <div className="flex border-b border-gray-200 dark:border-gray-700">
+          <button 
+            className={`flex-1 py-4 text-center font-bold text-lg relative ${
+              activeTab === 'for-you' 
+                ? 'text-black dark:text-white' 
+                : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+            }`}
+            onClick={() => setActiveTab('for-you')}
+          >
+            For you
+            {activeTab === 'for-you' && (
+              <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-1 bg-primary rounded-full"></div>
+            )}
+          </button>
+          <button 
+            className={`flex-1 py-4 text-center font-bold text-lg relative ${
+              activeTab === 'following' 
+                ? 'text-black dark:text-white' 
+                : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+            }`}
+            onClick={() => setActiveTab('following')}
+          >
+            Following
+            {activeTab === 'following' && (
+              <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-1 bg-primary rounded-full"></div>
+            )}
+          </button>
+        </div>
 
-      {/* Create Post */}
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex space-x-4">
-          <div className="flex-shrink-0">
-            <div className="h-10 w-10 rounded-full overflow-hidden bg-primary">
-              {user.avatar ? (
-                <img
-                  src={user.avatar}
-                  alt={user.username || 'User'}
-                  className="h-10 w-10 object-cover"
-                />
-              ) : (
-                <div className="h-10 w-10 flex items-center justify-center text-white">
-                  {user.username
-                    ? user.username.charAt(0).toUpperCase()
-                    : walletAddress?.substring(0, 2)}
+        {/* Create Post */}
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex space-x-4">
+            <div className="flex-shrink-0">
+              <div className="h-10 w-10 rounded-full overflow-hidden bg-primary">
+                {user.avatar ? (
+                  <img
+                    src={user.avatar}
+                    alt={user.username || 'User'}
+                    className="h-10 w-10 object-cover"
+                  />
+                ) : (
+                  <div className="h-10 w-10 flex items-center justify-center text-white">
+                    {user.username
+                      ? user.username.charAt(0).toUpperCase()
+                      : walletAddress?.substring(0, 2)}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex-1">
+              <textarea
+                ref={textareaRef}
+                className={`w-full p-2 text-lg border-none focus:outline-none focus:ring-0 resize-none ${
+                  isDarkMode
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-white text-gray-900'
+                }`}
+                placeholder="What's happening?"
+                rows={2}
+                value={newPostContent}
+                onChange={(e) => setNewPostContent(e.target.value)}
+                maxLength={280}
+              />
+
+              {selectedFilePreview && (
+                <div className="mt-2 relative rounded-2xl overflow-hidden">
+                  {selectedFileType === 'image' ? (
+                    <img src={selectedFilePreview} alt="Selected" className="w-full h-auto rounded-2xl" />
+                  ) : (
+                    <video src={selectedFilePreview} controls className="w-full rounded-2xl"></video>
+                  )}
+                  <button
+                    onClick={() => {
+                      setSelectedFile(null);
+                      setSelectedFilePreview(null);
+                      setSelectedFileType(undefined);
+                    }}
+                    className="absolute top-2 right-2 bg-black/50 text-white p-1 rounded-full"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              <div className="mt-3 flex items-center justify-between">
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-2 text-primary rounded-full hover:bg-primary/10 transition-colors"
+                  >
+                    <FaImage />
+                  </button>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept="image/*,video/*"
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    className="p-2 text-primary rounded-full hover:bg-primary/10 transition-colors"
+                  >
+                    <FaSmile />
+                  </button>
+                  <button
+                    className="p-2 text-primary rounded-full hover:bg-primary/10 transition-colors"
+                  >
+                    <FaCalendarAlt />
+                  </button>
+                  <button
+                    className="p-2 text-primary rounded-full hover:bg-primary/10 transition-colors"
+                  >
+                    <FaMapMarkerAlt />
+                  </button>
+                </div>
+                <button
+                  onClick={handleCreatePost}
+                  disabled={(!newPostContent.trim() && !selectedFile) || isSubmitting}
+                  className={`px-4 py-1.5 rounded-full font-bold ${
+                    !newPostContent.trim() && !selectedFile
+                      ? 'bg-primary/50 text-white cursor-not-allowed'
+                      : 'bg-primary text-white hover:bg-primary/90'
+                  } transition-colors`}
+                >
+                  {isSubmitting ? 'Posting...' : 'Post'}
+                </button>
+              </div>
+
+              {showEmojiPicker && (
+                <div className="absolute z-10 mt-2">
+                  <EmojiPicker onEmojiClick={handleEmojiClick} />
                 </div>
               )}
             </div>
           </div>
-          <div className="flex-1">
-            <textarea
-              ref={textareaRef}
-              className={`w-full p-2 text-lg border-none focus:outline-none focus:ring-0 resize-none ${
-                isDarkMode
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-white text-gray-900'
-              }`}
-              placeholder="What's happening?"
-              rows={2}
-              value={newPostContent}
-              onChange={(e) => setNewPostContent(e.target.value)}
-              maxLength={280}
-            />
+        </div>
 
-            {selectedFilePreview && (
-              <div className="mt-2 relative rounded-2xl overflow-hidden">
-                {selectedFileType === 'image' ? (
-                  <img src={selectedFilePreview} alt="Selected" className="w-full h-auto rounded-2xl" />
-                ) : (
-                  <video src={selectedFilePreview} controls className="w-full rounded-2xl"></video>
-                )}
-                <button
-                  onClick={() => {
-                    setSelectedFile(null);
-                    setSelectedFilePreview(null);
-                    setSelectedFileType(undefined);
-                  }}
-                  className="absolute top-2 right-2 bg-black/50 text-white p-1 rounded-full"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-
-            <div className="mt-3 flex items-center justify-between">
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-2 text-primary rounded-full hover:bg-primary/10 transition-colors"
-                >
-                  <FaImage />
-                </button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept="image/*,video/*"
-                  className="hidden"
-                />
-                <button
-                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                  className="p-2 text-primary rounded-full hover:bg-primary/10 transition-colors"
-                >
-                  <FaSmile />
-                </button>
-                <button
-                  className="p-2 text-primary rounded-full hover:bg-primary/10 transition-colors"
-                >
-                  <FaCalendarAlt />
-                </button>
-                <button
-                  className="p-2 text-primary rounded-full hover:bg-primary/10 transition-colors"
-                >
-                  <FaMapMarkerAlt />
-                </button>
-              </div>
-              <button
-                onClick={handleCreatePost}
-                disabled={(!newPostContent.trim() && !selectedFile) || isSubmitting}
-                className={`px-4 py-1.5 rounded-full font-bold ${
-                  !newPostContent.trim() && !selectedFile
-                    ? 'bg-primary/50 text-white cursor-not-allowed'
-                    : 'bg-primary text-white hover:bg-primary/90'
-                } transition-colors`}
-              >
-                {isSubmitting ? 'Posting...' : 'Post'}
-              </button>
-            </div>
-
-            {showEmojiPicker && (
-              <div className="absolute z-10 mt-2">
-                <EmojiPicker onEmojiClick={handleEmojiClick} />
-              </div>
-            )}
+        {/* Feed */}
+        {isLoading ? (
+          <div className="flex justify-center p-6">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
           </div>
-        </div>
+        ) : filteredFeed.length === 0 ? (
+          <div className="p-6 text-center">
+            <p className="text-gray-500 dark:text-gray-400">
+              {activeTab === 'following'
+                ? "You're not following anyone yet, or they haven't posted anything."
+                : "No posts yet. Be the first to post!"}
+            </p>
+          </div>
+        ) : (
+          <div>
+            {sortedFeed && Array.isArray(sortedFeed) && sortedFeed.map((post) => (
+              post && post.id ? (
+                <div 
+                  key={post.id}
+                  className={`border-b border-gray-200 dark:border-gray-700 ${
+                    hoverPost === post.id ? 'bg-gray-50 dark:bg-gray-800/50' : ''
+                  } transition-colors`}
+                  onMouseEnter={() => setHoverPost(post.id)}
+                  onMouseLeave={() => setHoverPost(null)}
+                >
+                  <PostCard
+                    post={post}
+                    comments={getPostComments(post.id)}
+                    onShare={() => handleSharePost(post.id)}
+                    onFollow={() => post.authorWallet && handleFollowUser(post.authorWallet, post.authorUsername || '')}
+                  />
+                </div>
+              ) : null
+            ))}
+          </div>
+        )}
       </div>
-
-      {/* Feed */}
-      {isLoading ? (
-        <div className="flex justify-center p-6">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
-        </div>
-      ) : filteredFeed.length === 0 ? (
-        <div className="p-6 text-center">
-          <p className="text-gray-500 dark:text-gray-400">
-            {activeTab === 'following'
-              ? "You're not following anyone yet, or they haven't posted anything."
-              : "No posts yet. Be the first to post!"}
-          </p>
-        </div>
-      ) : (
-        <div>
-          {sortedFeed && Array.isArray(sortedFeed) && sortedFeed.map((post) => (
-            post && post.id ? (
-              <div 
-                key={post.id}
-                className={`border-b border-gray-200 dark:border-gray-700 ${
-                  hoverPost === post.id ? 'bg-gray-50 dark:bg-gray-800/50' : ''
-                } transition-colors`}
-                onMouseEnter={() => setHoverPost(post.id)}
-                onMouseLeave={() => setHoverPost(null)}
-              >
-                <PostCard
-                  post={post}
-                  comments={getPostComments(post.id)}
-                  onShare={() => handleSharePost(post.id)}
-                  onFollow={() => post.authorWallet && handleFollowUser(post.authorWallet, post.authorUsername || '')}
-                />
-              </div>
-            ) : null
-          ))}
-        </div>
-      )}
-    </div>
+    </FeedErrorBoundary>
   );
 };
 
