@@ -1,22 +1,16 @@
 import { useEffect, useState } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { useRouter } from 'next/router';
-import { RootState } from '../lib/store';
-import { addPost, loadFromCache } from '../lib/slices/postsSlice';
-import { addTransaction } from '../lib/slices/auraPointsSlice';
-import { useWallet } from '../contexts/WalletContext';
 import Head from 'next/head';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
 import AuraSidebar from '../components/AuraSidebar';
-import { FaHome } from 'react-icons/fa';
+import { FaHome, FaSpinner } from 'react-icons/fa';
 
-// Simple static feed component instead of dynamic import
-const SimpleFeed = () => {
+// Ultra simple home page that works without wallet connections or redux
+const HomePage = () => {
   const [isLoading, setIsLoading] = useState(true);
   
   useEffect(() => {
-    // Simple timeout to simulate loading
+    // Simulate loading with a simple timeout
     const timer = setTimeout(() => {
       setIsLoading(false);
     }, 1000);
@@ -24,45 +18,81 @@ const SimpleFeed = () => {
     return () => clearTimeout(timer);
   }, []);
   
-  if (isLoading) {
+  // Simple feed display component with no dependencies
+  const StaticFeed = () => {
+    if (isLoading) {
+      return (
+        <div className="w-full border border-gray-200 dark:border-gray-700 rounded-lg h-64 flex items-center justify-center">
+          <FaSpinner className="animate-spin h-8 w-8 text-indigo-500" />
+        </div>
+      );
+    }
+    
     return (
-      <div className="w-full border border-gray-200 dark:border-gray-700 rounded-lg h-64 flex items-center justify-center">
-        <div className="animate-spin h-12 w-12 border-4 border-t-indigo-500 border-indigo-200 rounded-full"></div>
-      </div>
-    );
-  }
-  
-  // Simple static content without any dynamic data
-  return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center space-x-2 justify-center">
-          <FaHome className="text-indigo-500" />
-          <h2 className="text-xl font-bold">Welcome to GigaAura</h2>
+      <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center space-x-2 justify-center">
+            <FaHome className="text-indigo-500" />
+            <h2 className="text-xl font-bold">Welcome to GigaAura</h2>
+          </div>
+        </div>
+        
+        <div className="p-6">
+          <div className="mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+            <div className="flex items-center mb-3">
+              <div className="h-10 w-10 rounded-full bg-indigo-500 flex items-center justify-center text-white mr-3">
+                F
+              </div>
+              <div>
+                <p className="font-bold">Founder</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">2 hours ago</p>
+              </div>
+            </div>
+            <p className="mb-3">Welcome to GigaAura! We're working on making this platform the best it can be.</p>
+            <div className="flex space-x-4 text-gray-500 dark:text-gray-400">
+              <button className="flex items-center">
+                <span className="mr-1">❤️</span> Like
+              </button>
+              <button className="flex items-center">
+                <span className="mr-1">💬</span> Comment
+              </button>
+              <button className="flex items-center">
+                <span className="mr-1">🔄</span> Share
+              </button>
+            </div>
+          </div>
+          
+          <div className="mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+            <div className="flex items-center mb-3">
+              <div className="h-10 w-10 rounded-full bg-purple-500 flex items-center justify-center text-white mr-3">
+                G
+              </div>
+              <div>
+                <p className="font-bold">GigaAura Team</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">1 day ago</p>
+              </div>
+            </div>
+            <p className="mb-3">We're excited to see what you'll create with GigaAura! Share your thoughts and ideas.</p>
+            <div className="flex space-x-4 text-gray-500 dark:text-gray-400">
+              <button className="flex items-center">
+                <span className="mr-1">❤️</span> Like
+              </button>
+              <button className="flex items-center">
+                <span className="mr-1">💬</span> Comment
+              </button>
+              <button className="flex items-center">
+                <span className="mr-1">🔄</span> Share
+              </button>
+            </div>
+          </div>
+          
+          <p className="text-center text-gray-500 dark:text-gray-400 mt-4">
+            No more posts to show at this time.
+          </p>
         </div>
       </div>
-      
-      <div className="p-6 text-center">
-        <p className="text-gray-600 dark:text-gray-300 mb-4">
-          Your feed is currently being updated with the latest posts.
-        </p>
-        <p className="text-gray-500 dark:text-gray-400 mb-6">
-          Thank you for your patience while we improve your experience.
-        </p>
-        <button 
-          onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-        >
-          Refresh Page
-        </button>
-      </div>
-    </div>
-  );
-};
-
-const HomePage = () => {
-  const dispatch = useDispatch();
-  const router = useRouter();
+    );
+  };
   
   return (
     <>
@@ -80,7 +110,7 @@ const HomePage = () => {
         </div>
         
         <div className="col-span-1 md:col-span-6 content-column">
-          <SimpleFeed />
+          <StaticFeed />
         </div>
         
         <div className="hidden md:block md:col-span-3">
