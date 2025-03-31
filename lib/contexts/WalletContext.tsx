@@ -57,14 +57,24 @@ const safeGetAddress = (publicKey: any): string | null => {
   }
 };
 
+// Basic interface for the phantom wallet
+interface PhantomWallet {
+  publicKey: { toString: () => string } | null;
+  signMessage?: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
+  isPhantom?: boolean;
+  connect: (options?: { onlyIfTrusted?: boolean }) => Promise<{ publicKey: any }>;
+  disconnect: () => Promise<void>;
+}
+
 // Add this helper function to get the provider
 const getProvider = () => {
   try {
-    const windowObj = window as WindowWithSolana;
-    if (windowObj.solana?.isPhantom) {
-      return windowObj.solana;
-    } else if (windowObj.phantom?.solana?.isPhantom) {
-      return windowObj.phantom.solana;
+    if (typeof window === 'undefined') return null;
+    
+    if (window.solana?.isPhantom) {
+      return window.solana;
+    } else if (window.phantom?.solana?.isPhantom) {
+      return window.phantom.solana;
     }
     return null;
   } catch (err) {
@@ -72,23 +82,6 @@ const getProvider = () => {
     return null;
   }
 };
-
-// Extended Window interface to include Solana and Phantom
-interface WindowWithSolana extends Window {
-  solana?: PhantomWallet;
-  phantom?: {
-    solana?: PhantomWallet;
-  };
-}
-
-// Basic interface for the phantom wallet
-interface PhantomWallet {
-  publicKey: { toString: () => string } | null;
-  signMessage?: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
-  isPhantom?: boolean;
-  connect: (options?: { onlyIfTrusted: boolean }) => Promise<{ publicKey: { toString: () => string } }>;
-  disconnect: () => Promise<void>;
-}
 
 interface WalletProviderProps {
   children: ReactNode;
@@ -162,7 +155,9 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       }
     };
 
-    checkWalletConnection();
+    if (typeof window !== 'undefined') {
+      checkWalletConnection();
+    }
   }, []);
 
   // Load Aura Points from localStorage or initialize to default value
@@ -206,7 +201,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
           throw new Error('Could not extract wallet address');
         }
       } catch (error: any) {
-        if (error.message.includes('User rejected')) {
+        if (error.message && error.message.includes('User rejected')) {
           toast.error('Connection rejected by user.');
         } else {
           toast.error('Error connecting to wallet. Please try again.');
@@ -254,11 +249,9 @@ export const useWallet = () => useContext(WalletContext);
 // Add phantom property to Window interface
 declare global {
   interface Window {
+    solana?: PhantomWallet;
     phantom?: {
-      solana?: {
-        connect: (options?: { onlyIfTrusted?: boolean }) => Promise<{ publicKey: any }>;
-        disconnect: () => Promise<void>;
-      };
+      solana?: PhantomWallet;
     };
   }
 }
