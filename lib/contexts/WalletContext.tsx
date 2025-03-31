@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useDispatch } from 'react-redux';
-import { setWalletAddress, logout, setUser } from '../lib/slices/userSlice';
-import { loadWalletPoints } from '../lib/slices/auraPointsSlice';
+import { setWalletAddress, logout, setUser } from '../../lib/slices/userSlice';
+import { loadWalletPoints } from '../../lib/slices/auraPointsSlice';
 import { toast } from 'react-hot-toast';
+import { AppDispatch } from '../../lib/store';
 
 // Base interface to ensure we have proper typing
 interface WalletContextType {
@@ -73,6 +74,15 @@ const getProvider = () => {
   }
 };
 
+// Basic interface for the phantom wallet
+interface PhantomWallet {
+  publicKey: { toString: () => string } | null;
+  signMessage?: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
+  isPhantom?: boolean;
+  connect: (options?: { onlyIfTrusted?: boolean }) => Promise<{ publicKey: { toString: () => string } }>;
+  disconnect: () => Promise<void>;
+}
+
 // Extended Window interface to include Solana and Phantom
 interface WindowWithSolana extends Window {
   solana?: PhantomWallet;
@@ -81,25 +91,16 @@ interface WindowWithSolana extends Window {
   };
 }
 
-// Basic interface for the phantom wallet
-interface PhantomWallet {
-  publicKey: { toString: () => string } | null;
-  signMessage?: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
-  isPhantom?: boolean;
-  connect: (options?: { onlyIfTrusted: boolean }) => Promise<{ publicKey: { toString: () => string } }>;
-  disconnect: () => Promise<void>;
-}
-
 interface WalletProviderProps {
   children: ReactNode;
 }
 
 export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
-  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [walletAddress, setWalletState] = useState<string | null>(null);
   const [connected, setConnected] = useState<boolean>(false);
   const [connecting, setConnecting] = useState<boolean>(false);
 
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
 
   // Load user profile data from localStorage based on wallet address
   const loadUserProfileData = (address: string) => {
@@ -145,7 +146,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
             const address = safeGetAddress(response.publicKey);
             
             if (address) {
-              setWalletAddress(address);
+              setWalletState(address);
               setConnected(true);
               dispatch(setWalletAddress(address));
               loadWalletAuraPoints(address);
@@ -196,7 +197,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         const address = safeGetAddress(response.publicKey);
         
         if (address) {
-          setWalletAddress(address);
+          setWalletState(address);
           setConnected(true);
           dispatch(setWalletAddress(address));
           loadWalletAuraPoints(address);
@@ -225,7 +226,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const disconnectWallet = () => {
     try {
       window.phantom?.solana?.disconnect();
-      setWalletAddress(null);
+      setWalletState(null);
       setConnected(false);
       dispatch(logout());
       toast.success('Wallet disconnected.');
@@ -255,10 +256,7 @@ export const useWallet = () => useContext(WalletContext);
 declare global {
   interface Window {
     phantom?: {
-      solana?: {
-        connect: (options?: { onlyIfTrusted?: boolean }) => Promise<{ publicKey: any }>;
-        disconnect: () => Promise<void>;
-      };
+      solana?: PhantomWallet;
     };
   }
 }

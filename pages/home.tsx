@@ -50,7 +50,7 @@ const Feed = dynamic(() => import('../components/Feed').catch(err => {
 const HomePage = () => {
   const dispatch = useDispatch();
   const router = useRouter();
-  const { walletAddress, connectWallet, walletConnected } = useWallet();
+  const { walletAddress, connectWallet, connected } = useWallet();
   const user = useSelector((state: RootState) => state.user);
   const { feed } = useSelector((state: RootState) => state.posts);
   

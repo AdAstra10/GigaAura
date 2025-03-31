@@ -23,7 +23,7 @@ interface PostCardProps {
 const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFollow }) => {
   const dispatch = useDispatch();
   const router = useRouter();
-  const { connectWallet, walletConnected } = useWallet();
+  const { connectWallet, connected } = useWallet();
   const { walletAddress, username } = useSelector((state: RootState) => state.user as {
     walletAddress: string | null;
     username: string | null;
@@ -67,15 +67,11 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
   };
   
   const handleLike = async () => {
-    if (!walletConnected) {
-      const shouldConnect = window.confirm('You need to connect a wallet to like posts. Connect now?');
-      if (shouldConnect) {
-        try {
-          await connectWallet();
-        } catch (error) {
-          console.error('Failed to connect wallet:', error);
-          return;
-        }
+    if (!connected) {
+      const confirm = window.confirm('Please connect your wallet to like posts. Would you like to connect now?');
+      if (confirm) {
+        await connectWallet();
+        if (!connected) return;
       } else {
         return;
       }
@@ -119,15 +115,11 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
     
     if (!commentText.trim()) return;
     
-    if (!walletConnected) {
-      const shouldConnect = window.confirm('You need to connect a wallet to comment. Connect now?');
-      if (shouldConnect) {
-        try {
-          await connectWallet();
-        } catch (error) {
-          console.error('Failed to connect wallet:', error);
-          return;
-        }
+    if (!connected) {
+      const confirm = window.confirm('Please connect your wallet to comment. Would you like to connect now?');
+      if (confirm) {
+        await connectWallet();
+        if (!connected) return;
       } else {
         return;
       }

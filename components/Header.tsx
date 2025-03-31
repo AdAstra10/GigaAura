@@ -8,7 +8,7 @@ import { useDarkMode } from '../contexts/DarkModeContext';
 
 const Header = () => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
-  const { connectWallet, disconnectWallet, walletConnected, walletAddress } = useWallet();
+  const { connectWallet, disconnectWallet, connected, walletAddress } = useWallet();
   const user = useSelector((state: RootState) => state.user);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -75,7 +75,7 @@ const Header = () => {
               }
             </button>
             
-            {walletConnected ? (
+            {connected ? (
               <div className="flex items-center">
                 <Link href="/profile">
                   <div className="flex items-center cursor-pointer">
@@ -144,7 +144,7 @@ const Header = () => {
                 </div>
               </Link>
             </div>
-            {walletConnected ? (
+            {connected ? (
               <div className="flex items-center p-2">
                 <Link href="/profile">
                   <div className="flex items-center cursor-pointer">
