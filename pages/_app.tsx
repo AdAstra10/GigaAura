@@ -8,6 +8,7 @@ import { DarkModeProvider } from '../contexts/DarkModeContext';
 import { loadWalletPoints } from '../lib/slices/auraPointsSlice';
 import { updateProfile } from '../lib/slices/userSlice';
 import '../styles/globals.css';
+import Router from 'next/router';
 
 // Error boundary component to catch React errors
 const ErrorFallback = ({ error }: { error: Error }) => {
@@ -107,19 +108,71 @@ function MyApp({ Component, pageProps }: AppProps) {
   // Global error handling
   const [hasError, setHasError] = useState(false);
   
+  // This prevents toString errors from crashing the app
+  const fixEthereumConflicts = () => {
+    // Ensure window.ethereum is always either null or a valid object but never undefined
+    try {
+      if (typeof window !== 'undefined') {
+        Object.defineProperty(window, 'ethereum', {
+          value: null,
+          writable: false,
+          configurable: false
+        });
+      }
+    } catch (e) {
+      console.warn('Error setting up ethereum property protection', e);
+    }
+  };
+  
   useEffect(() => {
+    // Fix ethereum conflicts when app loads
+    fixEthereumConflicts();
+    
     // Add global error handler
     const handleError = (event: ErrorEvent) => {
-      console.error('Global error caught:', event.error);
-      setHasError(true);
-      // Prevent default error handling
-      event.preventDefault();
+      // Check if it's a toString error or ethereum related
+      if (event.error && 
+          (event.error.message?.includes('toString') || 
+           event.error.message?.includes('ethereum') ||
+           event.error.message?.includes('Cannot read properties of null'))) {
+        
+        console.error('Global error caught:', event.error);
+        setHasError(true);
+        
+        // Redirect to home page if on root
+        if (window.location.pathname === '/') {
+          Router.replace('/home');
+        }
+        
+        // Prevent default error handling
+        event.preventDefault();
+      }
     };
     
     window.addEventListener('error', handleError);
     
+    // Catch unhandled promise rejections
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      // Only redirect if it's a known wallet error
+      if (event.reason?.message && 
+          (event.reason.message.includes('ethereum') || 
+           event.reason.message.includes('wallet') ||
+           event.reason.message.includes('toString'))) {
+        setHasError(true);
+        // Redirect to home page if on root
+        if (window.location.pathname === '/') {
+          Router.replace('/home');
+        }
+      }
+      event.preventDefault();
+    };
+    
+    window.addEventListener('unhandledrejection', handleRejection);
+    
     return () => {
       window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleRejection);
     };
   }, []);
   

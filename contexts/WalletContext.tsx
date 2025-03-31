@@ -43,6 +43,21 @@ interface WalletProviderProps {
   children: ReactNode;
 }
 
+// Helper function to safely extract address from publicKey
+const safeGetAddress = (publicKey: any): string | null => {
+  try {
+    // Multiple checks to ensure we don't crash
+    if (!publicKey) return null;
+    if (typeof publicKey !== 'object') return null;
+    if (typeof publicKey.toString !== 'function') return null;
+    
+    return publicKey.toString();
+  } catch (error) {
+    console.error("Error extracting address from publicKey:", error);
+    return null;
+  }
+};
+
 export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const [walletAddress, setWalletState] = useState<string | null>(null);
   const [walletProvider, setWalletProvider] = useState<PhantomWallet | null>(null);
@@ -111,17 +126,20 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
           // Check if we're already authorized and connected
           try {
             const response = await provider.connect({ onlyIfTrusted: true });
+            
+            // Guard against null publicKey
             if (response && response.publicKey) {
-              try {
-                const address = response.publicKey.toString();
+              const address = safeGetAddress(response.publicKey);
+              
+              if (address) {
                 setWalletState(address);
                 setWalletConnected(true);
                 dispatch(setWalletAddress(address));
                 loadWalletAuraPoints(address);
                 loadUserProfileData(address); // Load profile data here
                 console.log("Auto-connected to wallet:", address);
-              } catch (error) {
-                console.error("Error converting publicKey to string:", error);
+              } else {
+                console.error("Couldn't extract address from publicKey");
               }
             }
           } catch (error) {
@@ -182,10 +200,12 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       if (provider) {
         try {
           const response = await provider.connect();
+          
+          // Guard against null publicKey with our helper function
           if (response && response.publicKey) {
-            try {
-              const address = response.publicKey.toString();
-              
+            const address = safeGetAddress(response.publicKey);
+            
+            if (address) {
               // Set wallet state and dispatch to Redux
               setWalletState(address);
               setWalletConnected(true);
@@ -196,9 +216,13 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
               loadWalletAuraPoints(address);
               loadUserProfileData(address); // Load profile data here
               console.log("Connected to wallet:", address);
-            } catch (error) {
-              console.error("Error converting publicKey to string:", error);
+            } else {
+              console.error("Couldn't extract address from publicKey");
+              alert("There was an issue connecting to your wallet. Please try again.");
             }
+          } else {
+            console.error("No publicKey in connect response");
+            alert("There was an issue connecting to your wallet. Please try again.");
           }
         } catch (error) {
           console.error("Error connecting to wallet:", error);

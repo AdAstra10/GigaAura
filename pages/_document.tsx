@@ -31,37 +31,86 @@ class MyDocument extends Document {
             content="default-src 'self'; font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:;"
           />
           
-          {/* Add script to completely block ethereum property access and handle Phantom wallet only */}
+          {/* Complete wallet protection script */}
           <script
             dangerouslySetInnerHTML={{
               __html: `
-                // Block ethereum property and focus on Phantom wallet only
                 (function() {
-                  try {
-                    // Prevent any access to ethereum property by creating a null getter
-                    // This prevents conflicts with Chrome extensions like MetaMask
-                    if (!Object.getOwnPropertyDescriptor(window, 'ethereum')) {
-                      Object.defineProperty(window, 'ethereum', {
-                        configurable: false,
-                        enumerable: false,
-                        get: function() { return null; }
-                      });
+                  // Wait for DOMContentLoaded to ensure this runs before any extensions
+                  document.addEventListener('DOMContentLoaded', function() {
+                    // Completely block all ethereum manipulations
+                    var ethereumDesc = {
+                      configurable: false,
+                      enumerable: false,
+                      get: function() { 
+                        console.log("Ethereum access blocked: GigaAura only supports Phantom Wallet");
+                        return null; 
+                      },
+                      set: function() {
+                        console.log("Ethereum property setting blocked: GigaAura only supports Phantom Wallet");
+                        return false;
+                      }
+                    };
+                    
+                    // Use a try-catch as we aggressively define the property
+                    try {
+                      // Delete any existing ethereum property first
+                      delete window.ethereum;
+                      
+                      // Then define our own that can't be overwritten
+                      Object.defineProperty(window, 'ethereum', ethereumDesc);
+                    } catch (e) {
+                      console.warn('Protected ethereum property');
                     }
                     
-                    // Store original solana if it exists
-                    const originalSolanaGetter = Object.getOwnPropertyDescriptor(window, 'solana');
+                    // Also protect window.web3
+                    try {
+                      delete window.web3;
+                      Object.defineProperty(window, 'web3', {
+                        configurable: false,
+                        enumerable: false,
+                        get: function() { return null; },
+                        set: function() { return false; }
+                      });
+                    } catch (e) {
+                      console.warn('Protected web3 property');
+                    }
                     
-                    // Protect this property from being overwritten or redefined
-                    // This will allow Phantom to set it but prevent conflicts
+                    // Protect Phantom wallet property
+                    const originalSolanaGetter = Object.getOwnPropertyDescriptor(window, 'solana');
                     if (originalSolanaGetter) {
                       Object.defineProperty(window, 'solana', {
                         configurable: false,
                         ...originalSolanaGetter
                       });
                     }
-                  } catch (e) {
-                    console.warn('Error setting up wallet protection:', e);
-                  }
+                  });
+                })();
+              `
+            }}
+          />
+          
+          {/* Detect and fix toString errors immediately */}
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                (function() {
+                  // Global error handler for toString errors
+                  window.addEventListener('error', function(event) {
+                    // Check if error is related to toString on null
+                    if (event.error && event.error.message && 
+                        (event.error.message.includes("Cannot read properties of null (reading 'toString')") ||
+                         event.error.message.includes("null is not an object (evaluating"))) {
+                      
+                      console.warn('Caught toString error, redirecting to safe page');
+                      event.preventDefault();
+                      
+                      // Redirect to /home instead of showing the error
+                      if (window.location.pathname === '/') {
+                        window.location.href = '/home';
+                      }
+                    }
+                  });
                 })();
               `
             }}
