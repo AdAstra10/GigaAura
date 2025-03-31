@@ -1,19 +1,16 @@
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useRouter } from 'next/router';
 import { RootState } from '../lib/store';
-import { addPost, loadFromCache } from '../lib/slices/postsSlice';
-import { addTransaction } from '../lib/slices/auraPointsSlice';
+import { loadFromCache } from '../lib/slices/postsSlice';
 import { useWallet } from '../contexts/WalletContext';
 import Head from 'next/head';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
-import PostCard from '../components/PostCard';
 import AuraSidebar from '../components/AuraSidebar';
-import Link from 'next/link';
-import { v4 as uuidv4 } from 'uuid';
-import toast from 'react-hot-toast';
+import { ErrorBoundary, FallbackProps } from 'react-error-boundary';
 import dynamic from 'next/dynamic';
+import { ErrorInfo } from 'react';
 
 // Loading fallback for Feed component
 const FeedLoading = () => (
@@ -23,7 +20,7 @@ const FeedLoading = () => (
 );
 
 // Error fallback component
-const ErrorFallback = () => (
+const ErrorFallback = ({ error, resetErrorBoundary }: FallbackProps) => (
   <div className="p-6 border border-red-200 rounded-lg bg-red-50 dark:bg-red-900/20 dark:border-red-800 text-center">
     <h3 className="text-lg font-medium text-red-800 dark:text-red-200 mb-2">Something went wrong</h3>
     <p className="text-red-600 dark:text-red-300 mb-4">There was an error loading the feed</p>
@@ -36,55 +33,33 @@ const ErrorFallback = () => (
   </div>
 );
 
-// Dynamically import Feed with no SSR to avoid hydration issues
-// Use a custom loading component with proper styling
-const Feed = dynamic(() => import('../components/Feed').catch(err => {
-  console.error('Failed to load Feed component:', err);
-  // Return a simple component that renders the error fallback
-  return () => <ErrorFallback />;
-}), { 
+// Use noSSR option to prevent hydration issues
+const Feed = dynamic(() => import('../components/Feed'), { 
   ssr: false,
   loading: () => <FeedLoading />
 });
 
 const HomePage = () => {
   const dispatch = useDispatch();
-  const router = useRouter();
   const { walletAddress, connectWallet, connected } = useWallet();
-  const user = useSelector((state: RootState) => state.user);
-  const { feed } = useSelector((state: RootState) => state.posts);
-  
-  const [isLoadingFeed, setIsLoadingFeed] = useState(true);
-  const [hasError, setHasError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Catch any errors that might happen during initialization
+    // Load feed from cache when component mounts
     try {
-      // Load feed from cache when component mounts
       dispatch(loadFromCache());
-      setIsLoadingFeed(false);
     } catch (error) {
       console.error("Error initializing home page:", error);
-      setHasError(true);
-      setIsLoadingFeed(false);
+    } finally {
+      setIsLoading(false);
     }
   }, [dispatch]);
 
-  // Global error handler for this component
-  useEffect(() => {
-    const handleError = (event: ErrorEvent) => {
-      console.error("Home page caught error:", event.error);
-      setHasError(true);
-      // Prevent the default error handling
-      event.preventDefault();
-    };
-
-    window.addEventListener('error', handleError);
-    
-    return () => {
-      window.removeEventListener('error', handleError);
-    };
-  }, []);
+  // Simple error handler to log errors but not interfere with rendering
+  const handleError = (error: Error, info: ErrorInfo) => {
+    console.error("Error in Home page:", error);
+    console.error("Component stack:", info.componentStack);
+  };
 
   return (
     <>
@@ -102,12 +77,15 @@ const HomePage = () => {
         </div>
         
         <div className="col-span-1 md:col-span-6 content-column">
-          {hasError ? (
-            <ErrorFallback />
+          {isLoading ? (
+            <FeedLoading />
           ) : (
-            <Suspense fallback={<FeedLoading />}>
+            <ErrorBoundary 
+              FallbackComponent={ErrorFallback} 
+              onError={handleError}
+            >
               <Feed />
-            </Suspense>
+            </ErrorBoundary>
           )}
         </div>
         
