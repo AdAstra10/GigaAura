@@ -6,11 +6,9 @@ export default function Document() {
   // Read the ethereum-shim.js content 
   let ethereumShimContent = '';
   try {
-    // In build/production, we can read the file directly
-    if (process.env.NODE_ENV === 'production') {
-      const shimPath = path.join(process.cwd(), 'public', 'ethereum-shim.js');
-      ethereumShimContent = fs.existsSync(shimPath) ? fs.readFileSync(shimPath, 'utf8') : '';
-    }
+    // Always try to read the file content
+    const shimPath = path.join(process.cwd(), 'public', 'ethereum-shim.js');
+    ethereumShimContent = fs.existsSync(shimPath) ? fs.readFileSync(shimPath, 'utf8') : '';
   } catch (error) {
     console.error('Error reading ethereum-shim.js:', error);
   }
@@ -18,12 +16,16 @@ export default function Document() {
   return (
     <Html lang="en">
       <Head>
-        {/* Load ethereum protection script the safe way */}
+        {/* CRITICAL: Load the ethereum protection as inline script to ensure it executes first */}
         {ethereumShimContent ? (
           <script dangerouslySetInnerHTML={{ __html: ethereumShimContent }} />
         ) : (
           <script src="/ethereum-shim.js" />
         )}
+        
+        {/* Prevent wallet detection with meta tags */}
+        <meta name="ethereum" content="false" />
+        <meta name="web3" content="false" />
         
         <meta charSet="utf-8" />
         <meta name="description" content="GigaAura - Social media platform with crypto wallet integration" />
