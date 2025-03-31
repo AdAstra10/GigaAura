@@ -1,13 +1,6 @@
 import { useState } from 'react';
 import { useWallet } from '@contexts/WalletContext';
 
-// Extended Window interface to include Solana
-interface WindowWithSolana extends Window {
-  solana?: {
-    isPhantom?: boolean;
-  };
-}
-
 const AuthPage = () => {
   const { connectWallet, connecting, connected } = useWallet();
   const [error, setError] = useState<string | null>(null);
@@ -16,8 +9,7 @@ const AuthPage = () => {
     e.preventDefault();
     setError(null);
     
-    const windowWithSolana = window as WindowWithSolana;
-    const hasPhantomWallet = (typeof window !== 'undefined' && !!windowWithSolana.phantom?.solana);
+    const hasPhantomWallet = (typeof window !== 'undefined' && !!window.phantom?.solana);
     
     if (!hasPhantomWallet) {
       setError('Phantom wallet not detected. Please install the Phantom browser extension.');
