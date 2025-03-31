@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component, ReactNode } from 'react';
 import { AppProps } from 'next/app';
 import { Provider } from 'react-redux';
 import { Toaster } from 'react-hot-toast';
@@ -9,7 +9,6 @@ import { loadWalletPoints } from '../lib/slices/auraPointsSlice';
 import { updateProfile } from '../lib/slices/userSlice';
 import '../styles/globals.css';
 import Router, { useRouter } from 'next/router';
-import { ErrorBoundary } from 'react-error-boundary';
 
 // Add these helper functions for safe data handling
 function safeToString(value: any): string {
@@ -34,7 +33,7 @@ function safeJSONParse(jsonString: string, fallback: any = null) {
   }
 }
 
-// Error boundary component to catch React errors
+// Add ErrorFallback component
 const ErrorFallback = ({ error }: { error: Error }) => {
   return (
     <div className="w-full h-screen flex flex-col items-center justify-center p-4 text-center">
@@ -49,6 +48,27 @@ const ErrorFallback = ({ error }: { error: Error }) => {
     </div>
   );
 };
+
+// Fix the ErrorBoundary component's state type
+class ErrorBoundary extends Component<{children: ReactNode, FallbackComponent: React.ComponentType<{error: Error}>}> {
+  state: { hasError: boolean, error: Error | null } = { hasError: false, error: null };
+  
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("Caught error in ErrorBoundary:", error, errorInfo);
+  }
+  
+  render() {
+    if (this.state.hasError && this.state.error) {
+      return <this.props.FallbackComponent error={this.state.error} />;
+    }
+    
+    return this.props.children;
+  }
+}
 
 // Wrapper component to access wallet context inside app
 const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Component']; pageProps: AppProps['pageProps'] }) => {

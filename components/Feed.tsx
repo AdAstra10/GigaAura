@@ -338,31 +338,49 @@ const Feed = () => {
       feed.filter(post => user.following?.includes(post.authorWallet)) : 
       feed;
       
-    // Replace the getSortedFeed function with this improved version
-    // that has better null handling
+    // Modify the getSortedFeed function to be more defensive
     const getSortedFeed = (posts: Post[]) => {
-      // First ensure feed exists and has items
-      if (!posts || !Array.isArray(posts) || posts.length === 0) {
+      // Defensive check - ensure we have valid posts
+      if (!posts || !Array.isArray(posts)) {
+        console.warn('Invalid feed data detected:', posts);
         return [];
       }
       
       try {
-        // Make a defensive copy to avoid modifying the original
+        // Only attempt to sort if we have posts
+        if (posts.length === 0) {
+          return [];
+        }
+        
+        // Make a safe copy and filter out invalid posts
         const safePosts = [...posts].filter(post => 
-          // Filter out any potentially invalid posts
-          post && typeof post === 'object' && post.id
+          post && 
+          typeof post === 'object' && 
+          typeof post.id === 'string' && 
+          post.id.length > 0
         );
         
+        // Return early if we filtered out all posts
+        if (safePosts.length === 0) {
+          return [];
+        }
+        
+        // Super safe sort that won't throw on invalid dates
         return safePosts.sort((a, b) => {
-          // Extra safe date comparison
-          const dateA = getSafeDate(a.createdAt);
-          const dateB = getSafeDate(b.createdAt);
-          return dateB - dateA;
+          try {
+            // Extra safe date comparison
+            const dateA = getSafeDate(a.createdAt);
+            const dateB = getSafeDate(b.createdAt);
+            return dateB - dateA;
+          } catch (e) {
+            console.warn('Error comparing post dates:', e);
+            return 0; // Keep original order if comparison fails
+          }
         });
       } catch (error) {
-        console.error('Error sorting feed:', error);
-        // Return the original posts as fallback
-        return posts;
+        console.error('Critical error sorting feed:', error);
+        // Return empty array as fallback
+        return [];
       }
     };
     
@@ -516,35 +534,42 @@ const Feed = () => {
             <div className="flex justify-center p-6">
               <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
             </div>
-          ) : !filteredFeed || !Array.isArray(filteredFeed) || filteredFeed.length === 0 ? (
-            <div className="p-6 text-center">
-              <p className="text-gray-500 dark:text-gray-400">
-                {activeTab === 'following'
-                  ? "You're not following anyone yet, or they haven't posted anything."
-                  : "No posts yet. Be the first to post!"}
-              </p>
-            </div>
           ) : (
             <div>
-              {sortedFeed && Array.isArray(sortedFeed) && sortedFeed.map((post) => (
-                post && post.id ? (
-                  <div 
-                    key={post.id}
-                    className={`border-b border-gray-200 dark:border-gray-700 ${
-                      hoverPost === post.id ? 'bg-gray-50 dark:bg-gray-800/50' : ''
-                    } transition-colors`}
-                    onMouseEnter={() => setHoverPost(post.id)}
-                    onMouseLeave={() => setHoverPost(null)}
-                  >
-                    <PostCard
-                      post={post}
-                      comments={getPostComments(post.id)}
-                      onShare={() => handleSharePost(post.id)}
-                      onFollow={() => post.authorWallet && handleFollowUser(post.authorWallet, post.authorUsername || '')}
-                    />
-                  </div>
-                ) : null
-              ))}
+              {!sortedFeed || !Array.isArray(sortedFeed) || sortedFeed.length === 0 ? (
+                <div className="p-6 text-center">
+                  <p className="text-gray-500 dark:text-gray-400">
+                    {activeTab === 'following'
+                      ? "You're not following anyone yet, or they haven't posted anything."
+                      : "No posts yet. Be the first to post!"}
+                  </p>
+                </div>
+              ) : (
+                sortedFeed.map((post) => {
+                  // Skip rendering if post is invalid
+                  if (!post || typeof post !== 'object' || !post.id) {
+                    return null;
+                  }
+                  
+                  return (
+                    <div 
+                      key={post.id}
+                      className={`border-b border-gray-200 dark:border-gray-700 ${
+                        hoverPost === post.id ? 'bg-gray-50 dark:bg-gray-800/50' : ''
+                      } transition-colors`}
+                      onMouseEnter={() => setHoverPost(post.id)}
+                      onMouseLeave={() => setHoverPost(null)}
+                    >
+                      <PostCard
+                        post={post}
+                        comments={getPostComments(post.id)}
+                        onShare={() => handleSharePost(post.id)}
+                        onFollow={() => post.authorWallet && handleFollowUser(post.authorWallet, post.authorUsername || '')}
+                      />
+                    </div>
+                  );
+                })
+              )}
             </div>
           )}
         </div>

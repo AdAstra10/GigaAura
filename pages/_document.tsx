@@ -10,72 +10,37 @@ class MyDocument extends Document {
     return (
       <Html lang="en">
         <Head>
-          {/* SUPER AGGRESSIVE script to block ethereum/web3 properties (runs first) */}
+          {/* ULTRA-SIMPLE wallet protection script - simple but effective approach */}
           <script
             dangerouslySetInnerHTML={{
               __html: `
-                try {
-                  (function() {
-                    // 1. DEFENSE LAYER ONE: Override Object.defineProperty
-                    const originalDefineProperty = Object.defineProperty;
-                    Object.defineProperty = function(obj, prop, desc) {
-                      // Intercept any attempt to define ethereum/web3 properties
-                      if (prop === 'ethereum' || prop === 'web3' || prop.toString().toLowerCase().includes('ethereum')) {
-                        console.warn('GigaAura blocked attempt to define ' + prop + ' property');
-                        // Instead of blocking completely, define a controlled version
-                        return originalDefineProperty(obj, prop, {
-                          configurable: false,
-                          enumerable: false,
-                          get: function() { 
-                            console.warn('GigaAura protected ethereum access'); 
-                            return null; 
-                          },
-                          set: function() { 
-                            console.warn('GigaAura protected ethereum setting'); 
-                            return false; 
+                (function() {
+                  // Super simple approach - define ethereum as null without any complexity
+                  try {
+                    // Simple direct property assignments - no defineProperty tricks
+                    window.ethereum = null;
+                    window.web3 = null;
+                    
+                    // Basic toString protection
+                    if (Object.prototype.toString !== undefined) {
+                      var originalToString = Object.prototype.toString;
+                      Object.prototype.toString = function() {
+                        try {
+                          if (this === null || this === undefined) {
+                            return "[object SafeNull]";
                           }
-                        });
-                      }
-                      
-                      // Let other property definitions proceed normally
-                      return originalDefineProperty(obj, prop, desc);
-                    };
-                    
-                    // 2. DEFENSE LAYER TWO: Pre-define our own protective versions
-                    originalDefineProperty(window, 'ethereum', {
-                      configurable: false,
-                      enumerable: false,
-                      value: null,
-                      writable: false
-                    });
-                    
-                    originalDefineProperty(window, 'web3', {
-                      configurable: false,
-                      enumerable: false,
-                      value: null,
-                      writable: false
-                    });
-                    
-                    // 3. DEFENSE LAYER THREE: Override toString to prevent null errors
-                    const originalToString = Object.prototype.toString;
-                    Object.prototype.toString = function() {
-                      try {
-                        // Handle null/undefined cases that would normally throw
-                        if (this === null || this === undefined) {
-                          return '[object SafeNullValue]';
+                          return originalToString.call(this);
+                        } catch(e) {
+                          return "[object Protected]";
                         }
-                        return originalToString.call(this);
-                      } catch (e) {
-                        console.warn('Protected toString error');
-                        return '[object ProtectedValue]';
-                      }
-                    };
+                      };
+                    }
                     
-                    console.log('GigaAura: Wallet protection enabled successfully');
-                  })();
-                } catch(err) {
-                  console.warn('GigaAura wallet protection initialization error:', err);
-                }
+                    console.log("Simple wallet protection applied");
+                  } catch(e) {
+                    console.warn("Couldn't apply wallet protection:", e);
+                  }
+                })();
               `
             }}
           />
@@ -151,8 +116,8 @@ class MyDocument extends Document {
           {/* Security headers */}
           <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
           <meta httpEquiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com;" />
-          <meta httpEquiv="X-Frame-Options" content="SAMEORIGIN" />
-          <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
+          <meta name="X-Frame-Options" content="SAMEORIGIN" />
+          <meta name="X-Content-Type-Options" content="nosniff" />
         </Head>
         <body>
           <Main />
