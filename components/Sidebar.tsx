@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
 import { FaHome, FaCompass, FaBell, FaEnvelope, FaBookmark, 
          FaUser, FaCog, FaInfoCircle, FaTwitter } from 'react-icons/fa';
-import { useWallet } from '../contexts/WalletContext';
 
 interface SidebarProps {
   className?: string;
@@ -14,15 +13,16 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   const router = useRouter();
   const user = useSelector((state: RootState) => state.user);
-  const walletAddress = useSelector((state: RootState) => state.user.walletAddress);
-  const { connectWallet } = useWallet();
   const [activeHoverItem, setActiveHoverItem] = useState<string | null>(null);
+  const [username, setUsername] = useState<string>('Guest User');
   
-  // Truncate wallet address for display
-  const truncateWallet = (address: string) => {
-    if (!address) return '';
-    return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
-  };
+  useEffect(() => {
+    // Get username from localStorage if available
+    const storedUsername = localStorage.getItem('username');
+    if (storedUsername) {
+      setUsername(storedUsername);
+    }
+  }, []);
 
   const navigation = [
     { name: 'Home', href: '/', icon: FaHome },
@@ -34,14 +34,6 @@ const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
     { name: 'Settings', href: '/settings', icon: FaCog },
     { name: 'About', href: '/about', icon: FaInfoCircle },
   ];
-
-  const handleConnectWallet = async () => {
-    try {
-      await connectWallet();
-    } catch (error) {
-      console.error('Error connecting wallet:', error);
-    }
-  };
 
   return (
     <aside className={`${className}`}>
@@ -103,45 +95,34 @@ const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
       </div>
 
       {/* User Profile Section */}
-      {walletAddress ? (
-        <Link href="/profile">
-          <div className="flex items-center p-3 mx-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 cursor-pointer transition-colors">
-            <div className="w-10 h-10 rounded-full flex-shrink-0 bg-primary text-white flex items-center justify-center">
-              {user.avatar ? (
-                <img 
-                  src={user.avatar} 
-                  alt={user.username || 'User'} 
-                  className="w-10 h-10 rounded-full object-cover"
-                />
-              ) : (
-                <span className="text-lg font-semibold">
-                  {user.username ? user.username.charAt(0).toUpperCase() : walletAddress.substring(0, 2)}
-                </span>
-              )}
+      <Link href="/profile">
+        <div className="flex items-center p-3 mx-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 cursor-pointer transition-colors">
+          <div className="w-10 h-10 rounded-full flex-shrink-0 bg-primary text-white flex items-center justify-center">
+            {user.avatar ? (
+              <img 
+                src={user.avatar} 
+                alt={user.username || 'User'} 
+                className="w-10 h-10 rounded-full object-cover"
+              />
+            ) : (
+              <span className="text-lg font-semibold">
+                {username.charAt(0).toUpperCase()}
+              </span>
+            )}
+          </div>
+          <div className="ml-3 flex-1">
+            <div className="font-bold text-black dark:text-white">
+              {user.username || username}
             </div>
-            <div className="ml-3 flex-1">
-              <div className="font-bold text-black dark:text-white">
-                {user.username || 'Anonymous User'}
-              </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                @{user.username || truncateWallet(walletAddress)}
-              </div>
-            </div>
-            <div className="text-gray-600 dark:text-gray-300">
-              •••
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              @{user.username || username.toLowerCase().replace(/\s+/g, '_')}
             </div>
           </div>
-        </Link>
-      ) : (
-        <div className="px-3">
-          <button 
-            onClick={handleConnectWallet}
-            className="bg-primary hover:bg-primary/90 rounded-full border-none text-white font-bold py-3 px-6 w-full transition-colors"
-          >
-            Connect Wallet
-          </button>
+          <div className="text-gray-600 dark:text-gray-300">
+            •••
+          </div>
         </div>
-      )}
+      </Link>
     </aside>
   );
 };

@@ -1,11 +1,10 @@
-import React, { useState, FormEvent } from 'react';
+import React, { useState, FormEvent, useEffect } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
 import { Post, Comment, likePost, unlikePost, addComment } from '../lib/slices/postsSlice';
 import { addTransaction } from '../lib/slices/auraPointsSlice';
 import { addNotification } from '../lib/slices/notificationsSlice';
-import { useWallet } from '../contexts/WalletContext';
 import { useRouter } from 'next/router';
 import { v4 as uuidv4 } from 'uuid';
 import toast from 'react-hot-toast';
@@ -23,13 +22,20 @@ interface PostCardProps {
 const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFollow }) => {
   const dispatch = useDispatch();
   const router = useRouter();
-  const { connectWallet, walletConnected } = useWallet();
-  const { walletAddress, username } = useSelector((state: RootState) => state.user as {
-    walletAddress: string | null;
-    username: string | null;
-  });
+  const user = useSelector((state: RootState) => state.user);
   const { totalPoints } = useSelector((state: RootState) => state.auraPoints);
-  const [isLiked, setIsLiked] = useState(post.likedBy?.includes(walletAddress || '') || false);
+  
+  // Use username from localStorage
+  const [currentUser, setCurrentUser] = useState<string>('Guest User');
+  
+  useEffect(() => {
+    const storedUsername = localStorage.getItem('username');
+    if (storedUsername) {
+      setCurrentUser(storedUsername);
+    }
+  }, []);
+  
+  const [isLiked, setIsLiked] = useState(post.likedBy?.includes(currentUser) || false);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -66,74 +72,52 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
     }
   };
   
-  const handleLike = async () => {
-    if (!walletConnected) {
-      const shouldConnect = window.confirm('You need to connect a wallet to like posts. Connect now?');
-      if (shouldConnect) {
-        try {
-          await connectWallet();
-        } catch (error) {
-          console.error('Failed to connect wallet:', error);
-          return;
-        }
-      } else {
-        return;
-      }
+  const handleLike = () => {
+    if (!currentUser || currentUser === 'Guest User') {
+      toast.error('Please log in to like posts');
+      return;
     }
     
-    if (!walletAddress) return;
-    
     if (!isLiked) {
-      dispatch(likePost({ postId: post.id, walletAddress }));
+      dispatch(likePost({ postId: post.id, walletAddress: currentUser }));
       setIsLiked(true);
       
       // Only add transaction and notification if the post is not by the current user
-      if (post.authorWallet !== walletAddress) {
+      if (post.authorWallet !== currentUser) {
         // Add Aura Points transaction for the post creator
         dispatch(addTransaction({
           id: uuidv4(),
           amount: 10, // 10 points for received like
           timestamp: new Date().toISOString(),
           action: 'like_received',
-          counterpartyName: username || walletAddress.substring(0, 6),
-          counterpartyWallet: walletAddress
+          counterpartyName: user.username || currentUser,
+          counterpartyWallet: currentUser
         }));
         
         // Add notification for the post creator
         dispatch(addNotification({
           type: 'like',
-          message: `${username || walletAddress} liked your post`,
-          fromWallet: walletAddress,
-          fromUsername: username || undefined,
+          message: `${user.username || currentUser} liked your post`,
+          fromWallet: currentUser,
+          fromUsername: user.username || undefined,
           postId: post.id,
         }));
       }
     } else {
-      dispatch(unlikePost({ postId: post.id, walletAddress }));
+      dispatch(unlikePost({ postId: post.id, walletAddress: currentUser }));
       setIsLiked(false);
     }
   };
   
-  const handleSubmitComment = async (e: FormEvent) => {
+  const handleSubmitComment = (e: FormEvent) => {
     e.preventDefault();
     
     if (!commentText.trim()) return;
     
-    if (!walletConnected) {
-      const shouldConnect = window.confirm('You need to connect a wallet to comment. Connect now?');
-      if (shouldConnect) {
-        try {
-          await connectWallet();
-        } catch (error) {
-          console.error('Failed to connect wallet:', error);
-          return;
-        }
-      } else {
-        return;
-      }
+    if (!currentUser || currentUser === 'Guest User') {
+      toast.error('Please log in to comment');
+      return;
     }
-    
-    if (!walletAddress) return;
     
     setIsSubmitting(true);
     
@@ -141,18 +125,18 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
       dispatch(addComment({
         postId: post.id,
         content: commentText,
-        authorWallet: walletAddress,
-        authorUsername: username || undefined,
-        authorAvatar: undefined // In a real app, this would come from the user state
+        authorWallet: currentUser,
+        authorUsername: user.username || currentUser,
+        authorAvatar: user.avatar || undefined // Use avatar from Redux store if available
       }));
       
       // Add notification for the post creator if it's not the user's own post
-      if (post.authorWallet !== walletAddress) {
+      if (post.authorWallet !== currentUser) {
         dispatch(addNotification({
           type: 'comment',
-          message: `${username || walletAddress} commented on your post`,
-          fromWallet: walletAddress,
-          fromUsername: username || undefined,
+          message: `${user.username || currentUser} commented on your post`,
+          fromWallet: currentUser,
+          fromUsername: user.username || undefined,
           postId: post.id,
         }));
         
@@ -162,7 +146,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
           amount: 10, // 10 points for making a comment
           timestamp: new Date().toISOString(),
           action: 'comment_made',
-          counterpartyName: post.authorUsername || post.authorWallet.substring(0, 6),
+          counterpartyName: post.authorUsername || post.authorWallet,
           counterpartyWallet: post.authorWallet
         }));
         
@@ -172,8 +156,8 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
           amount: 10, // 10 points for received comment
           timestamp: new Date().toISOString(),
           action: 'comment_received',
-          counterpartyName: username || walletAddress.substring(0, 6),
-          counterpartyWallet: walletAddress
+          counterpartyName: user.username || currentUser,
+          counterpartyWallet: currentUser
         }));
       }
       
@@ -189,16 +173,16 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
   const getAuthorAuraPoints = () => {
     // In a real app, this would come from a query or state
     // For now, just show a mock value or the points if it's the current user
-    return post.authorWallet === walletAddress ? totalPoints : Math.floor(Math.random() * 1000);
+    return post.authorWallet === currentUser ? totalPoints : Math.floor(Math.random() * 1000);
   };
   
   const handleFollowToggle = () => {
-    if (!walletAddress) {
-      toast.error('Please connect your wallet to follow users');
+    if (!currentUser || currentUser === 'Guest User') {
+      toast.error('Please log in to follow users');
       return;
     }
     
-    if (post.authorWallet === walletAddress) {
+    if (post.authorWallet === currentUser) {
       toast.error('You cannot follow yourself');
       return;
     }
@@ -213,20 +197,20 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
         amount: 10,
         timestamp: new Date().toISOString(),
         action: 'follower_gained',
-        counterpartyName: post.authorUsername || post.authorWallet.substring(0, 6),
+        counterpartyName: post.authorUsername || post.authorWallet,
         counterpartyWallet: post.authorWallet
       }));
       
       // Add notification
       dispatch(addNotification({
         type: 'follow',
-        message: `${username || walletAddress} started following you`,
-        fromWallet: walletAddress,
-        fromUsername: username || undefined,
+        message: `${user.username || currentUser} started following you`,
+        fromWallet: currentUser,
+        fromUsername: user.username || undefined,
         postId: undefined,
       }));
       
-      toast.success(`You are now following ${post.authorUsername || post.authorWallet.substring(0, 6)}`);
+      toast.success(`You are now following ${post.authorUsername || post.authorWallet}`);
       
       if (onFollow) {
         onFollow();
@@ -234,7 +218,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
     } else {
       // Unfollow the user
       dispatch(unfollowUser(post.authorWallet));
-      toast.success(`You have unfollowed ${post.authorUsername || post.authorWallet.substring(0, 6)}`);
+      toast.success(`You have unfollowed ${post.authorUsername || post.authorWallet}`);
     }
   };
   
@@ -378,19 +362,19 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
               <form onSubmit={handleSubmitComment} className="mb-4">
                 <div className="flex space-x-2">
                   <div className="w-8 h-8 rounded-full overflow-hidden bg-primary flex-shrink-0">
-                    {walletAddress && (
+                    {currentUser && (
                       <>
-                        {useSelector((state: RootState) => state.user.avatar) ? (
+                        {user.avatar ? (
                           <img 
-                            src={useSelector((state: RootState) => state.user.avatar) || ''}
-                            alt={username || 'User'}
+                            src={user.avatar}
+                            alt={user.username || 'User'}
                             className="w-full h-full object-cover"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-white">
-                            {username 
-                              ? username.charAt(0).toUpperCase()
-                              : walletAddress.substring(0, 2) || '?'}
+                            {user.username 
+                              ? user.username.charAt(0).toUpperCase()
+                              : currentUser.substring(0, 2) || '?'}
                           </div>
                         )}
                       </>
