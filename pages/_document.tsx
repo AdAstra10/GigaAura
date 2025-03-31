@@ -10,45 +10,33 @@ class MyDocument extends Document {
     return (
       <Html lang="en">
         <Head>
-          {/* ULTRA AGGRESSIVE wallet protection script - blocks at the highest level possible */}
+          {/* Compatibility script for Solana dApps - preserves window.solana for Phantom */}
           <script
             dangerouslySetInnerHTML={{
               __html: `
-                // Disable wallet extension properties immediately with absolute top priority
-                // This must run before ANY other scripts
+                // Solana-focused script that preserves Phantom while blocking other wallets
                 try {
-                  // Directly set properties to null - simplest and most aggressive approach
-                  Object.defineProperty(window, 'ethereum', {
-                    value: null,
-                    configurable: false, // Make it impossible to redefine
-                    writable: false      // Make it impossible to change
-                  });
+                  // Only modify ethereum property if it doesn't exist yet
+                  if (!window.hasOwnProperty('ethereum')) {
+                    // Create a dummy ethereum property that doesn't interfere with Phantom
+                    Object.defineProperty(window, 'ethereum', {
+                      value: null,
+                      writable: true,
+                      configurable: true
+                    });
+                    console.log("Added placeholder ethereum property");
+                  }
                   
-                  Object.defineProperty(window, 'web3', {
-                    value: null,
-                    configurable: false,
-                    writable: false
-                  });
-                  
-                  // Block inpage.js and evmAsk.js scripts completely
-                  const originalCreateElement = document.createElement;
-                  document.createElement = function() {
-                    const element = originalCreateElement.apply(document, arguments);
-                    if (arguments[0].toLowerCase() === 'script') {
-                      const originalSetAttribute = element.setAttribute;
-                      element.setAttribute = function(name, value) {
-                        if (name === 'src' && typeof value === 'string' && 
-                            (value.includes('inpage.js') || 
-                             value.includes('evmAsk.js') ||
-                             value.includes('metamask'))) {
-                          console.log('Blocked script:', value);
-                          return element;
-                        }
-                        return originalSetAttribute.apply(this, arguments);
-                      };
-                    }
-                    return element;
-                  };
+                  // Only modify web3 property if it doesn't exist yet
+                  if (!window.hasOwnProperty('web3')) {
+                    // Create a dummy web3 property
+                    Object.defineProperty(window, 'web3', {
+                      value: null,
+                      writable: true,
+                      configurable: true
+                    });
+                    console.log("Added placeholder web3 property");
+                  }
                   
                   // Safe toString implementation to prevent null reference errors
                   const originalToString = Object.prototype.toString;
@@ -63,16 +51,16 @@ class MyDocument extends Document {
                     }
                   };
                   
-                  console.log("Site protection active - wallet extensions blocked");
+                  console.log("Solana compatibility layer active");
                 } catch(e) {
-                  console.warn("Protection mechanism error:", e);
+                  console.warn("Compatibility layer error:", e);
                 }
               `
             }}
           />
           
           <meta charSet="utf-8" />
-          <meta name="description" content="GigaAura - Social media platform with crypto wallet integration" />
+          <meta name="description" content="GigaAura - Social media platform with Solana wallet integration" />
           <link rel="icon" href="/favicon.ico" />
           {/* DO NOT attempt to handle wallet providers in _document - let them work natively */}
           <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -88,7 +76,7 @@ class MyDocument extends Document {
           
           {/* Security headers properly formatted */}
           <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-          <meta httpEquiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com;" />
+          <meta httpEquiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://*.solana.com https://*.gigaaura.com; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com;" />
           <meta httpEquiv="X-Frame-Options" content="SAMEORIGIN" />
           <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
         </Head>
