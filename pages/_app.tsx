@@ -3,10 +3,7 @@ import { AppProps } from 'next/app';
 import { Provider } from 'react-redux';
 import { Toaster } from 'react-hot-toast';
 import { store } from '../lib/store';
-import { WalletProvider, useWallet } from '../contexts/WalletContext';
 import { DarkModeProvider } from '../contexts/DarkModeContext';
-import { loadWalletPoints } from '../lib/slices/auraPointsSlice';
-import { updateProfile } from '../lib/slices/userSlice';
 import '../styles/globals.css';
 import Router, { useRouter } from 'next/router';
 
@@ -70,85 +67,7 @@ class ErrorBoundary extends Component<{children: ReactNode, FallbackComponent: R
   }
 }
 
-// Wrapper component to access wallet context inside app
-const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Component']; pageProps: AppProps['pageProps'] }) => {
-  const { walletAddress } = useWallet();
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-  
-  useEffect(() => {
-    if (walletAddress) {
-      // Reset the loaded state whenever wallet address changes
-      setLoaded(false);
-    }
-  }, [walletAddress]);
-  
-  useEffect(() => {
-    if (walletAddress && !loaded) {
-      // Load wallet-specific data when wallet connects
-      console.log("Loading data for wallet:", walletAddress);
-      
-      try {
-        // Load Aura Points
-        try {
-          // Try to load aura points from localStorage or set default
-          const pointsStr = localStorage.getItem(`auraPoints_${walletAddress}`);
-          const points = pointsStr ? parseInt(pointsStr, 10) : 100;
-          store.dispatch(loadWalletPoints(points));
-        } catch (error) {
-          console.error("Error loading aura points:", error);
-          store.dispatch(loadWalletPoints(100)); // Default
-        }
-        
-        // Load profile data from localStorage
-        try {
-          // Load profile picture
-          const profilePictures = JSON.parse(localStorage.getItem('profilePictures') || '{}');
-          const avatar = profilePictures[walletAddress] || null;
-          
-          // Load banner image
-          const bannerImages = JSON.parse(localStorage.getItem('bannerImages') || '{}');
-          const bannerImage = bannerImages[walletAddress] || null;
-          
-          // Load username
-          const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
-          const username = usernames[walletAddress] || null;
-          
-          // Load bio
-          const bios = JSON.parse(localStorage.getItem('userBios') || '{}');
-          const bio = bios[walletAddress] || null;
-          
-          // Update profile in Redux store
-          store.dispatch(updateProfile({
-            username,
-            bio,
-            avatar,
-            bannerImage
-          }));
-          
-          console.log("Loaded profile data:", { username, avatar });
-        } catch (error) {
-          console.error('Error loading profile data:', error);
-        }
-        
-        setLoaded(true);
-      } catch (err) {
-        console.error("Error in wallet data loading:", err);
-        setError(err instanceof Error ? err : new Error(String(err)));
-      }
-    } else if (!walletAddress) {
-      setLoaded(false);
-    }
-  }, [walletAddress, loaded]);
-  
-  if (error) {
-    return <ErrorFallback error={error} />;
-  }
-  
-  return <Component {...pageProps} />;
-};
-
-// Modify the main App component to include better error handling
+// Simplified App component without wallet integration
 function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const [hasError, setHasError] = useState(false);
@@ -178,18 +97,11 @@ function MyApp({ Component, pageProps }: AppProps) {
     const handleError = (event: ErrorEvent) => {
       console.error('Global error caught:', event.error);
       
-      // Check for toString or wallet-related errors
-      if (event.error && 
-          (event.error.message?.includes('toString') || 
-           event.error.message?.includes('ethereum') ||
-           event.error.message?.includes('null'))) {
-        
-        setErrorMessage(safeToString(event.error.message));
-        setHasError(true);
-        
-        // Prevent default error handling 
-        event.preventDefault();
-      }
+      setErrorMessage(safeToString(event.error?.message || 'Unknown error'));
+      setHasError(true);
+      
+      // Prevent default error handling 
+      event.preventDefault();
     };
     
     // Handle promise rejection errors
@@ -197,16 +109,9 @@ function MyApp({ Component, pageProps }: AppProps) {
       console.error('Unhandled promise rejection:', event);
       
       const errorMessage = event.reason?.message || 'Promise rejection';
-      
-      // If it's a wallet error, show error UI
-      if (errorMessage.includes('ethereum') || 
-          errorMessage.includes('wallet') ||
-          errorMessage.includes('null')) {
-        
-        setErrorMessage(safeToString(errorMessage));
-        setHasError(true);
-        event.preventDefault();
-      }
+      setErrorMessage(safeToString(errorMessage));
+      setHasError(true);
+      event.preventDefault();
     };
     
     window.addEventListener('error', handleError);
@@ -254,17 +159,14 @@ function MyApp({ Component, pageProps }: AppProps) {
       </div>
     );
   }
-  
-  // Render the normal app
+
   return (
     <Provider store={store}>
       <DarkModeProvider>
-        <WalletProvider>
-          <ErrorBoundary FallbackComponent={ErrorFallback}>
-            <AppWithWallet Component={Component} pageProps={pageProps} />
-            <Toaster position="bottom-center" />
-          </ErrorBoundary>
-        </WalletProvider>
+        <ErrorBoundary FallbackComponent={ErrorFallback}>
+          <Component {...pageProps} />
+          <Toaster position="bottom-center" />
+        </ErrorBoundary>
       </DarkModeProvider>
     </Provider>
   );

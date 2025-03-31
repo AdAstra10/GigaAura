@@ -10,83 +10,18 @@ class MyDocument extends Document {
     return (
       <Html lang="en">
         <Head>
-          {/* ULTRA AGGRESSIVE wallet protection script - blocks at the highest level possible */}
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `
-                // Disable wallet extension properties immediately with absolute top priority
-                // This must run before ANY other scripts
-                try {
-                  // Directly set properties to null - simplest and most aggressive approach
-                  Object.defineProperty(window, 'ethereum', {
-                    value: null,
-                    configurable: false, // Make it impossible to redefine
-                    writable: false      // Make it impossible to change
-                  });
-                  
-                  Object.defineProperty(window, 'web3', {
-                    value: null,
-                    configurable: false,
-                    writable: false
-                  });
-                  
-                  // Block inpage.js and evmAsk.js scripts completely
-                  const originalCreateElement = document.createElement;
-                  document.createElement = function() {
-                    const element = originalCreateElement.apply(document, arguments);
-                    if (arguments[0].toLowerCase() === 'script') {
-                      const originalSetAttribute = element.setAttribute;
-                      element.setAttribute = function(name, value) {
-                        if (name === 'src' && typeof value === 'string' && 
-                            (value.includes('inpage.js') || 
-                             value.includes('evmAsk.js') ||
-                             value.includes('metamask'))) {
-                          console.log('Blocked script:', value);
-                          return element;
-                        }
-                        return originalSetAttribute.apply(this, arguments);
-                      };
-                    }
-                    return element;
-                  };
-                  
-                  // Safe toString implementation to prevent null reference errors
-                  const originalToString = Object.prototype.toString;
-                  Object.prototype.toString = function() {
-                    try {
-                      if (this === null || this === undefined) {
-                        return "[object SafeNull]";
-                      }
-                      return originalToString.call(this);
-                    } catch(e) {
-                      return "[object Protected]";
-                    }
-                  };
-                  
-                  console.log("Site protection active - wallet extensions blocked");
-                } catch(e) {
-                  console.warn("Protection mechanism error:", e);
-                }
-              `
-            }}
-          />
-          
           <meta charSet="utf-8" />
-          <meta name="description" content="GigaAura - Social media platform with crypto wallet integration" />
+          <meta name="description" content="GigaAura - Social media platform" />
           <link rel="icon" href="/favicon.ico" />
-          {/* DO NOT attempt to handle wallet providers in _document - let them work natively */}
           <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-          {/* Add meta tags for better mobile handling */}
           <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
           <meta name="theme-color" content="#6366F1" />
           <meta name="mobile-web-app-capable" content="yes" />
           <meta name="apple-mobile-web-app-capable" content="yes" />
           
-          {/* Add preconnect for better performance */}
           <link rel="preconnect" href="https://www.gigaaura.com" />
           <link rel="preconnect" href="https://gigaaura.onrender.com" />
           
-          {/* Security headers properly formatted */}
           <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
           <meta httpEquiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com;" />
           <meta httpEquiv="X-Frame-Options" content="SAMEORIGIN" />
