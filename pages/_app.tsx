@@ -45,7 +45,7 @@ const ErrorFallback = ({ error }: { error: Error }) => {
   return (
     <div className="w-full h-screen flex flex-col items-center justify-center p-4 text-center">
       <h1 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h1>
-      <p className="text-gray-700 dark:text-gray-300 mb-4">Please try refreshing the page</p>
+      <p className="text-[var(--text-primary)] mb-4">Please try refreshing the page</p>
       <button 
         onClick={() => window.location.href = '/home'} 
         className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-hover"
@@ -280,11 +280,11 @@ function MyApp({ Component, pageProps }: AppProps) {
   // If we've encountered an error, show the error UI
   if (hasError) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-100 dark:bg-gray-900">
+      <div className="flex items-center justify-center h-screen bg-light dark:bg-gray-900">
         <div className="text-center p-8 bg-white dark:bg-black rounded-lg shadow-lg max-w-md">
           <h1 className="text-2xl font-bold text-red-500 mb-4">Something went wrong</h1>
           {errorMessage && (
-            <p className="mb-4 text-[var(--text-secondary)] text-sm">
+            <p className="mb-4 text-[var(--text-primary)] text-sm">
               Error: {errorMessage.substring(0, 100)}
               {errorMessage.length > 100 ? '...' : ''}
             </p>

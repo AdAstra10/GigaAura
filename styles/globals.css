@@ -18,7 +18,7 @@
   --background-end-rgb: 255, 255, 255;
   --gray-light: #f7f9f9;
   --border-color: #eff3f4;
-  --text-primary: #0f1419;
+  --text-primary: #000000;  /* Black text for light mode */
   --text-secondary: #536471;
 }
 
@@ -41,6 +41,11 @@
 
   .dark body {
     @apply bg-dark text-[var(--text-primary)];
+  }
+  
+  /* Ensure light mode has proper text colors */
+  .text-gray-700, .text-gray-800, .text-gray-900 {
+    @apply text-[#000000] dark:text-[var(--text-primary)];
   }
 }
 

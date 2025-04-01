@@ -291,7 +291,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
           </div>
           
           <div className="mt-1">
-            <p className="text-gray-900 dark:text-white whitespace-pre-wrap">{post.content}</p>
+            <p className="text-[var(--text-primary)] whitespace-pre-wrap">{post.content}</p>
           </div>
           
           {post.mediaUrl && (
@@ -443,7 +443,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
                               {formatDate(comment.createdAt)}
                             </span>
                           </div>
-                          <p className="text-gray-800 dark:text-gray-200">{comment.content}</p>
+                          <p className="text-[var(--text-primary)]">{comment.content}</p>
                         </div>
                       </div>
                     </div>
