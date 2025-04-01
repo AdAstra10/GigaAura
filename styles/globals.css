@@ -149,13 +149,13 @@ html, body {
   @apply text-black dark:text-gray-400 !important;
 }
 
-/* Custom text colors for icon hover states */
-.text-sunHover {
-  color: var(--sun-hover, #FFC400);
+/* Theme toggle hover states */
+.moon-icon {
+  @apply text-black hover:text-[var(--moon-hover)] transition-colors duration-200;
 }
 
-.text-moonHover {
-  color: var(--moon-hover, #4A6FA5);
+.sun-icon {
+  @apply text-white hover:text-[var(--sun-hover)] transition-colors duration-200;
 }
 
 /* Add some custom styles for components */
@@ -248,34 +248,35 @@ html, body {
 }
 
 .no-shadow {
-  box-shadow: none;
+  box-shadow: none !important;
 }
 
-/* Sidebar Styles */
 .sidebar-column {
-  position: relative;
+  min-height: 100vh;
+  height: 100%;
 }
 
 .content-column {
-  margin: 0 auto;
-  max-width: 100%;
+  min-height: 100vh;
+  height: 100%;
 }
 
-/* Mobile media adjustments */
+/* Mobile styling */
 @media (max-width: 767px) {
   .mobile-bottom-nav {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    background-color: rgb(var(--background-end-rgb));
+    background-color: var(--light);
     border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-around;
     padding: 0.5rem 0;
     z-index: 50;
   }
 }
 
-/* Timeline separator */
 .timeline-separator {
   position: relative;
 }
@@ -286,17 +287,17 @@ html, body {
   left: 50%;
   top: 0;
   bottom: 0;
-  width: 1px;
-  background-color: var(--border-color);
+  width: 2px;
+  background-color: rgba(0, 0, 0, 0.1);
+  transform: translateX(-50%);
 }
 
 .dark .timeline-separator::after {
-  background-color: var(--border-color);
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
-/* Twitter-like UI elements */
 .x-border {
-  border-color: var(--border-color) !important;
+  border-color: var(--border-color);
 }
 
 .x-hover:hover {
@@ -313,100 +314,101 @@ html, body {
 
 .card-outline {
   border: 1px solid var(--border-color);
+  border-radius: 16px;
 }
 
-/* Twitter profile pic style */
 .profile-pic {
-  @apply rounded-full overflow-hidden;
+  border-radius: 50%;
+  overflow: hidden;
 }
 
-/* Post Styling */
 .post-container {
-  @apply border-b border-[var(--border-color)] p-4 hover:bg-[var(--gray-light)] transition-colors duration-150;
+  border-bottom: 1px solid var(--border-color);
+  padding: 12px 16px;
 }
 
-/* Tweet button styling */
 .tweet-button {
-  @apply bg-primary hover:bg-primary-hover text-white font-bold py-3 px-6 rounded-full w-full transition-colors;
+  @apply bg-primary hover:bg-primary-hover text-white font-bold py-3 px-4 rounded-full w-full;
 }
 
 @layer components {
   .btn {
-    @apply px-4 py-2 rounded-full transition-colors;
+    @apply font-bold py-2 px-4 rounded-lg;
   }
   
   .btn-secondary {
-    @apply bg-[var(--gray-light)] text-primary hover:bg-opacity-90;
+    @apply bg-transparent text-black dark:text-white border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800;
   }
   
   .input {
-    @apply border border-[var(--border-color)] rounded-full px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-colors duration-200;
+    @apply border border-gray-300 focus:border-primary focus:ring-primary rounded-lg p-2 bg-white dark:bg-black text-black dark:text-white;
   }
   
   .dark .input {
-    @apply bg-black border-[var(--border-color)] text-[var(--text-primary)];
+    @apply border-gray-700 focus:border-primary;
   }
   
-  /* Specific dark mode overrides */
+  /* Dark mode overrides for common TailwindCSS classes */
   .dark .bg-white {
     @apply bg-black;
   }
   
   .dark .bg-light {
-    @apply bg-black;
+    @apply bg-dark;
   }
   
   .dark .text-gray-800 {
-    @apply text-[var(--text-primary)];
+    @apply text-gray-200;
   }
   
   .dark .text-gray-700 {
-    @apply text-[var(--text-primary)];
+    @apply text-gray-300;
   }
   
   .dark .text-gray-500 {
-    @apply text-[var(--text-secondary)];
+    @apply text-gray-400;
   }
   
   .dark .border-gray-300 {
-    @apply border-[var(--border-color)];
+    @apply border-gray-700;
   }
   
   .dark .shadow {
-    @apply shadow-none;
+    @apply shadow-xl shadow-gray-900/20;
   }
-
-  /* Twitter-like navbar styles */
+  
+  /* Twitter X-like styling */
   .x-navbar-item {
-    @apply flex items-center p-3 rounded-full hover:bg-[var(--gray-light)] transition-colors duration-150;
+    @apply flex items-center p-3 mb-1 rounded-full hover:bg-[var(--gray-light)] transition-colors cursor-pointer;
   }
   
   .x-navbar-text {
-    @apply ml-4 text-xl;
+    @apply text-lg ml-4 hidden xl:inline;
   }
-
-  /* Twitter-like feed header */
+  
+  /* Feed header styling */
   .feed-header {
-    @apply sticky top-0 z-10 bg-white/80 dark:bg-black/80 backdrop-blur-md p-4 border-b border-[var(--border-color)];
+    @apply sticky top-0 z-10 bg-white dark:bg-black bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md border-b border-[var(--border-color)];
   }
-
-  /* Twitter-like tabs */
+  
   .x-tab {
-    @apply flex-1 py-4 font-bold text-[var(--text-secondary)] hover:bg-[var(--gray-light)] relative;
+    @apply flex-1 py-4 text-center font-medium text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 cursor-pointer;
   }
-
+  
   .x-tab-active {
-    @apply font-bold text-[var(--text-primary)];
+    @apply text-black dark:text-white font-bold;
   }
   
   .x-tab-indicator {
-    @apply absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-1 bg-primary rounded-full;
+    @apply absolute bottom-0 h-1 bg-primary rounded-full transition-all duration-300 ease-in-out;
+    width: 5rem;
+    left: 50%;
+    transform: translateX(-50%);
   }
 }
 
-/* Tweet interaction buttons */
 .tweet-action {
-  @apply flex items-center text-[var(--text-secondary)] transition-colors duration-150;
+  @apply text-gray-500 flex items-center hover:text-primary;
 }
 
 .tweet-action-comment:hover {
@@ -418,7 +420,7 @@ html, body {
 }
 
 .tweet-action-like:hover {
-  @apply text-pink-600;
+  @apply text-pink-500;
 }
 
 .tweet-action-share:hover {
@@ -427,7 +429,7 @@ html, body {
 
 /* Search input styling */
 .search-input {
-  @apply w-full bg-[var(--gray-light)] border-none rounded-full py-3 px-5 text-base;
+  @apply w-full bg-gray-200 dark:bg-gray-800 border-none rounded-full py-3 px-5 text-base text-black dark:text-white;
 }
 
 /* Scrollbar Styling */
@@ -464,23 +466,36 @@ html, body {
   display: none;
 }
 
-/* For the sidebar to be very subtle */
-.sidebar-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(128, 128, 128, 0.2) transparent;
+/* No scrollbar for right sidebar */
+.right-sidebar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+  overflow-y: auto;
 }
 
-.sidebar-scroll::-webkit-scrollbar {
-  width: 4px;
+.right-sidebar::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
 }
 
-.sidebar-scroll::-webkit-scrollbar-thumb {
-  background-color: rgba(128, 128, 128, 0.2);
-  border-radius: 10px;
-}
-
-/* Push scrollbar to the far right */
-.right-scrollbar {
+/* Main scrollbar styling - pushed far right */
+.main-content {
   scrollbar-gutter: stable;
-  padding-right: 0.5rem;
+  padding-right: 0.75rem;
+}
+
+/* Animation for numbers in Aura Points counter */
+@keyframes counterPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.counter-animate {
+  animation: counterPulse 0.5s ease;
 } 

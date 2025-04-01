@@ -27,9 +27,10 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
   const dispatch = useDispatch();
   const router = useRouter();
   const { connectWallet, connected } = useWallet();
-  const { walletAddress, username } = useSelector((state: RootState) => state.user as {
+  const { walletAddress, username, avatar } = useSelector((state: RootState) => state.user as {
     walletAddress: string | null;
     username: string | null;
+    avatar: string | null;
   });
   const { totalPoints } = useSelector((state: RootState) => state.auraPoints);
   const [isLiked, setIsLiked] = useState(post.likedBy?.includes(walletAddress || '') || false);
@@ -306,6 +307,10 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
     localStorage.setItem(bookmarksKey, JSON.stringify(bookmarkedPosts));
   };
   
+  const handleToggleComments = () => {
+    setShowComments(!showComments);
+  };
+  
   return (
     <div className="border-b border-[var(--border-color)] p-4 hover:bg-gray-50 dark:hover:bg-gray-900/20 transition-colors cursor-pointer">
       <div className="flex">
@@ -356,7 +361,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
           <div className="flex justify-between mt-3 max-w-md">
             <button 
               className="flex items-center group text-gray-500 hover:text-primary"
-              onClick={() => setShowComments(!showComments)}
+              onClick={handleToggleComments}
             >
               <ChatBubbleLeftIcon className="h-5 w-5 mr-2 group-hover:text-primary" />
               <span className="text-sm group-hover:text-primary">{post.comments}</span>
@@ -400,6 +405,95 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
               </button>
             </div>
           </div>
+          
+          {/* Comment Section */}
+          {showComments && (
+            <div className="mt-4 border-t border-[var(--border-color)] pt-4">
+              {/* Comment Form */}
+              <form onSubmit={handleSubmitComment} className="mb-4">
+                <div className="flex">
+                  <div className="flex-shrink-0 mr-2">
+                    <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+                      {connected ? (
+                        <Image 
+                          src={avatar || 'https://i.pravatar.cc/150?img=1'} 
+                          alt={username || 'User'} 
+                          width={32} 
+                          height={32} 
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-500">
+                          ?
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex-grow">
+                    <textarea
+                      className="w-full p-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-black dark:text-white resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+                      placeholder={connected ? "Post your reply" : "Connect wallet to comment"}
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      disabled={!connected || isSubmitting}
+                      rows={2}
+                    />
+                    <div className="flex justify-end mt-2">
+                      <button
+                        type="submit"
+                        className={`px-4 py-2 rounded-full font-medium ${
+                          connected && commentText.trim() && !isSubmitting
+                            ? 'bg-primary hover:bg-primary-hover text-white'
+                            : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                        }`}
+                        disabled={!connected || !commentText.trim() || isSubmitting}
+                      >
+                        {isSubmitting ? 'Posting...' : 'Reply'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+              
+              {/* Comments List */}
+              {comments.length > 0 ? (
+                <div className="space-y-4">
+                  {comments.map((comment, index) => (
+                    <div key={index} className="flex">
+                      <div className="flex-shrink-0 mr-2">
+                        <div className="w-8 h-8 rounded-full overflow-hidden">
+                          <Image 
+                            src={comment.authorAvatar || 'https://i.pravatar.cc/150?img=1'} 
+                            alt={comment.authorUsername || 'User'} 
+                            width={32} 
+                            height={32} 
+                            className="object-cover"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex-grow">
+                        <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg">
+                          <div className="flex items-center mb-1">
+                            <span className="font-bold text-black dark:text-white mr-2">
+                              {comment.authorUsername || 'Anonymous'}
+                            </span>
+                            <span className="text-gray-500 text-sm">
+                              {formatDate(comment.createdAt || new Date().toISOString())}
+                            </span>
+                          </div>
+                          <p className="text-black dark:text-white">{comment.content}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-4 text-gray-500">
+                  No comments yet. Be the first to comment!
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

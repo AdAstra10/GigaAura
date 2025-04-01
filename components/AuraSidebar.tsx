@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
+import { useRouter } from 'next/router';
 import { RootState } from '../lib/store';
 import { AuraTransaction } from '../lib/slices/auraPointsSlice';
 import AuraPointsCounter from './AuraPointsCounter';
@@ -8,6 +9,7 @@ import Image from 'next/image';
 import { MagnifyingGlassIcon, CheckBadgeIcon } from '@heroicons/react/24/solid';
 
 const AuraSidebar = () => {
+  const router = useRouter();
   const { walletAddress } = useSelector((state: RootState) => state.user);
   const { totalPoints, transactions } = useSelector((state: RootState) => state.auraPoints);
   const [recentTransactions, setRecentTransactions] = useState<AuraTransaction[]>([]);
@@ -34,6 +36,14 @@ const AuraSidebar = () => {
     
     setRecentTransactions(recent);
   }, [transactions]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      // Navigate to search results page with the query
+      router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
+    }
+  };
 
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -75,9 +85,9 @@ const AuraSidebar = () => {
   };
 
   return (
-    <div className="hidden md:flex flex-col space-y-4 py-4 pl-4 pr-6 sticky top-0 h-screen overflow-y-auto max-h-screen sidebar-scroll right-scrollbar">
+    <div className="hidden md:flex flex-col space-y-4 py-4 pl-4 pr-6 sticky top-0 h-screen max-h-screen right-sidebar">
       {/* Search */}
-      <div className="relative mb-4">
+      <form onSubmit={handleSearch} className="relative mb-4">
         <div className="flex items-center bg-gray-200 dark:bg-gray-800 rounded-full px-4 py-2">
           <MagnifyingGlassIcon className="h-5 w-5 text-gray-500" />
           <input 
@@ -88,7 +98,8 @@ const AuraSidebar = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-      </div>
+        <button type="submit" className="hidden">Search</button>
+      </form>
       
       {/* Trending */}
       <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-4">
@@ -177,7 +188,7 @@ const AuraSidebar = () => {
           <a href="#" className="mr-2 mb-1">Accessibility</a>
           <a href="#" className="mr-2 mb-1">More</a>
         </div>
-        <p className="metadata">© 2023 GigaAura</p>
+        <p className="metadata">© 2025 GigaAura</p>
       </div>
     </div>
   );

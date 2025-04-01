@@ -84,7 +84,7 @@ const Home: React.FC = () => {
               <Sidebar className="sticky top-20 px-4" />
             </div>
             
-            <div className="col-span-1 md:col-span-6 fixed-width-container">
+            <div className="col-span-1 md:col-span-6 fixed-width-container main-content">
               <ErrorBoundary FallbackComponent={() => (
                 <div className="p-4 bg-white dark:bg-black rounded-lg shadow">
                   <h3 className="text-xl font-medium mb-2">Feed unavailable</h3>
