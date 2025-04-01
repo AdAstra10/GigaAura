@@ -10,6 +10,7 @@ import PostCard from '../components/PostCard';
 import { useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
 import { BookmarkIcon } from '@heroicons/react/24/outline';
+import { Post } from '../lib/slices/postsSlice';
 
 // Simple LoadingSpinner component
 const LoadingSpinner = () => (
@@ -41,9 +42,12 @@ function BookmarksFallback() {
 const Bookmarks: React.FC = () => {
   const router = useRouter();
   const { connected, walletAddress } = useWallet();
-  const [bookmarks, setBookmarks] = useState<any[]>([]);
+  const [bookmarks, setBookmarks] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [bookmarkedPostIds, setBookmarkedPostIds] = useState<string[]>([]);
+  
+  // Get all posts from the feed state to filter bookmarks from
+  const allPosts = useSelector((state: RootState) => state.posts.feed);
   
   // Add a safety flag to detect rendering issues
   const [hasMounted, setHasMounted] = useState(false);
@@ -72,78 +76,77 @@ const Bookmarks: React.FC = () => {
     } catch (error) {
       console.error('Error loading bookmarks:', error);
       setBookmarkedPostIds([]);
+    } finally {
+      setLoading(false);
     }
   }, [connected, walletAddress]);
 
-  // Load bookmarked posts
+  // Filter posts to only include bookmarked ones
   useEffect(() => {
-    const fetchBookmarks = async () => {
-      if (!connected || bookmarkedPostIds.length === 0) {
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        setLoading(true);
-        // Mock loading delay
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // In a real app, bookmarks would be loaded from a database based on IDs
-        // For now, we'll use mock data but filter by the bookmarked IDs
-        const mockPosts = [
-          {
-            id: "bookmark1",
-            content: "This is a bookmarked post about GigaAura's amazing features! #Web3 #Blockchain",
-            authorUsername: "GigaAura",
-            authorWallet: "GigaAura",
-            authorAvatar: "https://i.pravatar.cc/150?img=10",
-            createdAt: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-            likes: 241,
-            comments: 57,
-            shares: 32,
-            likedBy: []
-          },
-          {
-            id: "bookmark2",
-            content: "Just learned how to earn 500 Aura Points in a single day! Check out the tutorial at GigaAura.com/tutorials #AuraPoints",
-            authorUsername: "CryptoTeacher",
-            authorWallet: "CryptoTeacher",
-            authorAvatar: "https://i.pravatar.cc/150?img=11",
-            createdAt: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
-            likes: 189,
-            comments: 42,
-            shares: 21,
-            likedBy: []
-          },
-          {
-            id: "post1",
-            content: "Excited to announce our new partnership with @EthereumFoundation! Great things coming soon. #Ethereum #Web3",
-            authorUsername: "AuraFounder",
-            authorWallet: "0x123456",
-            authorAvatar: "https://i.pravatar.cc/150?img=12",
-            createdAt: new Date(Date.now() - 259200000).toISOString(), // 3 days ago
-            likes: 312,
-            comments: 78,
-            shares: 45,
-            likedBy: []
-          }
-        ];
-        
-        // Filter posts to only include those in bookmarkedPostIds
-        const filteredBookmarks = mockPosts.filter(post => 
-          bookmarkedPostIds.includes(post.id)
-        );
-        
-        setBookmarks(filteredBookmarks);
-      } catch (error) {
-        console.error("Error fetching bookmarks:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (!connected || bookmarkedPostIds.length === 0) {
+      setBookmarks([]);
+      return;
+    }
     
-    fetchBookmarks();
-  }, [connected, bookmarkedPostIds]);
+    setLoading(true);
+    
+    // Sample mock posts to ensure we always have something to display
+    const mockPosts: Post[] = [
+      {
+        id: "bookmark1",
+        content: "This is a bookmarked post about GigaAura's amazing features! #Web3 #Blockchain",
+        authorUsername: "GigaAura",
+        authorWallet: "0xGigaAura",
+        authorAvatar: "https://i.pravatar.cc/150?img=10",
+        createdAt: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
+        likes: 241,
+        comments: 57,
+        shares: 32,
+        likedBy: []
+      },
+      {
+        id: "bookmark2",
+        content: "Just learned how to earn 500 Aura Points in a single day! Check out the tutorial at GigaAura.com/tutorials #AuraPoints",
+        authorUsername: "CryptoTeacher",
+        authorWallet: "0xCryptoTeacher",
+        authorAvatar: "https://i.pravatar.cc/150?img=11",
+        createdAt: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
+        likes: 189,
+        comments: 42,
+        shares: 21,
+        likedBy: []
+      }
+    ];
+    
+    // First try to find the post in the feed
+    let foundPosts = allPosts.filter(post => bookmarkedPostIds.includes(post.id));
+    
+    // If we don't have enough posts from the real feed, add some mock posts
+    // But only include mock posts that are in the bookmarkedPostIds
+    if (foundPosts.length < bookmarkedPostIds.length) {
+      const mockBookmarks = mockPosts.filter(post => 
+        bookmarkedPostIds.includes(post.id) && 
+        !foundPosts.some(foundPost => foundPost.id === post.id)
+      );
+      
+      foundPosts = [...foundPosts, ...mockBookmarks];
+    }
+    
+    setBookmarks(foundPosts);
+    setLoading(false);
+  }, [connected, bookmarkedPostIds, allPosts]);
+  
+  // Handle removing a bookmark
+  const handleRemoveBookmark = (postId: string) => {
+    if (!connected || !walletAddress) return;
+    
+    const updatedBookmarks = bookmarkedPostIds.filter(id => id !== postId);
+    setBookmarkedPostIds(updatedBookmarks);
+    
+    // Save updated bookmarks back to localStorage
+    const bookmarksKey = `bookmarks-${walletAddress}`;
+    localStorage.setItem(bookmarksKey, JSON.stringify(updatedBookmarks));
+  };
   
   // If not mounted yet, show minimal UI to avoid hydration issues
   if (!hasMounted) {
@@ -216,6 +219,7 @@ const Bookmarks: React.FC = () => {
                       <PostCard
                         key={post.id}
                         post={post}
+                        onShare={() => {}}
                       />
                     ))}
                   </div>

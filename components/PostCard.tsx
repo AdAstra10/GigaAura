@@ -71,14 +71,13 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
     const date = new Date(dateString);
     const now = new Date();
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    const diffInHours = diffInSeconds / 3600;
     
     if (diffInSeconds < 60) {
       return `${diffInSeconds}s`;
     } else if (diffInSeconds < 3600) {
       return `${Math.floor(diffInSeconds / 60)}m`;
-    } else if (diffInHours < 24) {
-      return `${Math.floor(diffInHours)}h`;
+    } else if (diffInSeconds / 3600 < 24) {
+      return `${Math.floor(diffInSeconds / 3600)}h`;
     } else {
       // If more than 24 hours, show the date
       return date.toLocaleDateString(undefined, { 
@@ -153,13 +152,21 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
     setIsSubmitting(true);
     
     try {
-      dispatch(addComment({
+      // Create a comment object that matches what the addComment action expects
+      const commentPayload = {
         postId: post.id,
         content: commentText,
         authorWallet: walletAddress,
         authorUsername: username || undefined,
-        authorAvatar: undefined // In a real app, this would come from the user state
-      }));
+        authorAvatar: avatar || 'https://i.pravatar.cc/150?img=1'
+      };
+      
+      dispatch(addComment(commentPayload));
+      
+      // Set showComments to true to make sure comments are visible
+      if (!showComments) {
+        setShowComments(true);
+      }
       
       // Add notification for the post creator if it's not the user's own post
       if (post.authorWallet !== walletAddress) {

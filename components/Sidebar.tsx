@@ -49,7 +49,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
       {/* Logo */}
       <div className="flex-shrink-0 p-3">
         <Link href="/home">
-          <div className="p-3 rounded-full hover:bg-[var(--gray-light)] cursor-pointer transition-colors">
+          <div className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 cursor-pointer transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28" className="fill-current text-black dark:text-white">
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
             </svg>
@@ -65,7 +65,7 @@ const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
           return (
             <Link key={item.name} href={item.href}>
               <div 
-                className="x-navbar-item"
+                className="flex items-center p-3 mb-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors cursor-pointer"
                 onMouseEnter={() => setActiveHoverItem(item.name)}
                 onMouseLeave={() => setActiveHoverItem(null)}
               >
@@ -81,7 +81,9 @@ const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
                     <span className="absolute -top-1.5 -right-1.5 bg-primary text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">{item.badge}</span>
                   )}
                 </div>
-                <span className={`x-navbar-text text-black dark:text-white ${isActive ? 'font-bold' : ''}`}>{item.name}</span>
+                <span className={`text-lg ml-4 hidden xl:inline text-black dark:text-white ${isActive ? 'font-bold' : ''}`}>
+                  {item.name}
+                </span>
               </div>
             </Link>
           );
@@ -100,10 +102,10 @@ const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
         </Link>
       </div>
 
-      {/* User Profile Section */}
-      {connected ? (
+      {/* User Profile Section - Always show profile if connected */}
+      {connected && (
         <div className="mt-auto mb-4 px-3">
-          <div className="flex items-center p-3 rounded-full hover:bg-[var(--gray-light)] cursor-pointer transition-colors justify-between">
+          <div className="flex items-center p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 cursor-pointer transition-colors justify-between">
             <div className="flex items-center">
               <div className="w-10 h-10 rounded-full flex-shrink-0 bg-primary text-white flex items-center justify-center overflow-hidden">
                 {user.avatar ? (
@@ -119,30 +121,21 @@ const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
                 )}
               </div>
               <div className="ml-3 flex-1 hidden md:block">
-                <div className="font-bold text-[var(--text-primary)]">
+                <div className="font-bold text-black dark:text-white">
                   {user.username || 'Anonymous User'}
                 </div>
-                <div className="text-sm text-[var(--text-secondary)]">
+                <div className="text-sm text-black dark:text-gray-400">
                   @{user.username || truncateWallet(walletAddress || '')}
                 </div>
-                <div className="text-sm flex items-center text-[var(--text-secondary)]">
+                <div className="text-sm flex items-center text-black dark:text-gray-400">
                   <FaGem className="mr-1 text-primary" /> <span className="font-bold text-primary">{auraPoints}</span> Aura Points
                 </div>
               </div>
             </div>
-            <div className="text-[var(--text-secondary)] hidden md:block">
+            <div className="text-black dark:text-gray-400 hidden md:block">
               <FaEllipsisH />
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="mt-auto mb-4 px-3">
-          <button 
-            onClick={handleConnectWallet}
-            className="tweet-button"
-          >
-            Connect Wallet
-          </button>
         </div>
       )}
     </aside>

@@ -129,7 +129,7 @@ const Header = () => {
           {shouldShowBackButton() ? (
             <button 
               onClick={() => router.back()} 
-              className="mr-4 p-2 rounded-full hover:bg-[var(--gray-light)] text-black dark:text-white"
+              className="mr-4 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 text-black dark:text-white"
             >
               <FaArrowLeft className="h-5 w-5" />
             </button>
@@ -154,10 +154,6 @@ const Header = () => {
               )}
             </div>
           )}
-          
-          <h1 className="text-xl font-bold text-black dark:text-white">
-            {renderPageTitle()}
-          </h1>
         </div>
         
         {/* Right section: Actions */}

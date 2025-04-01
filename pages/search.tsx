@@ -133,56 +133,100 @@ const Search: React.FC = () => {
             comments: 37,
             shares: 45,
             likedBy: []
+          },
+          {
+            id: "post6",
+            content: "Exploring the concept of decentralized social media with GigaAura. The potential is enormous!",
+            authorUsername: "defiexplorer",
+            authorWallet: "0xpqr678",
+            authorAvatar: "https://i.pravatar.cc/150?img=6",
+            createdAt: new Date(Date.now() - 345600000).toISOString(), // 4 days ago
+            likes: 78,
+            comments: 14,
+            shares: 9,
+            likedBy: []
+          },
+          {
+            id: "post7",
+            content: "Testing different wallet solutions for my Web3 app. Phantom is working flawlessly with GigaAura.",
+            authorUsername: "developerjane",
+            authorWallet: "0xstu901",
+            authorAvatar: "https://i.pravatar.cc/150?img=7",
+            createdAt: new Date(Date.now() - 432000000).toISOString(), // 5 days ago
+            likes: 45,
+            comments: 8,
+            shares: 3,
+            likedBy: []
           }
         ];
         
-        // Create a fuzzy search function that handles misspellings and partial matches
-        const fuzzySearch = (text: string, query: string) => {
+        // Create an improved search function that handles keyword matching and partial matches
+        const searchPostContent = (text: string, query: string) => {
           // Convert both to lowercase for case-insensitive matching
           const textLower = text.toLowerCase();
           const queryLower = query.toLowerCase();
           
-          // Exact match gets highest score
+          // Direct substring match gives highest score
           if (textLower.includes(queryLower)) {
-            return 3;
+            return 10;
           }
           
-          // Split query into words for partial matching
-          const queryWords = queryLower.split(/\s+/);
+          // Split query into words
+          const queryWords = queryLower.split(/\s+/).filter(word => word.length > 1);
           let matchScore = 0;
           
-          // Check each word in the query
-          queryWords.forEach(word => {
-            if (word.length < 3) return; // Skip very short words
+          // Check for exact word matches
+          for (const word of queryWords) {
+            // Check if the word appears as a whole word
+            const wordRegex = new RegExp(`\\b${word}\\b`, 'i');
+            if (wordRegex.test(textLower)) {
+              matchScore += 5;
+              continue;
+            }
             
-            // Check for exact word match
+            // Check for word starts with the query word
+            const startsWithRegex = new RegExp(`\\b${word}`, 'i');
+            if (startsWithRegex.test(textLower)) {
+              matchScore += 3;
+              continue;
+            }
+            
+            // Check for partial matches
             if (textLower.includes(word)) {
               matchScore += 2;
-              return;
+              continue;
             }
             
-            // Check for partial match (at least 70% of characters match)
-            const wordChars = word.split('');
-            const matchCount = wordChars.filter(char => textLower.includes(char)).length;
-            if (matchCount / word.length >= 0.7) {
-              matchScore += 1;
+            // Check for character-level fuzzy matching (at least 70% of chars match)
+            if (word.length >= 3) {
+              const chars = word.split('');
+              const matchCount = chars.filter(char => textLower.includes(char)).length;
+              const matchPercentage = matchCount / chars.length;
+              
+              if (matchPercentage >= 0.7) {
+                matchScore += 1;
+              }
             }
-          });
+          }
           
           return matchScore;
         };
         
-        // Filter and sort results based on match score
+        // Search in both content and author info
+        const getPostScore = (post: any, query: string) => {
+          const contentScore = searchPostContent(post.content, query) * 2; // Content is more important
+          const authorNameScore = searchPostContent(post.authorUsername, query);
+          const hashtagScore = post.content.toLowerCase().includes(`#${query.toLowerCase()}`) ? 8 : 0;
+          
+          return contentScore + authorNameScore + hashtagScore;
+        };
+        
+        // Filter and sort results
         const filteredResults = mockPosts
-          .map(post => {
-            // Check content and author fields
-            const contentScore = fuzzySearch(post.content, searchQuery);
-            const authorScore = fuzzySearch(post.authorUsername, searchQuery);
-            return {
-              ...post,
-              searchScore: contentScore + authorScore
-            };
-          })
+          .map(post => ({
+            ...post,
+            searchScore: getPostScore(post, searchQuery)
+          }))
           .filter(post => post.searchScore > 0)
           .sort((a, b) => b.searchScore - a.searchScore);
         
