@@ -76,8 +76,8 @@ const AuraSidebar = () => {
 
   return (
     <div className="hidden md:flex flex-col space-y-4 py-4 pl-4 pr-8 sticky top-0 h-screen overflow-y-auto max-h-screen">
-      {/* Search */}
-      <div className="relative mb-4">
+      {/* Search - only show on larger screens */}
+      <div className="relative mb-4 hidden lg:block">
         <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-2">
           <MagnifyingGlassIcon className="h-5 w-5 text-gray-500" />
           <input 

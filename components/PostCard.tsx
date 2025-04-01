@@ -292,19 +292,37 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
           )}
           
           <div className="flex justify-between mt-3 max-w-md">
-            <button className="flex items-center group text-gray-500 hover:text-primary">
+            <button 
+              className="flex items-center group text-gray-500 hover:text-primary"
+              onClick={() => setShowComments(!showComments)}
+            >
               <ChatBubbleLeftIcon className="h-5 w-5 mr-2 group-hover:text-primary" />
               <span className="text-sm group-hover:text-primary">{post.comments}</span>
             </button>
-            <button className="flex items-center group text-gray-500 hover:text-green-500">
+            <button 
+              className="flex items-center group text-gray-500 hover:text-green-500"
+              onClick={onShare}
+            >
               <ArrowPathRoundedSquareIcon className="h-5 w-5 mr-2 group-hover:text-green-500" />
               <span className="text-sm group-hover:text-green-500">{post.shares}</span>
             </button>
-            <button className="flex items-center group text-gray-500 hover:text-pink-500">
-              <HeartIcon className="h-5 w-5 mr-2 group-hover:text-pink-500" />
-              <span className="text-sm group-hover:text-pink-500">{post.likes}</span>
+            <button 
+              className={`flex items-center group ${isLiked ? 'text-pink-500' : 'text-gray-500 hover:text-pink-500'}`}
+              onClick={handleLike}
+            >
+              {isLiked ? (
+                <HeartIcon className="h-5 w-5 mr-2 text-pink-500 fill-current" />
+              ) : (
+                <HeartIcon className="h-5 w-5 mr-2 group-hover:text-pink-500" />
+              )}
+              <span className={`text-sm ${isLiked ? 'text-pink-500' : 'group-hover:text-pink-500'}`}>
+                {post.likes + (isLiked ? 1 : 0)}
+              </span>
             </button>
-            <button className="flex items-center text-gray-500 hover:text-primary">
+            <button 
+              className="flex items-center text-gray-500 hover:text-primary"
+              onClick={() => onShare && onShare()}
+            >
               <ShareIcon className="h-5 w-5" />
             </button>
           </div>

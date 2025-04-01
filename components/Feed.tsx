@@ -123,8 +123,8 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       try {
         setLoading(true);
         
-        // Simulating API delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Simulate stable feed by using consistent loading time
+        await new Promise(resolve => setTimeout(resolve, 800));
         
         // Mock posts data
         const mockPosts = [
@@ -235,12 +235,12 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   }
 
   return (
-    <div ref={feedRef} className="border-x border-[var(--border-color)] min-h-screen">
-      {/* Tabs */}
-      <div className="sticky top-0 bg-light dark:bg-dark z-10 border-b border-[var(--border-color)]">
-        <div className="flex">
+    <div ref={feedRef} className="feed-container fixed-width-container">
+      {/* Tabs - use a fixed height to prevent layout shift */}
+      <div className="sticky top-0 bg-light dark:bg-dark z-10 thin-border border-b h-14">
+        <div className="flex h-full">
           <button
-            className={`flex-1 py-4 text-center font-medium text-black dark:text-white hover:bg-gray-50 dark:hover:bg-gray-900 relative ${
+            className={`flex-1 flex items-center justify-center font-medium text-black dark:text-white hover:bg-gray-50 dark:hover:bg-gray-900 relative ${
               activeTab === 'for-you' ? 'font-bold' : ''
             }`}
             onClick={() => handleTabChange('for-you')}
@@ -251,7 +251,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
             )}
           </button>
           <button
-            className={`flex-1 py-4 text-center font-medium text-black dark:text-white hover:bg-gray-50 dark:hover:bg-gray-900 relative ${
+            className={`flex-1 flex items-center justify-center font-medium text-black dark:text-white hover:bg-gray-50 dark:hover:bg-gray-900 relative ${
               activeTab === 'following' ? 'font-bold' : ''
             }`}
             onClick={() => handleTabChange('following')}
@@ -265,7 +265,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       </div>
 
       {/* Create Post */}
-      <div className="p-4 border-b border-[var(--border-color)]">
+      <div className="p-4 thin-border border-b">
         <div className="flex space-x-4">
           <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 flex-shrink-0"></div>
           <div className="flex-grow">

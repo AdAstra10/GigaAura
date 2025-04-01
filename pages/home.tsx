@@ -78,32 +78,34 @@ const Home: React.FC = () => {
 
         <Header />
 
-        <main className="container mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-12 gap-6">
-          <div className="hidden md:block md:col-span-3 sidebar-column">
-            <Sidebar className="sticky top-20" />
-          </div>
-          
-          <div className="col-span-1 md:col-span-6 content-column">
-            <ErrorBoundary FallbackComponent={() => (
-              <div className="p-4 bg-white dark:bg-black rounded-lg shadow">
-                <h3 className="text-xl font-medium mb-2">Feed unavailable</h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">
-                  We're having trouble loading your feed. Please try again later.
-                </p>
-                <button 
-                  className="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-full"
-                  onClick={() => router.reload()}
-                >
-                  Reload
-                </button>
-              </div>
-            )}>
-              <Feed />
-            </ErrorBoundary>
-          </div>
-          
-          <div className="hidden md:block md:col-span-3">
-            <AuraSidebar />
+        <main className="tab-container">
+          <div className="container mx-auto grid grid-cols-1 md:grid-cols-12 md:divide-x md:divide-[var(--border-color)]">
+            <div className="hidden md:block md:col-span-3">
+              <Sidebar className="sticky top-20 px-4" />
+            </div>
+            
+            <div className="col-span-1 md:col-span-6 fixed-width-container">
+              <ErrorBoundary FallbackComponent={() => (
+                <div className="p-4 bg-white dark:bg-black rounded-lg shadow">
+                  <h3 className="text-xl font-medium mb-2">Feed unavailable</h3>
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">
+                    We're having trouble loading your feed. Please try again later.
+                  </p>
+                  <button 
+                    className="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-full"
+                    onClick={() => router.reload()}
+                  >
+                    Reload
+                  </button>
+                </div>
+              )}>
+                <Feed />
+              </ErrorBoundary>
+            </div>
+            
+            <div className="hidden md:block md:col-span-3">
+              <AuraSidebar />
+            </div>
           </div>
         </main>
       </div>

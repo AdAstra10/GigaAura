@@ -67,11 +67,17 @@ const safeGetAddress = (publicKey: any): string => {
 const getProvider = () => {
   try {
     const windowObj = window as WindowWithSolana;
-    if (windowObj.solana?.isPhantom) {
-      return windowObj.solana;
-    } else if (windowObj.phantom?.solana?.isPhantom) {
+    
+    // Primary check for Phantom
+    if (windowObj.phantom?.solana?.isPhantom) {
       return windowObj.phantom.solana;
+    } 
+    // Secondary check for older Phantom versions
+    else if (windowObj.solana?.isPhantom) {
+      return windowObj.solana;
     }
+    
+    // If Phantom is not installed, suggest installation
     return null;
   } catch (err) {
     console.error("Error accessing wallet provider:", err);
@@ -190,7 +196,17 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       const provider = getProvider();
       
       if (!provider) {
+        // Use a simpler toast without action
         toast.error("Phantom wallet not found. Please install Phantom wallet extension.");
+        
+        // After a delay, open a prompt to install
+        setTimeout(() => {
+          const shouldInstall = window.confirm('Would you like to install Phantom wallet?');
+          if (shouldInstall) {
+            window.open('https://phantom.app/', '_blank');
+          }
+        }, 1000);
+        
         setIsLoading(false);
         return;
       }
@@ -209,15 +225,28 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       
       // Load data for this wallet address
       loadWalletAuraPoints(walletAddress);
-      loadUserProfileData(walletAddress); // Load profile data here
+      loadUserProfileData(walletAddress);
       
       localStorage.setItem('walletConnected', 'true');
+      
+      // Show success toast
+      toast.success("Wallet connected successfully!");
       
       setIsLoading(false);
       
     } catch (error) {
       console.error('Error connecting to wallet:', error);
-      toast.error("Failed to connect to wallet. Please try again.");
+      
+      // More detailed error message
+      let errorMessage = "Failed to connect to wallet. Please try again.";
+      
+      if (error instanceof Error) {
+        if (error.message.includes('User rejected')) {
+          errorMessage = "You rejected the connection request. Please try again.";
+        }
+      }
+      
+      toast.error(errorMessage);
       setIsLoading(false);
     }
   };

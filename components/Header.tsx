@@ -150,7 +150,7 @@ const Header = () => {
               onClick={handleConnectWallet}
               className="bg-primary hover:bg-primary-hover rounded-full text-white font-medium py-2 px-4"
             >
-              Connect
+              Connect Wallet
             </button>
           )}
         </div>
