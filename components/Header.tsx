@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { FaSearch, FaMoon, FaSun, FaRegBell, FaRegEnvelope, FaRegUser, FaArrowLeft } from 'react-icons/fa';
+import { FaMoon, FaSun, FaRegBell, FaRegEnvelope, FaRegUser, FaArrowLeft } from 'react-icons/fa';
 import { useSelector } from 'react-redux';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useWallet } from '../contexts/WalletContext';
 import { RootState } from '../lib/store';
 import { useDarkMode } from '../contexts/DarkModeContext';
+import Image from 'next/image';
 
 const Header = () => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
@@ -39,6 +40,12 @@ const Header = () => {
     } catch (error) {
       console.error('Error connecting wallet:', error);
     }
+  };
+
+  // Truncate wallet address for display
+  const truncateWallet = (address: string) => {
+    if (!address) return '';
+    return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
   };
 
   // Display header based on route
@@ -81,7 +88,7 @@ const Header = () => {
           {shouldShowBackButton() ? (
             <button 
               onClick={() => router.back()} 
-              className="mr-4 p-2 rounded-full hover:bg-[var(--gray-light)] text-[var(--text-primary)]"
+              className="mr-4 p-2 rounded-full hover:bg-[var(--gray-light)] text-black dark:text-white"
             >
               <FaArrowLeft className="h-5 w-5" />
             </button>
@@ -107,31 +114,17 @@ const Header = () => {
             </div>
           )}
           
-          <h1 className="text-xl font-bold text-[var(--text-primary)]">
+          <h1 className="text-xl font-bold text-black dark:text-white">
             {renderPageTitle()}
           </h1>
         </div>
         
-        {/* Right section: Search and actions */}
-        <div className="flex items-center space-x-2">
-          {/* Search - visible on md+ screens */}
-          <div className="hidden md:block mr-4">
-            <div className="relative">
-              <input 
-                type="text" 
-                placeholder="Search" 
-                className="search-input focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              />
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <FaSearch className="h-5 w-5 text-[var(--text-secondary)]" />
-              </div>
-            </div>
-          </div>
-          
+        {/* Right section: Actions */}
+        <div className="flex items-center space-x-3">
           {/* Toggle dark mode button */}
           <button
             onClick={toggleDarkMode}
-            className="p-2 rounded-full hover:bg-[var(--gray-light)] text-[var(--text-primary)]"
+            className="p-2 rounded-full hover:bg-[var(--gray-light)] text-black dark:text-white"
           >
             {isDarkMode ? <FaSun /> : <FaMoon />}
           </button>
@@ -140,18 +133,41 @@ const Header = () => {
           {connected && (
             <div className="hidden md:flex items-center bg-[var(--gray-light)] rounded-full py-1 px-3">
               <span className="text-primary font-bold mr-1">{auraPoints}</span>
-              <span className="text-[var(--text-secondary)] text-sm">Aura</span>
+              <span className="text-black dark:text-white text-sm">Aura</span>
             </div>
           )}
           
-          {/* Connect Wallet Button - Only visible when not connected */}
-          {!connected && (
+          {/* Connect Wallet Button or Profile - Based on connection state */}
+          {!connected ? (
             <button 
               onClick={handleConnectWallet}
               className="bg-primary hover:bg-primary-hover rounded-full text-white font-medium py-2 px-4"
             >
               Connect Wallet
             </button>
+          ) : (
+            <Link href="/profile">
+              <div className="flex items-center p-2 rounded-full hover:bg-[var(--gray-light)] cursor-pointer">
+                <div className="mr-2 hidden md:block">
+                  <p className="text-sm font-medium text-black dark:text-white">
+                    {user.username || truncateWallet(walletAddress || '')}
+                  </p>
+                </div>
+                <div className="w-8 h-8 rounded-full overflow-hidden">
+                  {user.avatar ? (
+                    <img 
+                      src={user.avatar} 
+                      alt={user.username || 'User'} 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-primary flex items-center justify-center text-white">
+                      {user.username ? user.username.charAt(0).toUpperCase() : walletAddress?.substring(0, 2)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Link>
           )}
         </div>
       </div>

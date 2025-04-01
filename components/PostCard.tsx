@@ -1,4 +1,4 @@
-import React, { useState, FormEvent } from 'react';
+import React, { useState, FormEvent, useEffect } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
@@ -13,8 +13,8 @@ import { formatDistance } from 'date-fns';
 import { followUser, unfollowUser } from '../lib/slices/userSlice';
 import { FaRegComment, FaRegHeart, FaHeart, FaRetweet, FaRegShareSquare, FaEllipsisH } from 'react-icons/fa';
 import Image from 'next/image';
-import { ChatBubbleLeftIcon, ArrowPathRoundedSquareIcon, HeartIcon, ShareIcon } from '@heroicons/react/24/outline';
-import { CheckBadgeIcon } from '@heroicons/react/24/solid';
+import { ChatBubbleLeftIcon, ArrowPathRoundedSquareIcon, HeartIcon, ShareIcon, BookmarkIcon as BookmarkOutlineIcon } from '@heroicons/react/24/outline';
+import { CheckBadgeIcon, BookmarkIcon as BookmarkSolidIcon } from '@heroicons/react/24/solid';
 
 interface PostCardProps {
   post: Post;
@@ -46,6 +46,25 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
   
   // Check if the current user is following the post author
   const isFollowing = following.includes(post.authorWallet);
+
+  const [isBookmarked, setIsBookmarked] = useState(false);
+
+  // Load bookmarked state from localStorage when component mounts
+  useEffect(() => {
+    if (typeof window !== 'undefined' && connected && walletAddress) {
+      const bookmarksKey = `bookmarks-${walletAddress}`;
+      const savedBookmarks = localStorage.getItem(bookmarksKey);
+      
+      if (savedBookmarks) {
+        try {
+          const bookmarkedPosts = JSON.parse(savedBookmarks);
+          setIsBookmarked(bookmarkedPosts.includes(post.id));
+        } catch (error) {
+          console.error('Error parsing bookmarks from localStorage:', error);
+        }
+      }
+    }
+  }, [post.id, connected, walletAddress]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -244,6 +263,49 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
     return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
   };
   
+  const handleBookmark = () => {
+    if (!connected) {
+      const confirm = window.confirm('Please connect your wallet to bookmark posts. Would you like to connect now?');
+      if (confirm) {
+        connectWallet();
+      }
+      return;
+    }
+    
+    if (!walletAddress) return;
+    
+    const newBookmarkedState = !isBookmarked;
+    setIsBookmarked(newBookmarkedState);
+    
+    // Save to localStorage
+    const bookmarksKey = `bookmarks-${walletAddress}`;
+    const savedBookmarks = localStorage.getItem(bookmarksKey);
+    let bookmarkedPosts = [];
+    
+    if (savedBookmarks) {
+      try {
+        bookmarkedPosts = JSON.parse(savedBookmarks);
+      } catch (error) {
+        console.error('Error parsing bookmarks from localStorage:', error);
+      }
+    }
+    
+    if (newBookmarkedState) {
+      // Add to bookmarks if not already there
+      if (!bookmarkedPosts.includes(post.id)) {
+        bookmarkedPosts.push(post.id);
+      }
+      toast.success('Post bookmarked successfully!');
+    } else {
+      // Remove from bookmarks
+      bookmarkedPosts = bookmarkedPosts.filter((id: string) => id !== post.id);
+      toast.success('Post removed from bookmarks');
+    }
+    
+    // Save updated bookmarks back to localStorage
+    localStorage.setItem(bookmarksKey, JSON.stringify(bookmarkedPosts));
+  };
+  
   return (
     <div className="border-b border-[var(--border-color)] p-4 hover:bg-gray-50 dark:hover:bg-gray-900/20 transition-colors cursor-pointer">
       <div className="flex">
@@ -319,12 +381,24 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
                 {post.likes + (isLiked ? 1 : 0)}
               </span>
             </button>
-            <button 
-              className="flex items-center text-gray-500 hover:text-primary"
-              onClick={() => onShare && onShare()}
-            >
-              <ShareIcon className="h-5 w-5" />
-            </button>
+            <div className="flex space-x-3">
+              <button 
+                className="flex items-center text-gray-500 hover:text-primary"
+                onClick={() => onShare && onShare()}
+              >
+                <ShareIcon className="h-5 w-5" />
+              </button>
+              <button 
+                className={`flex items-center ${isBookmarked ? 'text-primary' : 'text-gray-500 hover:text-primary'}`}
+                onClick={handleBookmark}
+              >
+                {isBookmarked ? (
+                  <BookmarkSolidIcon className="h-5 w-5" />
+                ) : (
+                  <BookmarkOutlineIcon className="h-5 w-5" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>

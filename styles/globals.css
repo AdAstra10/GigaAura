@@ -428,4 +428,59 @@ html, body {
 /* Search input styling */
 .search-input {
   @apply w-full bg-[var(--gray-light)] border-none rounded-full py-3 px-5 text-base;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.3);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.5);
+}
+
+/* Hide scrollbar in most areas but keep functionality */
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
+/* For the main feed area to ensure stable layout */
+.feed-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* For the sidebar to be very subtle */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(128, 128, 128, 0.2) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(128, 128, 128, 0.2);
+  border-radius: 10px;
+}
+
+/* Push scrollbar to the far right */
+.right-scrollbar {
+  scrollbar-gutter: stable;
+  padding-right: 0.5rem;
 } 

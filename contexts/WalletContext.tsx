@@ -27,6 +27,7 @@ interface WalletContextProps {
   connectWallet: () => Promise<void>;
   disconnectWallet: () => Promise<void>;
   walletConnected: boolean;
+  connected: boolean;
   isLoading: boolean;
 }
 
@@ -275,6 +276,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         connectWallet,
         disconnectWallet,
         walletConnected,
+        connected: walletConnected,
         isLoading
       }}
     >

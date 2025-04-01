@@ -75,15 +75,17 @@ const AuraSidebar = () => {
   };
 
   return (
-    <div className="hidden md:flex flex-col space-y-4 py-4 pl-4 pr-8 sticky top-0 h-screen overflow-y-auto max-h-screen">
-      {/* Search - only show on larger screens */}
-      <div className="relative mb-4 hidden lg:block">
-        <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-2">
+    <div className="hidden md:flex flex-col space-y-4 py-4 pl-4 pr-6 sticky top-0 h-screen overflow-y-auto max-h-screen sidebar-scroll right-scrollbar">
+      {/* Search */}
+      <div className="relative mb-4">
+        <div className="flex items-center bg-gray-200 dark:bg-gray-800 rounded-full px-4 py-2">
           <MagnifyingGlassIcon className="h-5 w-5 text-gray-500" />
           <input 
             type="text" 
-            placeholder="Search" 
-            className="search-input bg-transparent border-none focus:ring-0 w-full pl-2"
+            placeholder="Search GigaAura" 
+            className="bg-transparent border-none focus:ring-0 focus:outline-none w-full pl-2 text-black dark:text-white"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
       </div>
