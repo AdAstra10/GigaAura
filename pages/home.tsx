@@ -3,11 +3,12 @@ import { useDispatch } from 'react-redux';
 import { useRouter } from 'next/router';
 import Feed from '../components/Feed';
 import { AppDispatch } from '../lib/store';
-import { useWallet } from '../lib/contexts/WalletContext';
+import { useWallet } from '../contexts/WalletContext';
 import { ErrorBoundary } from 'react-error-boundary';
 import Head from 'next/head';
 import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
+import AuraSidebar from '../components/AuraSidebar';
 
 // Error fallback for the entire Home page
 function HomeFallback() {
@@ -78,19 +79,19 @@ const Home: React.FC = () => {
         <Header />
 
         <main className="container mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-12 gap-6">
-          <div className="hidden md:block md:col-span-3">
+          <div className="hidden md:block md:col-span-3 sidebar-column">
             <Sidebar className="sticky top-20" />
           </div>
           
-          <div className="col-span-1 md:col-span-9">
+          <div className="col-span-1 md:col-span-6 content-column">
             <ErrorBoundary FallbackComponent={() => (
-              <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
+              <div className="p-4 bg-white dark:bg-black rounded-lg shadow">
                 <h3 className="text-xl font-medium mb-2">Feed unavailable</h3>
                 <p className="text-gray-600 dark:text-gray-400 mb-4">
                   We're having trouble loading your feed. Please try again later.
                 </p>
                 <button 
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                  className="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-full"
                   onClick={() => router.reload()}
                 >
                   Reload
@@ -99,6 +100,10 @@ const Home: React.FC = () => {
             )}>
               <Feed />
             </ErrorBoundary>
+          </div>
+          
+          <div className="hidden md:block md:col-span-3">
+            <AuraSidebar />
           </div>
         </main>
       </div>

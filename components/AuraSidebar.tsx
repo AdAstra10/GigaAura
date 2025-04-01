@@ -3,7 +3,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
 import { AuraTransaction } from '../lib/slices/auraPointsSlice';
 import AuraPointsCounter from './AuraPointsCounter';
-import { FaSearch } from 'react-icons/fa';
+import { FaSearch, FaGem, FaCheck } from 'react-icons/fa';
 
 const AuraSidebar = () => {
   const { walletAddress } = useSelector((state: RootState) => state.user);
@@ -14,14 +14,14 @@ const AuraSidebar = () => {
   const [whoToFollow, setWhoToFollow] = useState<any[]>([
     { id: 1, name: 'Bill Gates', username: 'BillGates', isVerified: true, avatar: 'https://i.pravatar.cc/150?img=3' },
     { id: 2, name: 'Vitalik Buterin', username: 'VitalikButerin', isVerified: true, avatar: 'https://i.pravatar.cc/150?img=11' },
-    { id: 3, name: 'Miya', username: 'Polr13', isVerified: false, avatar: 'https://i.pravatar.cc/150?img=5' }
+    { id: 3, name: 'Jill Wine-Banks', username: 'JillWineBanks', isVerified: true, avatar: 'https://i.pravatar.cc/150?img=5' }
   ]);
   
   const [trendingTopics, setTrendingTopics] = useState<any[]>([
-    { id: 1, title: 'Bishop Brigante, Toronto Hip Hop Legend, Passes Away', category: 'Music', posts: 90 },
-    { id: 2, title: 'Ontario Ice Storm Causes Widespread Outages', category: 'Weather', posts: 642 },
-    { id: 3, title: 'Andrew McCutchen\'s Home Run Milestone', category: 'Baseball', posts: 313 },
-    { id: 4, title: 'Crockett\'s Interracial Marriage Comments Stir Controversy', category: 'Politics', posts: '11K' }
+    { id: 1, title: 'SSC CGL Aspirants Demand Reforms for Fairness', category: 'Education', posts: '3.2K' },
+    { id: 2, title: 'Ohtani\'s Stolen Base Spotlight', category: 'Baseball', posts: '544' },
+    { id: 3, title: 'Adin Ross Confronts JasonTheWeen Over Racism Accusation', category: 'Streaming', posts: '93' },
+    { id: 4, title: 'ENHYPEN\'s Jake Sparks Fan Frenzy with Puppy Plea on Weverse', category: 'Music', posts: '1.9K' }
   ]);
 
   useEffect(() => {
@@ -73,15 +73,15 @@ const AuraSidebar = () => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full px-4">
       {/* Search */}
       <div className="relative mb-4">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <FaSearch className="h-5 w-5 text-gray-400" />
+          <FaSearch className="h-5 w-5 text-[var(--text-secondary)]" />
         </div>
         <input 
           type="text" 
-          className="bg-gray-100 dark:bg-gray-800 border-none rounded-full py-3 pl-10 pr-4 w-full focus:ring-primary focus:border-primary"
+          className="search-input focus:ring-2 focus:ring-primary"
           placeholder="Search" 
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
@@ -89,21 +89,22 @@ const AuraSidebar = () => {
       </div>
 
       {/* Aura Points Card */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
-        <div className="p-4 bg-gradient-to-r from-primary to-primary/80">
+      <div className="bg-white dark:bg-black rounded-xl overflow-hidden border border-[var(--border-color)]">
+        <div className="p-4 bg-gradient-to-r from-primary to-primary-hover">
           <h2 className="text-xl font-bold text-white mb-1">Aura Points</h2>
           <p className="text-white/90 text-sm mb-3">
-            Enjoy additional benefits as you earn Aura Points
+            Earn points by engaging with the community
           </p>
           <div className="flex justify-between items-center">
-            <div className="text-3xl font-bold text-white">
+            <div className="text-3xl font-bold text-white flex items-center">
+              <FaGem className="mr-2" />
               <AuraPointsCounter points={totalPoints} />
             </div>
           </div>
         </div>
         <div className="p-4">
-          <h3 className="font-bold mb-3 dark:text-white">Your Aura Rewards</h3>
-          <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-2">
+          <h3 className="font-bold mb-3 text-[var(--text-primary)]">Your Aura Rewards</h3>
+          <ul className="text-sm text-[var(--text-secondary)] space-y-2">
             <li className="flex justify-between items-center">
               <span>💫 Aura Points Boost</span>
               <span className="font-semibold text-primary">Unlocked</span>
@@ -121,46 +122,43 @@ const AuraSidebar = () => {
               <span className="font-semibold">{totalPoints > 5000 ? 'Unlocked' : `${totalPoints}/5000`}</span>
             </li>
           </ul>
-          <button className="mt-4 bg-primary hover:bg-primary/90 text-white font-bold py-2 rounded-full w-full transition-colors">
+          <button className="mt-4 bg-primary hover:bg-primary-hover text-white font-bold py-2 rounded-full w-full transition-colors">
             View Aura Status
           </button>
         </div>
       </div>
 
       {/* Explore Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-black rounded-xl overflow-hidden border border-[var(--border-color)]">
         <div className="p-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold dark:text-white">Explore</h2>
-            <div className="bg-gray-200 dark:bg-gray-700 rounded-full text-xs px-2 py-1 text-gray-700 dark:text-gray-300">
+            <h2 className="text-xl font-bold text-[var(--text-primary)]">Explore</h2>
+            <div className="bg-[var(--gray-light)] rounded-full text-xs px-2 py-1 text-[var(--text-secondary)]">
               Beta
             </div>
           </div>
           
           {trendingTopics.map(topic => (
-            <div key={topic.id} className="py-3 px-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors cursor-pointer">
-              <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
-                <div className="flex items-center">
-                  <img src="https://i.pravatar.cc/150?img=13" alt="User" className="w-4 h-4 rounded-full mr-1" />
-                  <span>Trending now · {topic.category}</span>
-                </div>
+            <div key={topic.id} className="py-3 px-2 hover:bg-[var(--gray-light)] transition-colors cursor-pointer">
+              <div className="flex items-center text-xs text-[var(--text-secondary)]">
+                <span>Trending now · {topic.category}</span>
                 <span className="mx-1">·</span>
                 <span>{topic.posts} posts</span>
               </div>
-              <p className="font-bold text-black dark:text-white text-sm mt-1">{topic.title}</p>
+              <p className="font-bold text-[var(--text-primary)] text-sm mt-1">{topic.title}</p>
             </div>
           ))}
           
-          <button className="text-primary hover:text-primary/80 text-sm mt-2 transition-colors">
+          <button className="text-primary hover:bg-primary/10 px-2 py-1 rounded-full text-sm mt-2 transition-colors">
             Show more
           </button>
         </div>
       </div>
 
       {/* Who to Follow */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-black rounded-xl overflow-hidden border border-[var(--border-color)]">
         <div className="p-4">
-          <h2 className="text-xl font-bold mb-4 dark:text-white">Who to follow</h2>
+          <h2 className="text-xl font-bold mb-4 text-[var(--text-primary)]">Who to follow</h2>
           
           {whoToFollow.map(user => (
             <div key={user.id} className="flex items-center justify-between py-3">
@@ -168,80 +166,65 @@ const AuraSidebar = () => {
                 <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full mr-3" />
                 <div>
                   <div className="flex items-center">
-                    <p className="font-bold text-black dark:text-white text-sm">{user.name}</p>
+                    <p className="font-bold text-[var(--text-primary)] text-sm">{user.name}</p>
                     {user.isVerified && (
-                      <span className="ml-1 text-primary">✓</span>
+                      <span className="ml-1 bg-primary text-white rounded-full p-0.5 flex items-center justify-center" style={{ width: '14px', height: '14px' }}>
+                        <FaCheck size={8} />
+                      </span>
                     )}
                   </div>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">@{user.username}</p>
+                  <p className="text-[var(--text-secondary)] text-sm">@{user.username}</p>
                 </div>
               </div>
-              <button className="bg-black dark:bg-white text-white dark:text-black font-bold text-sm py-1.5 px-4 rounded-full hover:bg-black/80 dark:hover:bg-white/80 transition-colors">
+              <button className="bg-black dark:bg-white text-white dark:text-black font-bold text-sm py-1.5 px-4 rounded-full hover:bg-opacity-80">
                 Follow
               </button>
             </div>
           ))}
           
-          <button className="text-primary hover:text-primary/80 text-sm mt-2 transition-colors">
+          <button className="text-primary hover:bg-primary/10 px-2 py-1 rounded-full text-sm mt-2 transition-colors">
             Show more
           </button>
         </div>
       </div>
 
       {/* Recent Activity */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-black rounded-xl overflow-hidden border border-[var(--border-color)]">
         <div className="p-4">
-          <h2 className="text-lg font-bold mb-4 dark:text-white">Recent Activity</h2>
+          <h2 className="text-lg font-bold mb-4 text-[var(--text-primary)]">Recent Activity</h2>
           
           {recentTransactions.length > 0 ? (
             <div className="space-y-3">
               {recentTransactions.map((tx) => (
                 <div key={tx.id} className="flex justify-between items-center">
                   <div>
-                    <p className="text-sm font-medium dark:text-white">{getActionLabel(tx.action)}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{formatTimestamp(tx.timestamp)}</p>
+                    <p className="text-sm font-medium text-[var(--text-primary)]">{getActionLabel(tx.action)}</p>
+                    <p className="text-xs text-[var(--text-secondary)]">{formatTimestamp(tx.timestamp)}</p>
                   </div>
-                  <div className="text-sm font-semibold text-primary">+{tx.amount} AP</div>
+                  <div className="text-sm font-semibold text-primary flex items-center">
+                    <FaGem className="mr-1" size={12} />
+                    <span>+{tx.amount}</span>
+                  </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-gray-500 dark:text-gray-400 text-sm">No recent activity. Start interacting to earn Aura Points!</p>
+            <p className="text-[var(--text-secondary)] text-sm">No recent activity. Start interacting to earn Aura Points!</p>
           )}
         </div>
       </div>
 
-      {/* How to Earn Aura */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
-        <div className="p-4">
-          <h3 className="font-bold mb-3 dark:text-white">How to Earn Aura</h3>
-          <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-2">
-            <li className="flex justify-between">
-              <span>Create a post</span>
-              <span className="font-semibold text-primary">+50 AP</span>
-            </li>
-            <li className="flex justify-between">
-              <span>Receive a like</span>
-              <span className="font-semibold text-primary">+10 AP</span>
-            </li>
-            <li className="flex justify-between">
-              <span>Comment on a post</span>
-              <span className="font-semibold text-primary">+10 AP</span>
-            </li>
-            <li className="flex justify-between">
-              <span>Receive a comment</span>
-              <span className="font-semibold text-primary">+10 AP</span>
-            </li>
-            <li className="flex justify-between">
-              <span>Gain a follower</span>
-              <span className="font-semibold text-primary">+10 AP</span>
-            </li>
-            <li className="flex justify-between">
-              <span>Follow someone</span>
-              <span className="font-semibold text-primary">+10 AP</span>
-            </li>
-          </ul>
+      {/* Footer Links */}
+      <div className="text-[var(--text-secondary)] text-xs">
+        <div className="flex flex-wrap gap-2">
+          <a href="#" className="hover:underline">Terms of Service</a>
+          <a href="#" className="hover:underline">Privacy Policy</a>
+          <a href="#" className="hover:underline">Cookie Policy</a>
+          <a href="#" className="hover:underline">Accessibility</a>
+          <a href="#" className="hover:underline">Ads info</a>
+          <a href="#" className="hover:underline">More ...</a>
         </div>
+        <div className="mt-2">© 2025 GigaAura Corp.</div>
       </div>
     </div>
   );

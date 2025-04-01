@@ -3,41 +3,50 @@
 @tailwind utilities;
 
 :root {
-  --primary: #60C5D1;
-  --secondary: #7AD5DF;
+  --primary: #1D9BF0;  /* Twitter blue */
+  --primary-hover: #1a8cd8;
+  --secondary: #0f1419;
   --accent: #F6B73C;
-  --dark: #1A202C;
-  --light: #F8FAFC;
+  --dark: #000000;  /* Black background for dark mode */
+  --light: #FFFFFF;  /* White background for light mode */
   --error: #E53E3E;
   --success: #48BB78;
-  --sun-hover: #FF9933;
+  --sun-hover: #FFC400;
   --moon-hover: #4A6FA5;
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 248, 248, 254;
+  --foreground-rgb: 15, 20, 25;
+  --background-start-rgb: 255, 255, 255;
   --background-end-rgb: 255, 255, 255;
+  --gray-light: #f7f9f9;
+  --border-color: #eff3f4;
+  --text-primary: #0f1419;
+  --text-secondary: #536471;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 20, 22, 28;
-    --background-end-rgb: 16, 16, 20;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+    --border-color: #2f3336;
+    --text-primary: #e7e9ea;
+    --text-secondary: #71767b;
+    --gray-light: #16181c;
   }
 }
 
 @layer base {
   body {
-    @apply bg-light text-dark transition-colors duration-200;
+    @apply bg-light text-[var(--text-primary)] transition-colors duration-200;
   }
 
   .dark body {
-    @apply bg-dark text-light;
+    @apply bg-dark text-[var(--text-primary)];
   }
 }
 
 /* Custom text colors for icon hover states */
 .text-sunHover {
-  color: var(--sun-hover, #FF9933);
+  color: var(--sun-hover, #FFC400);
 }
 
 .text-moonHover {
@@ -46,11 +55,11 @@
 
 /* Add some custom styles for components */
 .card {
-  @apply bg-white dark:bg-gray-800 rounded-lg shadow-md p-4;
+  @apply bg-white dark:bg-black rounded-xl border border-[var(--border-color)] p-4;
 }
 
 .btn-primary {
-  @apply bg-primary hover:bg-primary/90 text-white font-medium py-2 px-4 rounded-md;
+  @apply bg-primary hover:bg-primary-hover text-white font-medium py-2 px-4 rounded-full;
 }
 
 /* Dark mode transparent styling only applies in dark mode */
@@ -65,17 +74,31 @@
 
 /* Preserve hover effects in dark mode */
 .dark .hover-effect:hover {
-  background-color: rgba(255, 255, 255, 0.05) !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-/* Add vertical separators instead of boxes in dark mode */
+.hover-effect:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Update Twitter-like borders for sections */
 @media (min-width: 768px) {
   .dark .sidebar-column {
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    border-right: 1px solid var(--border-color);
   }
   
   .dark .content-column {
-    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    border-left: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+  }
+  
+  .sidebar-column {
+    border-right: 1px solid var(--border-color);
+  }
+  
+  .content-column {
+    border-left: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
   }
 }
 
@@ -83,15 +106,23 @@
 .post-image {
   max-height: 500px;
   object-fit: contain;
+  @apply rounded-2xl;
 }
 
 .post-video {
   max-height: 500px;
+  @apply rounded-2xl;
 }
 
 /* Keep header solid in dark mode */
 .dark .header-solid {
-  background-color: #1A202C !important;
+  background-color: rgba(0, 0, 0, 0.65) !important;
+  backdrop-filter: blur(12px);
+}
+
+.header-solid {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(12px);
 }
 
 .main-content-grid {
@@ -101,13 +132,14 @@
 
 @media (min-width: 768px) {
   .main-content-grid {
-    grid-template-columns: 3fr 6fr 3fr;
+    grid-template-columns: 1fr 600px 380px;
   }
 }
 
 /* Common Styles */
 .thin-borders {
   border-width: 1px;
+  border-color: var(--border-color);
 }
 
 .no-shadow {
@@ -132,7 +164,7 @@
     left: 0;
     right: 0;
     background-color: rgb(var(--background-end-rgb));
-    border-top: 1px solid rgba(209, 213, 219, 0.1);
+    border-top: 1px solid var(--border-color);
     padding: 0.5rem 0;
     z-index: 50;
   }
@@ -150,74 +182,145 @@
   top: 0;
   bottom: 0;
   width: 1px;
-  background-color: rgba(209, 213, 219, 0.3);
+  background-color: var(--border-color);
 }
 
 .dark .timeline-separator::after {
-  background-color: rgba(75, 85, 99, 0.3);
+  background-color: var(--border-color);
 }
 
-/* Open design for dark mode - use direct class selectors to avoid circular references */
-.dark .thin-borders {
-  border-color: rgba(255, 255, 255, 0.1) !important;
+/* Twitter-like UI elements */
+.x-border {
+  border-color: var(--border-color) !important;
 }
 
-.dark .no-shadow {
-  box-shadow: none !important;
+.x-hover:hover {
+  background-color: var(--gray-light);
 }
 
-/* Override for post items and feed to improve readability */
-.dark .post-separator {
-  border-color: rgba(255, 255, 255, 0.05) !important;
+.x-text-primary {
+  color: var(--text-primary);
+}
+
+.x-text-secondary {
+  color: var(--text-secondary);
 }
 
 .card-outline {
-  border: 1px solid rgba(209, 213, 219, 0.3);
+  border: 1px solid var(--border-color);
+}
+
+/* Twitter profile pic style */
+.profile-pic {
+  @apply rounded-full overflow-hidden;
+}
+
+/* Post Styling */
+.post-container {
+  @apply border-b border-[var(--border-color)] p-4 hover:bg-[var(--gray-light)] transition-colors duration-150;
+}
+
+/* Tweet button styling */
+.tweet-button {
+  @apply bg-primary hover:bg-primary-hover text-white font-bold py-3 px-6 rounded-full w-full transition-colors;
 }
 
 @layer components {
   .btn {
-    @apply px-4 py-2 rounded-md transition-colors;
+    @apply px-4 py-2 rounded-full transition-colors;
   }
   
   .btn-secondary {
-    @apply bg-secondary text-white hover:bg-secondary/80;
+    @apply bg-[var(--gray-light)] text-primary hover:bg-opacity-90;
   }
   
   .input {
-    @apply border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-colors duration-200;
+    @apply border border-[var(--border-color)] rounded-full px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-colors duration-200;
   }
   
   .dark .input {
-    @apply bg-gray-700 border-gray-600 text-white;
+    @apply bg-black border-[var(--border-color)] text-[var(--text-primary)];
   }
   
   /* Specific dark mode overrides */
   .dark .bg-white {
-    @apply bg-gray-800;
+    @apply bg-black;
   }
   
   .dark .bg-light {
-    @apply bg-gray-900;
+    @apply bg-black;
   }
   
   .dark .text-gray-800 {
-    @apply text-gray-100;
+    @apply text-[var(--text-primary)];
   }
   
   .dark .text-gray-700 {
-    @apply text-gray-200;
+    @apply text-[var(--text-primary)];
   }
   
   .dark .text-gray-500 {
-    @apply text-gray-400;
+    @apply text-[var(--text-secondary)];
   }
   
   .dark .border-gray-300 {
-    @apply border-gray-600;
+    @apply border-[var(--border-color)];
   }
   
   .dark .shadow {
-    @apply shadow-dark;
+    @apply shadow-none;
   }
+
+  /* Twitter-like navbar styles */
+  .x-navbar-item {
+    @apply flex items-center p-3 rounded-full hover:bg-[var(--gray-light)] transition-colors duration-150;
+  }
+  
+  .x-navbar-text {
+    @apply ml-4 text-xl;
+  }
+
+  /* Twitter-like feed header */
+  .feed-header {
+    @apply sticky top-0 z-10 bg-white/80 dark:bg-black/80 backdrop-blur-md p-4 border-b border-[var(--border-color)];
+  }
+
+  /* Twitter-like tabs */
+  .x-tab {
+    @apply flex-1 py-4 font-bold text-[var(--text-secondary)] hover:bg-[var(--gray-light)] relative;
+  }
+
+  .x-tab-active {
+    @apply font-bold text-[var(--text-primary)];
+  }
+  
+  .x-tab-indicator {
+    @apply absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-1 bg-primary rounded-full;
+  }
+}
+
+/* Tweet interaction buttons */
+.tweet-action {
+  @apply flex items-center text-[var(--text-secondary)] transition-colors duration-150;
+}
+
+.tweet-action-comment:hover {
+  @apply text-primary;
+}
+
+.tweet-action-retweet:hover {
+  @apply text-green-500;
+}
+
+.tweet-action-like:hover {
+  @apply text-pink-600;
+}
+
+.tweet-action-share:hover {
+  @apply text-primary;
+}
+
+/* Search input styling */
+.search-input {
+  @apply w-full bg-[var(--gray-light)] border-none rounded-full py-3 px-5 text-base;
 } 

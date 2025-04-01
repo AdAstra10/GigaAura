@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { FaSun, FaMoon, FaBell, FaEnvelope } from 'react-icons/fa';
+import { FaSearch, FaMoon, FaSun, FaRegBell, FaRegEnvelope, FaRegUser, FaArrowLeft } from 'react-icons/fa';
 import { useSelector } from 'react-redux';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { useWallet } from '../contexts/WalletContext';
 import { RootState } from '../lib/store';
 import { useDarkMode } from '../contexts/DarkModeContext';
@@ -10,10 +11,10 @@ const Header = () => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { connectWallet, disconnectWallet, connected, walletAddress } = useWallet();
   const user = useSelector((state: RootState) => state.user);
+  const auraPoints = useSelector((state: RootState) => state.auraPoints.totalPoints || 0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [isSunHovered, setIsSunHovered] = useState(false);
-  const [isMoonHovered, setIsMoonHovered] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     const checkIfMobile = () => {
@@ -40,142 +41,120 @@ const Header = () => {
     }
   };
 
-  return (
-    <header className="sticky top-0 z-50 bg-white dark:bg-gray-900 header-solid border-b border-gray-200 dark:border-gray-700 thin-borders">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex-shrink-0 flex items-center">
-            <Link href="/">
-              <span className="font-bold text-xl cursor-pointer text-primary">
-                GigaAura
-              </span>
-            </Link>
-          </div>
+  // Display header based on route
+  const renderPageTitle = () => {
+    const path = router.pathname;
+    
+    switch (true) {
+      case path === '/home':
+        return 'Home';
+      case path === '/explore':
+        return 'Explore';
+      case path === '/notifications':
+        return 'Notifications';
+      case path === '/messages':
+        return 'Messages';
+      case path === '/bookmarks':
+        return 'Bookmarks';
+      case path === '/profile':
+        return 'Profile';
+      case path === '/settings':
+        return 'Settings';
+      case path.includes('/profile/'):
+        return 'Profile';
+      default:
+        return 'GigaAura';
+    }
+  };
 
-          <div className="hidden md:flex items-center space-x-4">
-            <Link href="/notifications">
-              <div className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 hover-effect cursor-pointer text-gray-600 dark:text-gray-300">
-                <FaBell />
-              </div>
-            </Link>
-            <Link href="/messages">
-              <div className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 hover-effect cursor-pointer text-gray-600 dark:text-gray-300">
-                <FaEnvelope />
-              </div>
-            </Link>
-            <button
-              onClick={toggleDarkMode}
-              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 hover-effect text-gray-600 dark:text-gray-300"
-              onMouseEnter={() => isDarkMode ? setIsSunHovered(true) : setIsMoonHovered(true)}
-              onMouseLeave={() => {setIsSunHovered(false); setIsMoonHovered(false)}}
+  // Decide if we need a back button
+  const shouldShowBackButton = () => {
+    return router.pathname !== '/home' && router.pathname !== '/';
+  };
+
+  return (
+    <header className="sticky top-0 z-50 bg-white dark:bg-black border-b border-[var(--border-color)] backdrop-blur-md bg-opacity-80 dark:bg-opacity-80">
+      {/* Mobile and middle-size screen header */}
+      <div className="flex justify-between items-center h-14 px-4">
+        {/* Left section: Back button or Title */}
+        <div className="flex items-center">
+          {shouldShowBackButton() ? (
+            <button 
+              onClick={() => router.back()} 
+              className="mr-4 p-2 rounded-full hover:bg-[var(--gray-light)] text-[var(--text-primary)]"
             >
-              {isDarkMode ? 
-                <FaSun className={isSunHovered ? "text-sunHover" : ""} /> : 
-                <FaMoon className={isMoonHovered ? "text-moonHover" : ""} />
-              }
+              <FaArrowLeft className="h-5 w-5" />
             </button>
-            
-            {connected ? (
-              <div className="flex items-center">
+          ) : (
+            <div className="w-10 h-10 flex items-center justify-center md:hidden">
+              {connected && (
                 <Link href="/profile">
-                  <div className="flex items-center cursor-pointer">
-                    <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
-                      {user.username || walletAddress?.substring(0, 4) + '...' + walletAddress?.substring(walletAddress.length - 4)}
-                    </div>
-                    <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                      {user.avatar ? (
-                        <img src={user.avatar} alt={user.username || 'User'} className="w-8 h-8 rounded-full" />
-                      ) : (
-                        <span className="text-gray-500 dark:text-gray-300 text-sm">
-                          {(user.username && user.username.charAt(0)) || (walletAddress && walletAddress.substring(0, 2))}
-                        </span>
-                      )}
-                    </div>
+                  <div className="w-8 h-8 rounded-full overflow-hidden">
+                    {user.avatar ? (
+                      <img 
+                        src={user.avatar} 
+                        alt={user.username || 'User'} 
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-primary flex items-center justify-center text-white">
+                        {user.username ? user.username.charAt(0).toUpperCase() : walletAddress?.substring(0, 2)}
+                      </div>
+                    )}
                   </div>
                 </Link>
+              )}
+            </div>
+          )}
+          
+          <h1 className="text-xl font-bold text-[var(--text-primary)]">
+            {renderPageTitle()}
+          </h1>
+        </div>
+        
+        {/* Right section: Search and actions */}
+        <div className="flex items-center space-x-2">
+          {/* Search - visible on md+ screens */}
+          <div className="hidden md:block mr-4">
+            <div className="relative">
+              <input 
+                type="text" 
+                placeholder="Search" 
+                className="search-input focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <FaSearch className="h-5 w-5 text-[var(--text-secondary)]" />
               </div>
-            ) : (
-              <button 
-                onClick={handleConnectWallet}
-                className="bg-primary hover:bg-primary/90 rounded-full border-none text-white font-medium py-2 px-4 cursor-pointer"
-              >
-                Connect Wallet
-              </button>
-            )}
+            </div>
           </div>
-
-          <div className="md:hidden flex items-center">
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="inline-flex items-center justify-center p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover-effect focus:outline-none"
+          
+          {/* Toggle dark mode button */}
+          <button
+            onClick={toggleDarkMode}
+            className="p-2 rounded-full hover:bg-[var(--gray-light)] text-[var(--text-primary)]"
+          >
+            {isDarkMode ? <FaSun /> : <FaMoon />}
+          </button>
+          
+          {/* Aura Points display - Only visible when connected */}
+          {connected && (
+            <div className="hidden md:flex items-center bg-[var(--gray-light)] rounded-full py-1 px-3">
+              <span className="text-primary font-bold mr-1">{auraPoints}</span>
+              <span className="text-[var(--text-secondary)] text-sm">Aura</span>
+            </div>
+          )}
+          
+          {/* Connect Wallet Button - Only visible when not connected */}
+          {!connected && (
+            <button 
+              onClick={handleConnectWallet}
+              className="bg-primary hover:bg-primary-hover rounded-full text-white font-medium py-2 px-4"
             >
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={isMenuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
-              </svg>
+              Connect
             </button>
-          </div>
+          )}
         </div>
       </div>
-
-      {/* Mobile menu */}
-      {isMobile && isMenuOpen && (
-        <div className="md:hidden">
-          <div className="px-2 pt-2 pb-3 space-y-1 bg-white dark:bg-gray-900 transparent-bg border-b border-gray-200 dark:border-gray-700 thin-borders">
-            <div className="flex justify-between items-center p-2">
-              <button
-                onClick={toggleDarkMode}
-                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 hover-effect text-gray-600 dark:text-gray-300"
-                onMouseEnter={() => isDarkMode ? setIsSunHovered(true) : setIsMoonHovered(true)}
-                onMouseLeave={() => {setIsSunHovered(false); setIsMoonHovered(false)}}
-              >
-                {isDarkMode ? 
-                  <FaSun className={isSunHovered ? "text-sunHover" : ""} /> : 
-                  <FaMoon className={isMoonHovered ? "text-moonHover" : ""} />
-                }
-              </button>
-              <Link href="/notifications">
-                <div className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 hover-effect cursor-pointer text-gray-600 dark:text-gray-300">
-                  <FaBell />
-                </div>
-              </Link>
-              <Link href="/messages">
-                <div className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 hover-effect cursor-pointer text-gray-600 dark:text-gray-300">
-                  <FaEnvelope />
-                </div>
-              </Link>
-            </div>
-            {connected ? (
-              <div className="flex items-center p-2">
-                <Link href="/profile">
-                  <div className="flex items-center cursor-pointer">
-                    <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mr-2">
-                      {user.avatar ? (
-                        <img src={user.avatar} alt={user.username || 'User'} className="w-8 h-8 rounded-full" />
-                      ) : (
-                        <span className="text-gray-500 dark:text-gray-300 text-sm">
-                          {(user.username && user.username.charAt(0)) || (walletAddress && walletAddress.substring(0, 2))}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {user.username || walletAddress?.substring(0, 4) + '...' + walletAddress?.substring(walletAddress.length - 4)}
-                    </div>
-                  </div>
-                </Link>
-              </div>
-            ) : (
-              <div className="p-2">
-                <button 
-                  onClick={handleConnectWallet}
-                  className="bg-primary hover:bg-primary/90 rounded-full border-none text-white font-medium py-2 px-4 w-full"
-                >
-                  Connect Wallet
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </header>
   );
 };
