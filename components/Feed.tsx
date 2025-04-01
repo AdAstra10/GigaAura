@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../lib/store';
 import { setFeed, addPost, Post, addComment, setComments } from '../lib/slices/postsSlice';
@@ -9,6 +9,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { useDarkMode } from '../contexts/DarkModeContext';
 import dynamic from 'next/dynamic';
 import { FaRegComment, FaRetweet, FaRegHeart, FaShare, FaImage, FaRegSmile, FaRegListAlt, FaMapMarkerAlt } from 'react-icons/fa';
+import { useErrorBoundary } from 'react-error-boundary';
+import PostCard from './PostCard';
 
 // Import the emoji picker dynamically to avoid SSR issues
 // IMPORTANT: Keep this import outside of the component to prevent rendering issues
@@ -22,315 +24,317 @@ interface EmojiClickData {
   emoji: string;
 }
 
-// Safely get the sort date value to prevent toString errors
-const getSafeDate = (dateStr: string | undefined) => {
-  if (!dateStr) return 0;
-  try {
-    return new Date(dateStr).getTime();
-  } catch (e) {
-    console.warn('Invalid date string:', dateStr);
-    return 0;
-  }
-};
+// Simple LoadingSpinner component
+const LoadingSpinner = () => (
+  <div className="flex justify-center items-center py-4">
+    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+  </div>
+);
 
-// Add this robust fallback error boundary component inside the Feed.tsx file
-const FeedErrorBoundary = ({ children }: { children: React.ReactNode }) => {
-  const [hasError, setHasError] = useState(false);
-  
+// Helper function to safely format dates
+function getSafeDate(dateString: string | null | undefined): string {
+  if (!dateString) return 'Just now';
+  try {
+    return new Date(dateString).toLocaleDateString();
+  } catch (e) {
+    return 'Recently';
+  }
+}
+
+// Error boundary fallback component
+function FeedErrorFallback({ error, resetErrorBoundary }: { error: Error, resetErrorBoundary: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center p-8 rounded-lg bg-gray-50 dark:bg-gray-800 my-4">
+      <h3 className="text-xl font-bold text-black dark:text-white mb-4">Something went wrong loading the feed</h3>
+      <p className="text-black dark:text-gray-300 mb-4">We're sorry, but there was an error loading your feed content.</p>
+      <button
+        onClick={resetErrorBoundary}
+        className="px-4 py-2 bg-primary text-white rounded-full hover:bg-primary-hover transition-colors"
+      >
+        Try Again
+      </button>
+    </div>
+  );
+}
+
+// Error boundary component
+class FeedErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode; fallback: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(_: Error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("Feed error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+
+    return this.props.children;
+  }
+}
+
+// Safety wrapper component to handle additional checks
+function FeedSafetyWrapper(props: Record<string, any>) {
+  const [isMetaMaskDetected, setIsMetaMaskDetected] = useState(false);
+  const { showBoundary } = useErrorBoundary();
+
   useEffect(() => {
-    const handleError = (event: ErrorEvent) => {
-      console.error("Feed caught error:", event.error);
-      setHasError(true);
-      event.preventDefault();
-    };
-    
-    window.addEventListener('error', handleError);
-    return () => window.removeEventListener('error', handleError);
+    // Check for ethereum in a type-safe way
+    try {
+      const win = window as unknown as { ethereum?: any };
+      setIsMetaMaskDetected(!!win.ethereum);
+    } catch (e) {
+      console.error("Error checking for ethereum:", e);
+    }
   }, []);
-  
-  if (hasError) {
+
+  // Render the FeedInner component with extra safety measures
+  try {
+    return <FeedInner {...props} isMetaMaskDetected={isMetaMaskDetected} />;
+  } catch (error) {
+    showBoundary(error instanceof Error ? error : new Error('Unknown feed error'));
+    return <LoadingSpinner />;
+  }
+}
+
+// Inner feed component with main logic
+function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
+  const [activeTab, setActiveTab] = useState('for-you');
+  const [loading, setLoading] = useState(true);
+  const [posts, setPosts] = useState<any[]>([]);
+  const [error, setError] = useState<Error | null>(null);
+  const feedRef = useRef<HTMLDivElement>(null);
+  const { showBoundary } = useErrorBoundary();
+
+  useEffect(() => {
+    // Mock function to simulate loading posts
+    const fetchPosts = async () => {
+      try {
+        setLoading(true);
+        
+        // Simulating API delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Mock posts data
+        const mockPosts = [
+          {
+            id: 1,
+            user: {
+              name: 'Alex Johnson',
+              username: 'alexjohnson',
+              avatar: 'https://i.pravatar.cc/150?img=1',
+              verified: true
+            },
+            content: 'Just deployed my first #Web3 dApp on @GigaAura! The experience was seamless. Looking forward to building more with this amazing platform. #Blockchain #Crypto',
+            timestamp: '2023-05-15T14:30:00Z',
+            likes: 142,
+            comments: 23,
+            reposts: 7
+          },
+          {
+            id: 2,
+            user: {
+              name: 'Crypto Daily',
+              username: 'cryptodaily',
+              avatar: 'https://i.pravatar.cc/150?img=2',
+              verified: true
+            },
+            content: 'Breaking: Major update coming to #GigaAura next week! Sources say it will include new wallet integration features and enhanced social capabilities. Stay tuned for the official announcement! #Web3News',
+            timestamp: '2023-05-14T10:15:00Z',
+            likes: 358,
+            comments: 47,
+            reposts: 112
+          },
+          {
+            id: 3,
+            user: {
+              name: 'Web3 Developer',
+              username: 'web3dev',
+              avatar: 'https://i.pravatar.cc/150?img=3',
+              verified: false
+            },
+            content: 'Tutorial: How to earn Aura Points on @GigaAura\n\n1. Create quality posts\n2. Engage with community\n3. Complete challenges\n4. Verify your profile\n\nHas anyone reached Elite status yet? Share your tips below! #AuraPoints #GigaAura',
+            timestamp: '2023-05-13T16:45:00Z',
+            likes: 89,
+            comments: 31,
+            reposts: 12
+          },
+          {
+            id: 4,
+            user: {
+              name: 'GigaAura Official',
+              username: 'gigaaura',
+              avatar: 'https://i.pravatar.cc/150?img=4',
+              verified: true
+            },
+            content: "We're excited to announce our new partnership with @PhantomWallet! This collaboration will bring enhanced features and a smoother experience to all GigaAura users. #Web3 #Partnership",
+            timestamp: '2023-05-12T09:30:00Z',
+            likes: 721,
+            comments: 134,
+            reposts: 203
+          },
+          {
+            id: 5,
+            user: {
+              name: 'Blockchain Enthusiast',
+              username: 'blockchainenth',
+              avatar: 'https://i.pravatar.cc/150?img=5',
+              verified: false
+            },
+            content: 'Just hit 5000 Aura Points and unlocked Elite Status! 🌟 The perks are amazing - especially loving the custom badge and boosts. Thank you @GigaAura for creating such a rewarding ecosystem! #AuraPoints #EliteStatus',
+            timestamp: '2023-05-11T13:20:00Z',
+            likes: 176,
+            comments: 42,
+            reposts: 15
+          }
+        ];
+        
+        setPosts(mockPosts);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching posts:', err);
+        setError(err instanceof Error ? err : new Error('Failed to fetch posts'));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPosts().catch(err => {
+      showBoundary(err);
+    });
+  }, [activeTab, showBoundary]);
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+  };
+
+  if (error) {
     return (
-      <div className="p-6 border border-[var(--border-color)] rounded-lg bg-[var(--gray-light)]">
-        <h3 className="text-lg font-bold text-[var(--text-primary)] mb-2">Something went wrong</h3>
-        <p className="text-[var(--text-secondary)] mb-4">There was an error loading your feed. We're working on fixing it.</p>
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4 my-4">
+        <h3 className="text-red-800 dark:text-red-400 font-medium">Error loading feed</h3>
+        <p className="text-red-700 dark:text-red-300 text-sm">{error.message}</p>
         <button 
-          onClick={() => window.location.reload()} 
-          className="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-full"
+          onClick={() => window.location.reload()}
+          className="mt-2 text-white bg-red-600 hover:bg-red-700 px-4 py-1 rounded-full text-sm"
         >
-          Refresh Page
+          Refresh
         </button>
       </div>
     );
   }
-  
-  return <>{children}</>;
-};
 
-// Simple fallback component if the Feed fails to load
-const FeedFallback = () => (
-  <div className="p-6 border border-[var(--border-color)] rounded-lg text-center">
-    <p className="text-[var(--text-secondary)] mb-4">
-      Unable to load feed. Please try again later.
-    </p>
-    <button
-      onClick={() => window.location.reload()}
-      className="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-full"
-    >
-      Refresh
-    </button>
-  </div>
-);
-
-// Advanced safety wrapper around the Feed component
-const FeedSafetyWrapper = (props: Record<string, any>) => {
-  // Extra safety check to make sure component never renders if ethereum is causing problems
-  useEffect(() => {
-    // Use type assertion to safely check for ethereum property
-    if ((window as any).ethereum !== null) {
-      console.error('ethereum property found in Feed component - should be null');
-    }
-  }, []);
-  
-  // Try to render the inner content in a protected way
-  try {
-    return <FeedInner {...props} />;
-  } catch (error) {
-    console.error('Error rendering Feed:', error);
-    return <FeedFallback />;
-  }
-};
-
-// The actual inner feed component with all the implementation
-const FeedInner = () => {
-  try {
-    const dispatch = useDispatch();
-    const { walletAddress } = useWallet();
-    const { isDarkMode } = useDarkMode();
-    const feed = useSelector((state: RootState) => state.posts.feed || []);
-    const user = useSelector((state: RootState) => state.user || {});
-    
-    // States
-    const [isLoading, setIsLoading] = useState(true);
-    const [feedError, setFeedError] = useState(false);
-    const [activeTab, setActiveTab] = useState<'for-you' | 'following'>('for-you');
-    const [newPostContent, setNewPostContent] = useState('');
-    
-    // Load posts
-    useEffect(() => {
-      try {
-        // Simple loading effect
-        const timer = setTimeout(() => {
-          setIsLoading(false);
-        }, 1000);
-        
-        return () => clearTimeout(timer);
-      } catch (error) {
-        console.error('Feed loading error:', error);
-        setFeedError(true);
-        setIsLoading(false);
-      }
-    }, []);
-    
-    // If there's an error, show error UI
-    if (feedError) {
-      return <FeedFallback />;
-    }
-    
-    const formatDate = (dateString: string) => {
-      const now = new Date();
-      const date = new Date(dateString);
-      const diffMs = now.getTime() - date.getTime();
-      const diffSecs = Math.floor(diffMs / 1000);
-      const diffMins = Math.floor(diffSecs / 60);
-      const diffHours = Math.floor(diffMins / 60);
-      const diffDays = Math.floor(diffHours / 24);
-      
-      if (diffSecs < 60) return `${diffSecs}s`;
-      if (diffMins < 60) return `${diffMins}m`;
-      if (diffHours < 24) return `${diffHours}h`;
-      if (diffDays < 7) return `${diffDays}d`;
-      
-      return date.toLocaleDateString();
-    };
-    
-    // Return a minimal safe implementation
-    return (
-      <div>
-        {/* Feed header */}
-        <div className="feed-header">
-          {/* Tabs */}
-          <div className="flex border-b border-[var(--border-color)]">
-            <button 
-              className={`x-tab ${activeTab === 'for-you' ? 'x-tab-active' : ''}`}
-              onClick={() => setActiveTab('for-you')}
-            >
-              For you
-              {activeTab === 'for-you' && (
-                <div className="x-tab-indicator"></div>
-              )}
-            </button>
-            <button 
-              className={`x-tab ${activeTab === 'following' ? 'x-tab-active' : ''}`}
-              onClick={() => setActiveTab('following')}
-            >
-              Following
-              {activeTab === 'following' && (
-                <div className="x-tab-indicator"></div>
-              )}
-            </button>
-          </div>
+  return (
+    <div ref={feedRef} className="border-x border-[var(--border-color)] min-h-screen">
+      {/* Tabs */}
+      <div className="sticky top-0 bg-light dark:bg-dark z-10 border-b border-[var(--border-color)]">
+        <div className="flex">
+          <button
+            className={`flex-1 py-4 text-center font-medium text-black dark:text-white hover:bg-gray-50 dark:hover:bg-gray-900 relative ${
+              activeTab === 'for-you' ? 'font-bold' : ''
+            }`}
+            onClick={() => handleTabChange('for-you')}
+          >
+            For you
+            {activeTab === 'for-you' && (
+              <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-1 rounded-full bg-primary" />
+            )}
+          </button>
+          <button
+            className={`flex-1 py-4 text-center font-medium text-black dark:text-white hover:bg-gray-50 dark:hover:bg-gray-900 relative ${
+              activeTab === 'following' ? 'font-bold' : ''
+            }`}
+            onClick={() => handleTabChange('following')}
+          >
+            Following
+            {activeTab === 'following' && (
+              <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-1 rounded-full bg-primary" />
+            )}
+          </button>
         </div>
-        
-        {/* Post creation area */}
-        <div className="border-b border-[var(--border-color)] p-4">
-          <div className="flex space-x-3">
-            <div className="flex-shrink-0">
-              <div className="h-10 w-10 rounded-full overflow-hidden bg-primary flex items-center justify-center text-white">
-                {user?.avatar ? (
-                  <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
-                ) : (
-                  <span>{user?.username?.charAt(0)?.toUpperCase() || walletAddress?.substring(0, 2) || '?'}</span>
-                )}
-              </div>
-            </div>
-            <div className="flex-1">
-              <textarea
-                className="w-full bg-transparent text-[var(--text-primary)] text-xl px-0 py-2 border-0 focus:ring-0 resize-none placeholder-[var(--text-secondary)]"
-                placeholder="What's happening?"
-                rows={3}
-                value={newPostContent}
-                onChange={(e) => setNewPostContent(e.target.value)}
-              ></textarea>
-              
-              <div className="border-t border-[var(--border-color)] pt-3 flex justify-between items-center">
-                <div className="flex space-x-2 text-primary">
-                  <button className="p-2 hover:bg-primary/10 rounded-full">
-                    <FaImage className="w-5 h-5" />
-                  </button>
-                  <button className="p-2 hover:bg-primary/10 rounded-full">
-                    <FaRegListAlt className="w-5 h-5" />
-                  </button>
-                  <button className="p-2 hover:bg-primary/10 rounded-full">
-                    <FaRegSmile className="w-5 h-5" />
-                  </button>
-                  <button className="p-2 hover:bg-primary/10 rounded-full">
-                    <FaMapMarkerAlt className="w-5 h-5" />
-                  </button>
-                </div>
-                <button 
-                  disabled={!newPostContent.trim()}
-                  className={`px-4 py-1.5 rounded-full font-bold text-white ${
-                    !newPostContent.trim() 
-                      ? 'bg-primary/50 cursor-not-allowed' 
-                      : 'bg-primary hover:bg-primary-hover'
-                  }`}
-                >
-                  Post
+      </div>
+
+      {/* Create Post */}
+      <div className="p-4 border-b border-[var(--border-color)]">
+        <div className="flex space-x-4">
+          <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 flex-shrink-0"></div>
+          <div className="flex-grow">
+            <textarea
+              placeholder="What's happening?"
+              className="w-full p-2 bg-transparent text-black dark:text-white border-b border-[var(--border-color)] focus:outline-none focus:border-primary resize-none"
+              rows={2}
+            ></textarea>
+            <div className="flex justify-between items-center mt-3">
+              <div className="flex space-x-2 text-primary">
+                <button className="hover:bg-primary/10 p-2 rounded-full">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19.75 2H4.25C3.01 2 2 3.01 2 4.25v15.5C2 20.99 3.01 22 4.25 22h15.5c1.24 0 2.25-1.01 2.25-2.25V4.25C22 3.01 20.99 2 19.75 2zM4.25 3.5h15.5c.413 0 .75.337.75.75v9.676l-3.858-3.858c-.14-.14-.33-.22-.53-.22h-.003c-.2 0-.393.08-.532.224l-4.317 4.384-1.813-1.806c-.14-.14-.33-.22-.53-.22-.193-.03-.395.08-.535.227L3.5 17.642V4.25c0-.413.337-.75.75-.75zm-.744 16.28l5.418-5.534 6.282 6.254H4.25c-.402 0-.727-.322-.744-.72zm16.244.72h-2.42l-5.007-4.987 3.792-3.85 4.385 4.384v3.703c0 .413-.337.75-.75.75z"></path>
+                  </svg>
+                </button>
+                <button className="hover:bg-primary/10 p-2 rounded-full">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 10.5V8.8h-4.4v6.4h1.7v-2h2v-1.7h-2v-1H19zm-7.3-1.7h1.7v6.4h-1.7V8.8zm-3.6 1.6c.4 0 .9.2 1.2.5l1.2-1C9.9 9.2 9 8.8 8.1 8.8c-1.8 0-3.2 1.4-3.2 3.2s1.4 3.2 3.2 3.2c1 0 1.8-.4 2.4-1.1v-2.5H7.7v1.2h1.2v.6c-.2.1-.5.2-.8.2-.9 0-1.6-.7-1.6-1.6 0-.8.7-1.6 1.6-1.6z"></path>
+                    <path d="M20.5 2.02h-17c-1.24 0-2.25 1.007-2.25 2.247v15.507c0 1.238 1.01 2.246 2.25 2.246h17c1.24 0 2.25-1.008 2.25-2.246V4.267c0-1.24-1.01-2.247-2.25-2.247zm.75 17.754c0 .41-.336.746-.75.746h-17c-.414 0-.75-.336-.75-.746V4.267c0-.412.336-.747.75-.747h17c.414 0 .75.335.75.747v15.507z"></path>
+                  </svg>
                 </button>
               </div>
+              <button className="bg-primary hover:bg-primary-hover text-white font-bold py-1.5 px-4 rounded-full">
+                Post
+              </button>
             </div>
           </div>
         </div>
-        
-        {/* Feed content */}
-        {isLoading ? (
-          <div className="flex justify-center p-8">
-            <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-          </div>
-        ) : (
-          <div>
-            {/* Sample posts */}
-            {[
-              {
-                id: 1,
-                name: 'GigaAura Team',
-                username: 'GigaAuraOfficial',
-                avatar: '/images/logo.png',
-                content: 'Welcome to GigaAura! Your social platform with crypto wallet integration. Earn Aura Points by engaging with the community! 🎉',
-                date: '2h',
-                comments: 5,
-                retweets: 12,
-                likes: 45
-              },
-              {
-                id: 2,
-                name: 'Crypto Enthusiast',
-                username: 'crypto_fan',
-                content: 'Just connected my Phantom wallet to GigaAura and got my first Aura Points! The UI is smooth and reminds me of Twitter but with crypto features. Loving it so far! 🚀',
-                date: '4h',
-                comments: 3,
-                retweets: 7,
-                likes: 23
-              },
-              {
-                id: 3,
-                name: 'Tech Guru',
-                username: 'techguru',
-                content: 'Testing out this new platform. The combination of social media with blockchain tech is fascinating. Curious to see how Aura Points can be used in the future!',
-                date: '7h',
-                comments: 8,
-                retweets: 4,
-                likes: 31
-              }
-            ].map((post) => (
-              <div key={post.id} className="post-container">
-                <div className="flex space-x-3">
-                  <div className="flex-shrink-0">
-                    <div className="h-12 w-12 rounded-full bg-primary flex items-center justify-center text-white overflow-hidden">
-                      {post.avatar ? (
-                        <img src={post.avatar} alt={post.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <span>{post.name.charAt(0)}</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center">
-                      <h3 className="font-bold text-[var(--text-primary)]">{post.name}</h3>
-                      <span className="ml-2 text-[var(--text-secondary)]">@{post.username}</span>
-                      <span className="mx-1 text-[var(--text-secondary)]">·</span>
-                      <span className="text-[var(--text-secondary)]">{post.date}</span>
-                    </div>
-                    <p className="mt-1 text-[var(--text-primary)]">{post.content}</p>
-                    
-                    <div className="mt-3 flex justify-between max-w-md">
-                      <button className="tweet-action tweet-action-comment group">
-                        <FaRegComment className="h-4 w-4 mr-2 group-hover:text-primary" />
-                        <span>{post.comments}</span>
-                      </button>
-                      <button className="tweet-action tweet-action-retweet group">
-                        <FaRetweet className="h-4 w-4 mr-2 group-hover:text-green-500" />
-                        <span>{post.retweets}</span>
-                      </button>
-                      <button className="tweet-action tweet-action-like group">
-                        <FaRegHeart className="h-4 w-4 mr-2 group-hover:text-pink-600" />
-                        <span>{post.likes}</span>
-                      </button>
-                      <button className="tweet-action tweet-action-share group">
-                        <FaShare className="h-4 w-4 mr-2 group-hover:text-primary" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
-    );
-  } catch (error) {
-    console.error('Error in Feed component:', error);
-    return <FeedFallback />;
-  }
-};
 
-// Export the safety-wrapped Feed component
-const Feed = (props: Record<string, any>) => {
+      {/* Posts */}
+      {loading ? (
+        <div className="flex justify-center items-center py-10">
+          <LoadingSpinner />
+        </div>
+      ) : (
+        <div>
+          {posts.map(post => (
+            <PostCard
+              key={post.id}
+              post={{
+                id: post.id.toString(),
+                content: post.content,
+                authorUsername: post.user.username,
+                authorWallet: post.user.username,
+                authorAvatar: post.user.avatar,
+                createdAt: post.timestamp,
+                likes: post.likes,
+                comments: post.comments,
+                shares: post.reposts,
+                likedBy: []
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Main export with error boundary
+function Feed(props: Record<string, any>) {
   return (
-    <FeedErrorBoundary>
+    <FeedErrorBoundary
+      fallback={<FeedErrorFallback error={new Error('Failed to load feed')} resetErrorBoundary={() => window.location.reload()} />}
+    >
       <FeedSafetyWrapper {...props} />
     </FeedErrorBoundary>
   );
-};
+}
 
 export default Feed; 

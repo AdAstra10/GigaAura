@@ -12,6 +12,9 @@ import toast from 'react-hot-toast';
 import { formatDistance } from 'date-fns';
 import { followUser, unfollowUser } from '../lib/slices/userSlice';
 import { FaRegComment, FaRegHeart, FaHeart, FaRetweet, FaRegShareSquare, FaEllipsisH } from 'react-icons/fa';
+import Image from 'next/image';
+import { ChatBubbleLeftIcon, ArrowPathRoundedSquareIcon, HeartIcon, ShareIcon } from '@heroicons/react/24/outline';
+import { CheckBadgeIcon } from '@heroicons/react/24/solid';
 
 interface PostCardProps {
   post: Post;
@@ -242,56 +245,32 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
   };
   
   return (
-    <div className="p-4">
-      <div className="flex space-x-3">
-        {/* Avatar */}
-        <div 
-          className="flex-shrink-0 cursor-pointer" 
-          onClick={handleViewProfile}
-        >
-          <div className="w-10 h-10 rounded-full overflow-hidden bg-primary">
-            {post.authorAvatar ? (
-              <img 
-                src={post.authorAvatar} 
-                alt={post.authorUsername || 'User'} 
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-white">
-                {post.authorUsername 
-                  ? post.authorUsername.charAt(0).toUpperCase() 
-                  : post.authorWallet.substring(0, 2)}
-              </div>
-            )}
+    <div className="border-b border-[var(--border-color)] p-4 hover:bg-gray-50 dark:hover:bg-gray-900/20 transition-colors cursor-pointer">
+      <div className="flex">
+        <div className="flex-shrink-0 mr-3">
+          <div className="w-12 h-12 rounded-full overflow-hidden">
+            <Image 
+              src={post.authorAvatar || ''} 
+              alt={post.authorUsername || 'User'} 
+              width={48} 
+              height={48} 
+              className="object-cover"
+            />
           </div>
         </div>
-      
-        {/* Content */}
+        
         <div className="flex-1">
           <div className="flex items-center">
-            <div className="flex items-center flex-1">
-              <div 
-                className="font-bold hover:underline cursor-pointer mr-1"
-                onClick={handleViewProfile}
-              >
-                {post.authorUsername || 'Anonymous'}
-              </div>
-              <span className="text-gray-500">
-                @{post.authorUsername || truncateWallet(post.authorWallet)}
-              </span>
-              <span className="mx-1 text-gray-500">·</span>
-              <span className="text-gray-500 hover:underline cursor-pointer">
-                {formatDate(post.createdAt)}
-              </span>
-            </div>
-            
-            <div className="text-gray-500 hover:text-primary hover:bg-primary/10 p-1 rounded-full cursor-pointer transition-colors">
-              <FaEllipsisH size={16} />
-            </div>
+            <span className="profile-name font-bold">{post.authorUsername || 'Anonymous'}</span>
+            {post.authorWallet && (
+              <span className="user-handle ml-2">@{truncateWallet(post.authorWallet)}</span>
+            )}
+            <span className="metadata mx-1">·</span>
+            <span className="metadata">{formatDate(post.createdAt)}</span>
           </div>
           
           <div className="mt-1">
-            <p className="text-[var(--text-primary)] whitespace-pre-wrap">{post.content}</p>
+            <p className="post-content whitespace-pre-line">{post.content}</p>
           </div>
           
           {post.mediaUrl && (
@@ -312,150 +291,23 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
             </div>
           )}
           
-          {/* Action buttons */}
           <div className="flex justify-between mt-3 max-w-md">
-            <div 
-              className={`flex items-center group cursor-pointer ${commentHover ? 'text-blue-500' : 'text-gray-500'}`}
-              onMouseEnter={() => setCommentHover(true)}
-              onMouseLeave={() => setCommentHover(false)}
-              onClick={() => setShowComments(!showComments)}
-            >
-              <div className={`p-2 rounded-full ${commentHover ? 'bg-blue-100 dark:bg-blue-900/30' : 'hover:bg-gray-200 dark:hover:bg-gray-700'} transition-colors`}>
-                <FaRegComment size={18} />
-              </div>
-              <span className="ml-1 text-sm">{post.comments}</span>
-            </div>
-            
-            <div 
-              className={`flex items-center group cursor-pointer ${retweetHover ? 'text-green-500' : 'text-gray-500'}`}
-              onMouseEnter={() => setRetweetHover(true)}
-              onMouseLeave={() => setRetweetHover(false)}
-              onClick={onShare}
-            >
-              <div className={`p-2 rounded-full ${retweetHover ? 'bg-green-100 dark:bg-green-900/30' : 'hover:bg-gray-200 dark:hover:bg-gray-700'} transition-colors`}>
-                <FaRetweet size={18} />
-              </div>
-              <span className="ml-1 text-sm">{post.shares}</span>
-            </div>
-            
-            <div 
-              className={`flex items-center group cursor-pointer ${isLiked || likeHover ? 'text-pink-500' : 'text-gray-500'}`}
-              onMouseEnter={() => setLikeHover(true)}
-              onMouseLeave={() => setLikeHover(false)}
-              onClick={handleLike}
-            >
-              <div className={`p-2 rounded-full ${likeHover ? 'bg-pink-100 dark:bg-pink-900/30' : 'hover:bg-gray-200 dark:hover:bg-gray-700'} transition-colors`}>
-                {isLiked ? <FaHeart size={18} /> : <FaRegHeart size={18} />}
-              </div>
-              <span className="ml-1 text-sm">{post.likes}</span>
-            </div>
-            
-            <div 
-              className={`flex items-center group cursor-pointer ${shareHover ? 'text-blue-500' : 'text-gray-500'}`}
-              onMouseEnter={() => setShareHover(true)}
-              onMouseLeave={() => setShareHover(false)}
-            >
-              <div className={`p-2 rounded-full ${shareHover ? 'bg-blue-100 dark:bg-blue-900/30' : 'hover:bg-gray-200 dark:hover:bg-gray-700'} transition-colors`}>
-                <FaRegShareSquare size={18} />
-              </div>
-            </div>
+            <button className="flex items-center group text-gray-500 hover:text-primary">
+              <ChatBubbleLeftIcon className="h-5 w-5 mr-2 group-hover:text-primary" />
+              <span className="text-sm group-hover:text-primary">{post.comments}</span>
+            </button>
+            <button className="flex items-center group text-gray-500 hover:text-green-500">
+              <ArrowPathRoundedSquareIcon className="h-5 w-5 mr-2 group-hover:text-green-500" />
+              <span className="text-sm group-hover:text-green-500">{post.shares}</span>
+            </button>
+            <button className="flex items-center group text-gray-500 hover:text-pink-500">
+              <HeartIcon className="h-5 w-5 mr-2 group-hover:text-pink-500" />
+              <span className="text-sm group-hover:text-pink-500">{post.likes}</span>
+            </button>
+            <button className="flex items-center text-gray-500 hover:text-primary">
+              <ShareIcon className="h-5 w-5" />
+            </button>
           </div>
-          
-          {/* Comments Section */}
-          {showComments && (
-            <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
-              <h3 className="text-lg font-semibold mb-2">Comments</h3>
-              
-              {/* Comment form */}
-              <form onSubmit={handleSubmitComment} className="mb-4">
-                <div className="flex space-x-2">
-                  <div className="w-8 h-8 rounded-full overflow-hidden bg-primary flex-shrink-0">
-                    {walletAddress && (
-                      <>
-                        {useSelector((state: RootState) => state.user.avatar) ? (
-                          <img 
-                            src={useSelector((state: RootState) => state.user.avatar) || ''}
-                            alt={username || 'User'}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-white">
-                            {username 
-                              ? username.charAt(0).toUpperCase()
-                              : walletAddress.substring(0, 2) || '?'}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <input
-                      type="text"
-                      placeholder="Add a comment..."
-                      value={commentText}
-                      onChange={(e) => setCommentText(e.target.value)}
-                      className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-full dark:bg-gray-800 dark:text-white"
-                    />
-                    <div className="mt-2 flex justify-end">
-                      <button
-                        type="submit"
-                        disabled={!commentText.trim() || isSubmitting}
-                        className={`px-3 py-1 rounded-full ${
-                          !commentText.trim() || isSubmitting
-                            ? 'bg-primary/50 text-white cursor-not-allowed'
-                            : 'bg-primary text-white hover:bg-primary/90'
-                        }`}
-                      >
-                        {isSubmitting ? 'Posting...' : 'Comment'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </form>
-              
-              {/* Comment list */}
-              {comments.length > 0 ? (
-                <div className="space-y-4">
-                  {comments.map((comment) => (
-                    <div key={comment.id} className="flex space-x-2">
-                      <div className="w-8 h-8 rounded-full overflow-hidden bg-primary flex-shrink-0">
-                        {comment.authorAvatar ? (
-                          <img 
-                            src={comment.authorAvatar}
-                            alt={comment.authorUsername || 'User'}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-white">
-                            {comment.authorUsername 
-                              ? comment.authorUsername.charAt(0).toUpperCase()
-                              : comment.authorWallet.substring(0, 2)}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
-                          <div className="flex items-center mb-1">
-                            <span className="font-semibold dark:text-white mr-2">
-                              {comment.authorUsername || truncateWallet(comment.authorWallet)}
-                            </span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                              {formatDate(comment.createdAt)}
-                            </span>
-                          </div>
-                          <p className="text-[var(--text-primary)]">{comment.content}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500 dark:text-gray-400 text-center py-2">
-                  No comments yet. Be the first to comment!
-                </p>
-              )}
-            </div>
-          )}
         </div>
       </div>
     </div>

@@ -19,7 +19,9 @@
   --gray-light: #f7f9f9;
   --border-color: #eff3f4;
   --text-primary: #000000;  /* Pure black text for light mode */
-  --text-secondary: #333333;  /* Darker gray for better contrast in light mode */
+  --text-secondary: #222222;  /* Even darker gray for better light mode contrast */
+  --light-mode-text: #000000; /* Black text specifically for light mode */
+  --dark-mode-text: #FFFFFF; /* White text specifically for dark mode */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -36,34 +38,79 @@
 
 @layer base {
   body {
-    @apply bg-light text-[var(--text-primary)] transition-colors duration-200;
-  }
-
-  .dark body {
-    @apply bg-dark text-[var(--text-primary)];
+    @apply bg-light text-black dark:bg-dark dark:text-white transition-colors duration-200;
   }
   
-  /* Ensure light mode has proper text colors */
+  /* Global text color overrides for better contrast */
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-black dark:text-white;
+  }
+  
+  p, span, div {
+    @apply text-black dark:text-white;
+  }
+  
+  /* Ensure light mode has proper text colors for all gray variations */
+  .text-gray-50, .text-gray-100, .text-gray-200, .text-gray-300, .text-gray-400, 
   .text-gray-500, .text-gray-600, .text-gray-700, .text-gray-800, .text-gray-900 {
-    @apply text-[#000000] dark:text-[var(--text-primary)];
+    @apply text-black dark:text-white;
+  }
+  
+  /* Force light theme text colors */
+  .light {
+    body, p, div, span, h1, h2, h3, h4, h5, h6, button, input, textarea, select, a {
+      @apply text-black;
+    }
+  }
+  
+  /* Force dark theme text colors */
+  .dark {
+    body, p, div, span, h1, h2, h3, h4, h5, h6 {
+      @apply text-white;
+    }
   }
 }
 
 /* More specific text color overrides for light mode */
 .light-mode-text-fix {
-  @apply text-black dark:text-white;
+  @apply text-black dark:text-white !important;
 }
 
 .sidebar-text {
-  @apply text-black dark:text-white;
+  @apply text-black dark:text-white !important;
 }
 
 .trending-topic-title {
-  @apply font-bold text-black dark:text-white;
+  @apply font-bold text-black dark:text-white !important;
 }
 
 .trending-topic-subtitle {
-  @apply text-gray-800 dark:text-gray-400;
+  @apply text-black dark:text-gray-400 !important;
+}
+
+/* Force black text in light mode for specific UI components */
+.search-input {
+  @apply text-black dark:text-white !important;
+}
+
+.post-content {
+  @apply text-black dark:text-white !important;
+}
+
+.comment-text {
+  @apply text-black dark:text-white !important;
+}
+
+.profile-name {
+  @apply text-black dark:text-white !important;
+}
+
+.user-handle {
+  @apply text-black dark:text-gray-400 !important;
+}
+
+.metadata {
+  @apply text-black dark:text-gray-400 !important;
 }
 
 /* Custom text colors for icon hover states */

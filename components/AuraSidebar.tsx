@@ -4,6 +4,8 @@ import { RootState } from '../lib/store';
 import { AuraTransaction } from '../lib/slices/auraPointsSlice';
 import AuraPointsCounter from './AuraPointsCounter';
 import { FaSearch, FaGem, FaCheck } from 'react-icons/fa';
+import Image from 'next/image';
+import { MagnifyingGlassIcon, CheckBadgeIcon } from '@heroicons/react/24/solid';
 
 const AuraSidebar = () => {
   const { walletAddress } = useSelector((state: RootState) => state.user);
@@ -73,158 +75,107 @@ const AuraSidebar = () => {
   };
 
   return (
-    <div className="space-y-4 w-full px-4">
+    <div className="hidden md:flex flex-col space-y-4 py-4 pl-4 pr-8 sticky top-0 h-screen overflow-y-auto max-h-screen">
       {/* Search */}
       <div className="relative mb-4">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <FaSearch className="h-5 w-5 text-black dark:text-gray-400" />
-        </div>
-        <input 
-          type="text" 
-          className="search-input focus:ring-2 focus:ring-primary text-black dark:text-white"
-          placeholder="Search" 
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-      </div>
-
-      {/* Aura Points Card */}
-      <div className="bg-white dark:bg-black rounded-xl overflow-hidden border border-[var(--border-color)]">
-        <div className="p-4 bg-gradient-to-r from-primary to-primary-hover">
-          <h2 className="text-xl font-bold text-white mb-1">Aura Points</h2>
-          <p className="text-white/90 text-sm mb-3">
-            Earn points by engaging with the community
-          </p>
-          <div className="flex justify-between items-center">
-            <div className="text-3xl font-bold text-white flex items-center">
-              <FaGem className="mr-2" />
-              <AuraPointsCounter points={totalPoints} />
-            </div>
-          </div>
-        </div>
-        <div className="p-4">
-          <h3 className="font-bold mb-3 text-black dark:text-white">Your Aura Rewards</h3>
-          <ul className="text-sm space-y-2">
-            <li className="flex justify-between items-center">
-              <span className="text-black dark:text-gray-300">💫 Aura Points Boost</span>
-              <span className="font-semibold text-primary">Unlocked</span>
-            </li>
-            <li className="flex justify-between items-center">
-              <span className="text-black dark:text-gray-300">🔥 Premium Badge</span>
-              <span className="font-semibold text-black dark:text-white">{totalPoints > 500 ? 'Unlocked' : `${totalPoints}/500`}</span>
-            </li>
-            <li className="flex justify-between items-center">
-              <span className="text-black dark:text-gray-300">🌟 Verified Status</span>
-              <span className="font-semibold text-black dark:text-white">{totalPoints > 1000 ? 'Unlocked' : `${totalPoints}/1000`}</span>
-            </li>
-            <li className="flex justify-between items-center mt-2">
-              <span className="text-black dark:text-gray-300">👑 Elite Status</span>
-              <span className="font-semibold text-black dark:text-white">{totalPoints > 5000 ? 'Unlocked' : `${totalPoints}/5000`}</span>
-            </li>
-          </ul>
-          <button className="mt-4 bg-primary hover:bg-primary-hover text-white font-bold py-2 rounded-full w-full transition-colors">
-            View Aura Status
-          </button>
+        <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-2">
+          <MagnifyingGlassIcon className="h-5 w-5 text-gray-500" />
+          <input 
+            type="text" 
+            placeholder="Search" 
+            className="search-input bg-transparent border-none focus:ring-0 w-full pl-2"
+          />
         </div>
       </div>
-
-      {/* Explore Section */}
-      <div className="bg-white dark:bg-black rounded-xl overflow-hidden border border-[var(--border-color)]">
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-black dark:text-white">Explore</h2>
-            <div className="bg-[var(--gray-light)] rounded-full text-xs px-2 py-1 text-black dark:text-gray-400">
-              Beta
+      
+      {/* Trending */}
+      <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-4">
+        <h2 className="trending-topic-title text-xl mb-4">Trending</h2>
+        
+        {/* Trending Items */}
+        {[1, 2, 3].map((item) => (
+          <div key={item} className="mb-4 last:mb-0">
+            <div className="flex justify-between items-start">
+              <span className="trending-topic-subtitle text-sm">Web3 · Trending</span>
+              <span className="text-gray-400">...</span>
             </div>
+            <h3 className="trending-topic-title font-bold my-1">#{item === 1 ? 'Ethereum' : item === 2 ? 'GigaAura' : 'Web3'}</h3>
+            <span className="metadata text-sm">{`${Math.floor(Math.random() * 100)}K Tweets`}</span>
           </div>
-          
-          {trendingTopics.map(topic => (
-            <div key={topic.id} className="py-3 px-2 hover:bg-[var(--gray-light)] transition-colors cursor-pointer">
-              <div className="flex items-center text-xs text-gray-700 dark:text-gray-400">
-                <span>Trending now · {topic.category}</span>
-                <span className="mx-1">·</span>
-                <span>{topic.posts} posts</span>
+        ))}
+        
+        <a href="#" className="text-primary block mt-4 text-sm">Show more</a>
+      </div>
+      
+      {/* Who to follow */}
+      <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-4">
+        <h2 className="trending-topic-title text-xl mb-4">Who to follow</h2>
+        
+        {/* Follow items */}
+        {[
+          { name: 'Vitalik Buterin', handle: '@vitalikbuterin', verified: true },
+          { name: 'GigaAura', handle: '@gigaaura', verified: true },
+          { name: 'Web3 Daily', handle: '@web3daily', verified: false },
+        ].map((person, idx) => (
+          <div key={idx} className="flex items-center justify-between mb-4 last:mb-0">
+            <div className="flex items-center">
+              <div className="h-10 w-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                <Image src={`https://i.pravatar.cc/150?u=${person.handle}`} alt={person.name} width={40} height={40} />
               </div>
-              <p className="font-bold text-black dark:text-white text-sm mt-1">{topic.title}</p>
-            </div>
-          ))}
-          
-          <button className="text-primary hover:bg-primary/10 px-2 py-1 rounded-full text-sm mt-2 transition-colors">
-            Show more
-          </button>
-        </div>
-      </div>
-
-      {/* Who to Follow */}
-      <div className="bg-white dark:bg-black rounded-xl overflow-hidden border border-[var(--border-color)]">
-        <div className="p-4">
-          <h2 className="text-xl font-bold mb-4 text-black dark:text-white">Who to follow</h2>
-          
-          {whoToFollow.map(user => (
-            <div key={user.id} className="flex items-center justify-between py-3">
-              <div className="flex items-center">
-                <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full mr-3" />
-                <div>
-                  <div className="flex items-center">
-                    <p className="font-bold text-black dark:text-white text-sm">{user.name}</p>
-                    {user.isVerified && (
-                      <span className="ml-1 bg-primary text-white rounded-full p-0.5 flex items-center justify-center" style={{ width: '14px', height: '14px' }}>
-                        <FaCheck size={8} />
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-gray-700 dark:text-gray-400 text-sm">@{user.username}</p>
+              <div className="ml-3">
+                <div className="flex items-center">
+                  <span className="profile-name font-bold">{person.name}</span>
+                  {person.verified && <CheckBadgeIcon className="h-4 w-4 text-primary ml-1" />}
                 </div>
+                <span className="user-handle block">{person.handle}</span>
               </div>
-              <button className="bg-black dark:bg-white text-white dark:text-black font-bold text-sm py-1.5 px-4 rounded-full hover:bg-opacity-80">
-                Follow
-              </button>
             </div>
-          ))}
-          
-          <button className="text-primary hover:bg-primary/10 px-2 py-1 rounded-full text-sm mt-2 transition-colors">
-            Show more
-          </button>
-        </div>
+            <button className="bg-black dark:bg-white text-white dark:text-black font-bold rounded-full px-4 py-1.5 text-sm">
+              Follow
+            </button>
+          </div>
+        ))}
+        
+        <a href="#" className="text-primary block mt-4 text-sm">Show more</a>
       </div>
-
+      
       {/* Recent Activity */}
-      <div className="bg-white dark:bg-black rounded-xl overflow-hidden border border-[var(--border-color)]">
-        <div className="p-4">
-          <h2 className="text-lg font-bold mb-4 text-black dark:text-white">Recent Activity</h2>
-          
-          {recentTransactions.length > 0 ? (
-            <div className="space-y-3">
-              {recentTransactions.map((tx) => (
-                <div key={tx.id} className="flex justify-between items-center">
-                  <div>
-                    <p className="text-sm font-medium text-black dark:text-white">{getActionLabel(tx.action)}</p>
-                    <p className="text-xs text-gray-700 dark:text-gray-400">{formatTimestamp(tx.timestamp)}</p>
-                  </div>
-                  <div className="text-sm font-semibold text-primary flex items-center">
-                    <FaGem className="mr-1" size={12} />
-                    <span>+{tx.amount}</span>
-                  </div>
-                </div>
-              ))}
+      <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-4">
+        <h2 className="trending-topic-title text-xl mb-4">Recent Activity</h2>
+        
+        {/* Activity items */}
+        {[
+          { type: 'post', user: 'Alex', action: 'posted a new update' },
+          { type: 'like', user: 'Jordan', action: 'liked your post' },
+          { type: 'follow', user: 'Taylor', action: 'started following you' },
+        ].map((activity, idx) => (
+          <div key={idx} className="mb-4 last:mb-0">
+            <div className="flex items-start">
+              <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center overflow-hidden mr-2">
+                <Image src={`https://i.pravatar.cc/150?u=${activity.user}`} alt={activity.user} width={32} height={32} />
+              </div>
+              <div>
+                <span className="profile-name font-bold">{activity.user}</span>
+                <span className="metadata ml-1">{activity.action}</span>
+                <span className="metadata block text-sm">{`${Math.floor(Math.random() * 12)}h ago`}</span>
+              </div>
             </div>
-          ) : (
-            <p className="text-gray-700 dark:text-gray-400 text-sm">No recent activity. Start interacting to earn Aura Points!</p>
-          )}
-        </div>
+          </div>
+        ))}
+        
+        <a href="#" className="text-primary block mt-4 text-sm">See all activity</a>
       </div>
-
-      {/* Footer Links */}
-      <div className="text-gray-700 dark:text-gray-400 text-xs">
-        <div className="flex flex-wrap gap-2">
-          <a href="#" className="hover:underline">Terms of Service</a>
-          <a href="#" className="hover:underline">Privacy Policy</a>
-          <a href="#" className="hover:underline">Cookie Policy</a>
-          <a href="#" className="hover:underline">Accessibility</a>
-          <a href="#" className="hover:underline">Ads info</a>
-          <a href="#" className="hover:underline">More ...</a>
+      
+      {/* Footer */}
+      <div className="px-4 text-sm">
+        <div className="flex flex-wrap metadata mb-2">
+          <a href="#" className="mr-2 mb-1">Terms of Service</a>
+          <a href="#" className="mr-2 mb-1">Privacy Policy</a>
+          <a href="#" className="mr-2 mb-1">Cookie Policy</a>
+          <a href="#" className="mr-2 mb-1">Accessibility</a>
+          <a href="#" className="mr-2 mb-1">More</a>
         </div>
-        <div className="mt-2">© 2025 GigaAura Corp.</div>
+        <p className="metadata">© 2023 GigaAura</p>
       </div>
     </div>
   );
