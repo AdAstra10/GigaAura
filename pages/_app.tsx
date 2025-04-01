@@ -33,6 +33,13 @@ function safeJSONParse(jsonString: string, fallback: any = null) {
   }
 }
 
+// For TypeScript, extend the Function interface to allow our __protected property
+declare global {
+  interface Function {
+    __protected?: boolean;
+  }
+}
+
 // Add ErrorFallback component
 const ErrorFallback = ({ error }: { error: Error }) => {
   return (
@@ -41,7 +48,7 @@ const ErrorFallback = ({ error }: { error: Error }) => {
       <p className="text-gray-700 dark:text-gray-300 mb-4">Please try refreshing the page</p>
       <button 
         onClick={() => window.location.href = '/home'} 
-        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+        className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-hover"
       >
         Go to Home
       </button>
@@ -70,11 +77,52 @@ class ErrorBoundary extends Component<{children: ReactNode, FallbackComponent: R
   }
 }
 
+/**
+ * Safe null check utility to prevent toString errors
+ * This is used throughout the application to prevent common errors
+ */
+const ensureSafeToString = () => {
+  try {
+    // Only apply if toString isn't already protected
+    if (!Object.prototype.toString.__protected) {
+      // Keep a reference to the original method
+      const originalToString = Object.prototype.toString;
+      
+      // Create a safer version
+      const safeToString = function(this: any) {
+        try {
+          // Null/undefined special handling
+          if (this === null || this === undefined) {
+            return '[object SafeNull]';
+          }
+          return originalToString.call(this);
+        } catch (e) {
+          // Last resort safety
+          return '[object Protected]';
+        }
+      };
+      
+      // Mark our function as protected
+      Object.defineProperty(safeToString, '__protected', { value: true });
+      
+      // Replace the original method
+      Object.prototype.toString = safeToString;
+    }
+  } catch (e) {
+    console.warn('Failed to protect toString method:', e);
+  }
+};
+
 // Wrapper component to access wallet context inside app
 const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Component']; pageProps: AppProps['pageProps'] }) => {
   const { walletAddress } = useWallet();
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  
+  // Apply our toString protection early
+  useEffect(() => {
+    ensureSafeToString();
+  }, []);
   
   useEffect(() => {
     if (walletAddress) {
@@ -103,19 +151,19 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
         // Load profile data from localStorage
         try {
           // Load profile picture
-          const profilePictures = JSON.parse(localStorage.getItem('profilePictures') || '{}');
+          const profilePictures = safeJSONParse(localStorage.getItem('profilePictures') || '{}', {});
           const avatar = profilePictures[walletAddress] || null;
           
           // Load banner image
-          const bannerImages = JSON.parse(localStorage.getItem('bannerImages') || '{}');
+          const bannerImages = safeJSONParse(localStorage.getItem('bannerImages') || '{}', {});
           const bannerImage = bannerImages[walletAddress] || null;
           
           // Load username
-          const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
+          const usernames = safeJSONParse(localStorage.getItem('usernames') || '{}', {});
           const username = usernames[walletAddress] || null;
           
           // Load bio
-          const bios = JSON.parse(localStorage.getItem('userBios') || '{}');
+          const bios = safeJSONParse(localStorage.getItem('userBios') || '{}', {});
           const bio = bios[walletAddress] || null;
           
           // Update profile in Redux store
@@ -156,66 +204,75 @@ function MyApp({ Component, pageProps }: AppProps) {
 
   // Global error handler for React errors
   useEffect(() => {
-    // Protect Object.prototype.toString
-    const originalToString = Object.prototype.toString;
-    
-    // Override toString to prevent errors
-    Object.prototype.toString = function() {
-      try {
-        // Handle null/undefined
-        if (this === null || this === undefined) {
-          console.warn('Prevented toString() call on null/undefined');
-          return '[object SafeNull]';
-        }
-        return originalToString.call(this);
-      } catch (e) {
-        console.warn('Protected toString error:', e);
-        return '[object Protected]';
-      }
-    };
+    // Ensure toString protection is applied as early as possible
+    ensureSafeToString();
     
     // Handle unhandled exceptions
     const handleError = (event: ErrorEvent) => {
-      console.error('Global error caught:', event.error);
+      // Get error details safely
+      const errorMsg = event.error?.message || event.message || 'Unknown error';
+      const errorName = event.error?.name || 'Error';
       
-      // Check for toString or wallet-related errors
-      if (event.error && 
-          (event.error.message?.includes('toString') || 
-           event.error.message?.includes('ethereum') ||
-           event.error.message?.includes('null'))) {
+      console.error(`Global error caught: ${errorName}`, event.error);
+      
+      // Check for known problematic errors
+      const isWalletError = 
+        errorMsg.includes('ethereum') || 
+        errorMsg.includes('web3') || 
+        errorMsg.includes('metamask') ||
+        errorMsg.includes('wallet');
         
-        setErrorMessage(safeToString(event.error.message));
+      const isNullError = 
+        errorMsg.includes('null') || 
+        errorMsg.includes('undefined') || 
+        errorMsg.includes('toString');
+      
+      // Handle the error if it's a wallet or null-related issue
+      if (isWalletError || isNullError) {
+        // Update error state to trigger fallback UI
+        setErrorMessage(safeToString(errorMsg));
         setHasError(true);
         
-        // Prevent default error handling 
+        // Prevent default error handling
         event.preventDefault();
+        return true;
       }
     };
     
     // Handle promise rejection errors
     const handleRejection = (event: PromiseRejectionEvent) => {
-      console.error('Unhandled promise rejection:', event);
+      // Get error details safely
+      const errorMsg = event.reason?.message || 'Promise rejection';
+      console.error('Unhandled promise rejection:', errorMsg);
       
-      const errorMessage = event.reason?.message || 'Promise rejection';
-      
-      // If it's a wallet error, show error UI
-      if (errorMessage.includes('ethereum') || 
-          errorMessage.includes('wallet') ||
-          errorMessage.includes('null')) {
+      // Check if it's a wallet-related error
+      const isWalletError = 
+        errorMsg.includes('ethereum') || 
+        errorMsg.includes('web3') || 
+        errorMsg.includes('wallet') ||
+        errorMsg.includes('metamask');
         
-        setErrorMessage(safeToString(errorMessage));
+      const isNullError = 
+        errorMsg.includes('null') || 
+        errorMsg.includes('undefined') || 
+        errorMsg.includes('toString');
+      
+      // Handle the error if it's a wallet issue
+      if (isWalletError || isNullError) {
+        setErrorMessage(safeToString(errorMsg));
         setHasError(true);
         event.preventDefault();
+        return true;
       }
     };
     
-    window.addEventListener('error', handleError);
+    // Add event listeners
+    window.addEventListener('error', handleError, true); // Use capture phase
     window.addEventListener('unhandledrejection', handleRejection);
     
-    // Clean up
+    // Clean up event listeners on unmount
     return () => {
-      Object.prototype.toString = originalToString;
-      window.removeEventListener('error', handleError);
+      window.removeEventListener('error', handleError, true);
       window.removeEventListener('unhandledrejection', handleRejection);
     };
   }, []);
@@ -224,10 +281,10 @@ function MyApp({ Component, pageProps }: AppProps) {
   if (hasError) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-100 dark:bg-gray-900">
-        <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md">
+        <div className="text-center p-8 bg-white dark:bg-black rounded-lg shadow-lg max-w-md">
           <h1 className="text-2xl font-bold text-red-500 mb-4">Something went wrong</h1>
           {errorMessage && (
-            <p className="mb-4 text-gray-700 dark:text-gray-300 text-sm">
+            <p className="mb-4 text-[var(--text-secondary)] text-sm">
               Error: {errorMessage.substring(0, 100)}
               {errorMessage.length > 100 ? '...' : ''}
             </p>
@@ -238,7 +295,7 @@ function MyApp({ Component, pageProps }: AppProps) {
               setErrorMessage('');
               router.push('/home');
             }}
-            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 mr-2"
+            className="px-4 py-2 bg-primary text-white rounded-full hover:bg-primary-hover mr-2"
           >
             Go to Home
           </button>
@@ -246,27 +303,26 @@ function MyApp({ Component, pageProps }: AppProps) {
             onClick={() => {
               window.location.reload();
             }}
-            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 mt-2 sm:mt-0"
+            className="px-4 py-2 bg-gray-600 text-white rounded-full hover:bg-gray-700 mt-2 sm:mt-0"
           >
-            Reload Page
+            Refresh Page
           </button>
         </div>
       </div>
     );
   }
-  
-  // Render the normal app
+
   return (
-    <Provider store={store}>
-      <DarkModeProvider>
-        <WalletProvider>
-          <ErrorBoundary FallbackComponent={ErrorFallback}>
+    <ErrorBoundary FallbackComponent={ErrorFallback}>
+      <Provider store={store}>
+        <DarkModeProvider>
+          <WalletProvider>
             <AppWithWallet Component={Component} pageProps={pageProps} />
             <Toaster position="bottom-center" />
-          </ErrorBoundary>
-        </WalletProvider>
-      </DarkModeProvider>
-    </Provider>
+          </WalletProvider>
+        </DarkModeProvider>
+      </Provider>
+    </ErrorBoundary>
   );
 }
 

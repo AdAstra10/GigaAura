@@ -16,37 +16,47 @@ export default function Document() {
   return (
     <Html lang="en">
       <Head>
-        {/* CRITICAL: Load the ethereum protection as inline script to ensure it executes first */}
-        {ethereumShimContent ? (
-          <script dangerouslySetInnerHTML={{ __html: ethereumShimContent }} />
-        ) : (
-          <script src="/ethereum-shim.js" />
-        )}
+        {/* SUPER CRITICAL: This script MUST load first, before ANY other scripts */}
+        <script 
+          id="ethereum-protector" 
+          dangerouslySetInnerHTML={{ __html: ethereumShimContent }} 
+          data-priority="true"
+        />
         
-        {/* Prevent wallet detection with meta tags */}
+        {/* Meta tags to aggressively prevent wallet detection */}
         <meta name="ethereum" content="false" />
         <meta name="web3" content="false" />
+        <meta name="metamask" content="false" />
+        <meta name="crypto" content="Phantom" />
         
         <meta charSet="utf-8" />
         <meta name="description" content="GigaAura - Social media platform with crypto wallet integration" />
         <link rel="icon" href="/favicon.ico" />
-        {/* DO NOT attempt to handle wallet providers in _document - let them work natively */}
+        
+        {/* Fonts */}
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-        {/* Add meta tags for better mobile handling */}
+        
+        {/* Mobile tags */}
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-        <meta name="theme-color" content="#6366F1" />
+        <meta name="theme-color" content="#1D9BF0" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         
-        {/* Add preconnect for better performance */}
+        {/* Performance optimizations */}
         <link rel="preconnect" href="https://www.gigaaura.com" />
         <link rel="preconnect" href="https://gigaaura.onrender.com" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         
-        {/* Security headers */}
+        {/* Security headers - FIXED CSP to allow eval */}
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-        <meta httpEquiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com;" />
-        <meta name="X-Frame-Options" content="SAMEORIGIN" />
-        <meta name="X-Content-Type-Options" content="nosniff" />
+        <meta 
+          httpEquiv="Content-Security-Policy" 
+          content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com; connect-src 'self' https://*.gigaaura.com;" 
+        />
+        <meta httpEquiv="X-Frame-Options" content="SAMEORIGIN" />
+        <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
+        <meta httpEquiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
       </Head>
       <body>
         <Main />
