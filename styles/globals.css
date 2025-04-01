@@ -18,8 +18,8 @@
   --background-end-rgb: 255, 255, 255;
   --gray-light: #f7f9f9;
   --border-color: #eff3f4;
-  --text-primary: #000000;  /* Black text for light mode */
-  --text-secondary: #536471;
+  --text-primary: #000000;  /* Pure black text for light mode */
+  --text-secondary: #333333;  /* Darker gray for better contrast in light mode */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -44,9 +44,26 @@
   }
   
   /* Ensure light mode has proper text colors */
-  .text-gray-700, .text-gray-800, .text-gray-900 {
+  .text-gray-500, .text-gray-600, .text-gray-700, .text-gray-800, .text-gray-900 {
     @apply text-[#000000] dark:text-[var(--text-primary)];
   }
+}
+
+/* More specific text color overrides for light mode */
+.light-mode-text-fix {
+  @apply text-black dark:text-white;
+}
+
+.sidebar-text {
+  @apply text-black dark:text-white;
+}
+
+.trending-topic-title {
+  @apply font-bold text-black dark:text-white;
+}
+
+.trending-topic-subtitle {
+  @apply text-gray-800 dark:text-gray-400;
 }
 
 /* Custom text colors for icon hover states */

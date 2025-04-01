@@ -77,11 +77,11 @@ const AuraSidebar = () => {
       {/* Search */}
       <div className="relative mb-4">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <FaSearch className="h-5 w-5 text-[var(--text-secondary)]" />
+          <FaSearch className="h-5 w-5 text-black dark:text-gray-400" />
         </div>
         <input 
           type="text" 
-          className="search-input focus:ring-2 focus:ring-primary"
+          className="search-input focus:ring-2 focus:ring-primary text-black dark:text-white"
           placeholder="Search" 
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
@@ -103,23 +103,23 @@ const AuraSidebar = () => {
           </div>
         </div>
         <div className="p-4">
-          <h3 className="font-bold mb-3 text-[var(--text-primary)]">Your Aura Rewards</h3>
-          <ul className="text-sm text-[var(--text-secondary)] space-y-2">
+          <h3 className="font-bold mb-3 text-black dark:text-white">Your Aura Rewards</h3>
+          <ul className="text-sm space-y-2">
             <li className="flex justify-between items-center">
-              <span>💫 Aura Points Boost</span>
+              <span className="text-black dark:text-gray-300">💫 Aura Points Boost</span>
               <span className="font-semibold text-primary">Unlocked</span>
             </li>
             <li className="flex justify-between items-center">
-              <span>🔥 Premium Badge</span>
-              <span className="font-semibold">{totalPoints > 500 ? 'Unlocked' : `${totalPoints}/500`}</span>
+              <span className="text-black dark:text-gray-300">🔥 Premium Badge</span>
+              <span className="font-semibold text-black dark:text-white">{totalPoints > 500 ? 'Unlocked' : `${totalPoints}/500`}</span>
             </li>
             <li className="flex justify-between items-center">
-              <span>🌟 Verified Status</span>
-              <span className="font-semibold">{totalPoints > 1000 ? 'Unlocked' : `${totalPoints}/1000`}</span>
+              <span className="text-black dark:text-gray-300">🌟 Verified Status</span>
+              <span className="font-semibold text-black dark:text-white">{totalPoints > 1000 ? 'Unlocked' : `${totalPoints}/1000`}</span>
             </li>
             <li className="flex justify-between items-center mt-2">
-              <span>👑 Elite Status</span>
-              <span className="font-semibold">{totalPoints > 5000 ? 'Unlocked' : `${totalPoints}/5000`}</span>
+              <span className="text-black dark:text-gray-300">👑 Elite Status</span>
+              <span className="font-semibold text-black dark:text-white">{totalPoints > 5000 ? 'Unlocked' : `${totalPoints}/5000`}</span>
             </li>
           </ul>
           <button className="mt-4 bg-primary hover:bg-primary-hover text-white font-bold py-2 rounded-full w-full transition-colors">
@@ -132,20 +132,20 @@ const AuraSidebar = () => {
       <div className="bg-white dark:bg-black rounded-xl overflow-hidden border border-[var(--border-color)]">
         <div className="p-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-[var(--text-primary)]">Explore</h2>
-            <div className="bg-[var(--gray-light)] rounded-full text-xs px-2 py-1 text-[var(--text-secondary)]">
+            <h2 className="text-xl font-bold text-black dark:text-white">Explore</h2>
+            <div className="bg-[var(--gray-light)] rounded-full text-xs px-2 py-1 text-black dark:text-gray-400">
               Beta
             </div>
           </div>
           
           {trendingTopics.map(topic => (
             <div key={topic.id} className="py-3 px-2 hover:bg-[var(--gray-light)] transition-colors cursor-pointer">
-              <div className="flex items-center text-xs text-[var(--text-secondary)]">
+              <div className="flex items-center text-xs text-gray-700 dark:text-gray-400">
                 <span>Trending now · {topic.category}</span>
                 <span className="mx-1">·</span>
                 <span>{topic.posts} posts</span>
               </div>
-              <p className="font-bold text-[var(--text-primary)] text-sm mt-1">{topic.title}</p>
+              <p className="font-bold text-black dark:text-white text-sm mt-1">{topic.title}</p>
             </div>
           ))}
           
@@ -158,7 +158,7 @@ const AuraSidebar = () => {
       {/* Who to Follow */}
       <div className="bg-white dark:bg-black rounded-xl overflow-hidden border border-[var(--border-color)]">
         <div className="p-4">
-          <h2 className="text-xl font-bold mb-4 text-[var(--text-primary)]">Who to follow</h2>
+          <h2 className="text-xl font-bold mb-4 text-black dark:text-white">Who to follow</h2>
           
           {whoToFollow.map(user => (
             <div key={user.id} className="flex items-center justify-between py-3">
@@ -166,14 +166,14 @@ const AuraSidebar = () => {
                 <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full mr-3" />
                 <div>
                   <div className="flex items-center">
-                    <p className="font-bold text-[var(--text-primary)] text-sm">{user.name}</p>
+                    <p className="font-bold text-black dark:text-white text-sm">{user.name}</p>
                     {user.isVerified && (
                       <span className="ml-1 bg-primary text-white rounded-full p-0.5 flex items-center justify-center" style={{ width: '14px', height: '14px' }}>
                         <FaCheck size={8} />
                       </span>
                     )}
                   </div>
-                  <p className="text-[var(--text-secondary)] text-sm">@{user.username}</p>
+                  <p className="text-gray-700 dark:text-gray-400 text-sm">@{user.username}</p>
                 </div>
               </div>
               <button className="bg-black dark:bg-white text-white dark:text-black font-bold text-sm py-1.5 px-4 rounded-full hover:bg-opacity-80">
@@ -191,15 +191,15 @@ const AuraSidebar = () => {
       {/* Recent Activity */}
       <div className="bg-white dark:bg-black rounded-xl overflow-hidden border border-[var(--border-color)]">
         <div className="p-4">
-          <h2 className="text-lg font-bold mb-4 text-[var(--text-primary)]">Recent Activity</h2>
+          <h2 className="text-lg font-bold mb-4 text-black dark:text-white">Recent Activity</h2>
           
           {recentTransactions.length > 0 ? (
             <div className="space-y-3">
               {recentTransactions.map((tx) => (
                 <div key={tx.id} className="flex justify-between items-center">
                   <div>
-                    <p className="text-sm font-medium text-[var(--text-primary)]">{getActionLabel(tx.action)}</p>
-                    <p className="text-xs text-[var(--text-secondary)]">{formatTimestamp(tx.timestamp)}</p>
+                    <p className="text-sm font-medium text-black dark:text-white">{getActionLabel(tx.action)}</p>
+                    <p className="text-xs text-gray-700 dark:text-gray-400">{formatTimestamp(tx.timestamp)}</p>
                   </div>
                   <div className="text-sm font-semibold text-primary flex items-center">
                     <FaGem className="mr-1" size={12} />
@@ -209,13 +209,13 @@ const AuraSidebar = () => {
               ))}
             </div>
           ) : (
-            <p className="text-[var(--text-secondary)] text-sm">No recent activity. Start interacting to earn Aura Points!</p>
+            <p className="text-gray-700 dark:text-gray-400 text-sm">No recent activity. Start interacting to earn Aura Points!</p>
           )}
         </div>
       </div>
 
       {/* Footer Links */}
-      <div className="text-[var(--text-secondary)] text-xs">
+      <div className="text-gray-700 dark:text-gray-400 text-xs">
         <div className="flex flex-wrap gap-2">
           <a href="#" className="hover:underline">Terms of Service</a>
           <a href="#" className="hover:underline">Privacy Policy</a>
