@@ -20,7 +20,13 @@ import {
   serverTimestamp,
   Firestore,
   onSnapshot,
-  Unsubscribe
+  Unsubscribe,
+  connectFirestoreEmulator,
+  enableIndexedDbPersistence,
+  CACHE_SIZE_UNLIMITED,
+  QuerySnapshot,
+  DocumentData,
+  SnapshotListenOptions
 } from 'firebase/firestore';
 import { Post } from '@lib/slices/postsSlice';
 import { AuraPointsState, AuraTransaction } from '@lib/slices/auraPointsSlice';
@@ -46,14 +52,62 @@ let app: FirebaseApp | undefined;
 let db: Firestore | undefined;
 
 /**
+ * Exponential backoff for retrying operations
+ */
+const retry = async <T>(operation: () => Promise<T>, maxRetries = 3, delayMs = 1000): Promise<T> => {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error as Error;
+      console.warn(`Operation failed (attempt ${attempt + 1}/${maxRetries}):`, error);
+      
+      // Only delay if we're going to retry
+      if (attempt < maxRetries - 1) {
+        const delay = delayMs * Math.pow(2, attempt);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  throw lastError || new Error('Operation failed after multiple retries');
+};
+
+/**
  * Lazily initialize Firebase only when needed
  */
 const initializeFirebase = () => {
-  if (isInitialized) return { app, db };
+  if (isInitialized && app && db) return { app, db };
   
   try {
+    // If we already have an app but somehow lost the db reference, delete it and start fresh
+    if (app) {
+      try {
+        deleteApp(app).catch(e => console.error('Error deleting existing app:', e));
+        app = undefined;
+      } catch (e) {
+        console.error('Error cleaning up existing app:', e);
+      }
+    }
+    
     app = initializeApp(firebaseConfig);
     db = getFirestore(app);
+    
+    // Enable offline persistence
+    if (typeof window !== 'undefined') {
+      enableIndexedDbPersistence(db).catch(err => {
+        if (err.code === 'failed-precondition') {
+          console.warn('Multiple tabs open, persistence can only be enabled in one tab at a time.');
+        } else if (err.code === 'unimplemented') {
+          console.warn('The current browser does not support offline persistence.');
+        } else {
+          console.error('Failed to enable persistence:', err);
+        }
+      });
+    }
+    
     isInitialized = true;
     console.log('Firebase initialized successfully');
     
@@ -75,6 +129,11 @@ const initializeFirebase = () => {
     }
   } catch (error) {
     console.error('Error initializing Firebase:', error);
+    
+    // Reset flags for next attempt
+    isInitialized = false;
+    app = undefined;
+    db = undefined;
   }
   
   return { app, db };
@@ -94,7 +153,13 @@ export const addListener = (unsubscribe: Unsubscribe): void => {
 export const cleanupAllListeners = (): void => {
   if (activeListeners.length > 0) {
     console.log(`Cleaning up ${activeListeners.length} Firestore listeners`);
-    activeListeners.forEach(unsubscribe => unsubscribe());
+    activeListeners.forEach(unsubscribe => {
+      try {
+        unsubscribe();
+      } catch (e) {
+        console.warn('Error unsubscribing listener:', e);
+      }
+    });
     activeListeners.length = 0; // Clear the array
   }
 };
@@ -109,23 +174,28 @@ export const cleanupFirebase = async (verbose = true): Promise<void> => {
     
     // Then delete the app if it exists
     if (app) {
-      await deleteApp(app);
-      if (verbose) console.log('Firebase app deleted successfully');
+      try {
+        await deleteApp(app);
+        if (verbose) console.log('Firebase app deleted successfully');
+      } catch (e) {
+        console.error('Error deleting Firebase app:', e);
+      }
+      
       isInitialized = false;
       app = undefined;
       db = undefined;
     }
   } catch (error) {
-    console.error('Error deleting Firebase app:', error);
+    console.error('Error cleaning up Firebase:', error);
   }
 };
 
 /**
- * Save a post to Firestore
+ * Save a post to Firestore with retry
  */
 export const savePost = async (post: Post): Promise<boolean> => {
-  const { db } = initializeFirebase();
-  try {
+  return retry(async () => {
+    const { db } = initializeFirebase();
     if (!db) return false;
     
     // Ensure post has all required fields
@@ -148,36 +218,35 @@ export const savePost = async (post: Post): Promise<boolean> => {
     
     console.log('Post saved to Firestore:', post.id);
     return true;
-  } catch (error) {
-    console.error('Error saving post to Firestore:', error);
-    return false;
-  }
+  }, 3);
 };
 
 /**
- * Get all posts from Firestore
+ * Get all posts from Firestore with retry
  */
 export const getPosts = async (): Promise<Post[]> => {
-  const { db } = initializeFirebase();
-  try {
+  return retry(async () => {
+    const { db } = initializeFirebase();
     if (!db) return [];
     
-    // Query posts collection ordered by server timestamp (newest first)
-    const postsQuery = query(collection(db, 'posts'), orderBy('serverTimestamp', 'desc'));
-    const querySnapshot = await getDocs(postsQuery);
-    
-    const posts: Post[] = [];
-    querySnapshot.forEach((docSnapshot) => {
-      const postData = docSnapshot.data() as Post;
-      posts.push(postData);
-    });
-    
-    console.log('Retrieved posts from Firestore:', posts.length);
-    return posts;
-  } catch (error) {
-    console.error('Error getting posts from Firestore:', error);
-    return [];
-  }
+    try {
+      // First try to get posts from cache for immediate display
+      const postsQuery = query(collection(db, 'posts'), orderBy('serverTimestamp', 'desc'));
+      const querySnapshot = await getDocs(postsQuery);
+      
+      const posts: Post[] = [];
+      querySnapshot.forEach((docSnapshot) => {
+        const postData = docSnapshot.data() as Post;
+        posts.push(postData);
+      });
+      
+      console.log('Retrieved posts from Firestore:', posts.length);
+      return posts;
+    } catch (error) {
+      console.error('Error getting posts from Firestore:', error);
+      return [];
+    }
+  }, 3);
 };
 
 /**
@@ -380,16 +449,32 @@ export const listenToPosts = (callback: (posts: Post[]) => void): Unsubscribe =>
     // Create a query for the posts collection
     const postsQuery = query(collection(db, 'posts'), orderBy('serverTimestamp', 'desc'));
     
-    // Set up the listener
-    const unsubscribe = onSnapshot(postsQuery, (snapshot) => {
-      const posts: Post[] = [];
-      snapshot.forEach((doc) => {
-        posts.push(doc.data() as Post);
-      });
-      callback(posts);
-    }, (error) => {
-      console.error('Error in Firestore listener:', error);
-    });
+    // Set up the listener with error handling
+    const unsubscribe = onSnapshot(
+      postsQuery, 
+      (snapshot: QuerySnapshot<DocumentData>) => {
+        const posts: Post[] = [];
+        snapshot.forEach((docSnapshot) => {
+          try {
+            posts.push(docSnapshot.data() as Post);
+          } catch (e) {
+            console.error('Error parsing document data:', e);
+          }
+        });
+        callback(posts);
+      }, 
+      (error) => {
+        console.error('Error in Firestore listener:', error);
+        // Try to reinitialize on error
+        if (error.code === 'permission-denied' || error.code === 'unavailable') {
+          setTimeout(() => {
+            console.log('Attempting to reinitialize Firebase after error');
+            cleanupFirebase(false);
+            initializeFirebase();
+          }, 5000);
+        }
+      }
+    );
     
     // Track this listener
     addListener(unsubscribe);
@@ -409,5 +494,6 @@ export default {
   saveAuraPoints,
   getAuraPoints,
   addTransaction,
-  listenToPosts
+  listenToPosts,
+  cleanupFirebase
 }; 
