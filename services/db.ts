@@ -19,6 +19,26 @@ const BASE_URL = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG
 let postsCache: Post[] = [];
 let activeListeners: (() => void)[] = [];
 
+// Flag to track if we've detected API permission issues
+let hasApiPermissionIssue = false;
+
+// Initialize caches from localStorage on startup
+if (typeof window !== 'undefined') {
+  try {
+    // Try to restore posts cache
+    const cachedPosts = localStorage.getItem('giga-aura-posts');
+    if (cachedPosts) {
+      const parsed = JSON.parse(cachedPosts);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        postsCache = parsed;
+        console.log('Restored posts cache from localStorage:', postsCache.length);
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to initialize cache from localStorage:', e);
+  }
+}
+
 /**
  * Get Firebase auth token for REST API requests
  * Using email/password authentication instead of anonymous 
@@ -122,12 +142,32 @@ const createAuthAccount = async (email: string, password: string): Promise<strin
 };
 
 /**
+ * Handle API permission error
+ */
+const handlePermissionError = (error: any): void => {
+  // Check if this is a permission error
+  if (error?.message?.includes('Permission denied') || 
+      error?.message?.includes('PERMISSION_DENIED') ||
+      error?.message?.includes('CONSUMER_INVALID')) {
+    
+    if (!hasApiPermissionIssue) {
+      console.warn('Firebase permission issue detected. Switching to local-only mode.');
+      hasApiPermissionIssue = true;
+    }
+  }
+};
+
+/**
  * Helper to handle REST API responses and catch errors
  */
 const handleResponse = async (response: Response) => {
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Firebase REST API error (${response.status}): ${errorText}`);
+    const error = new Error(`Firebase REST API error (${response.status}): ${errorText}`);
+    if (response.status === 403) {
+      handlePermissionError(error);
+    }
+    throw error;
   }
   return response.json();
 };
@@ -136,6 +176,11 @@ const handleResponse = async (response: Response) => {
  * Make a Firebase API request with proper authentication if available
  */
 const makeFirebaseRequest = async (url: string, options: RequestInit = {}): Promise<any> => {
+  // If we already know there are permission issues, don't even try the API
+  if (hasApiPermissionIssue) {
+    throw new Error('Skipping Firebase API request due to known permission issues');
+  }
+  
   try {
     // Try to get auth token
     let token = '';
@@ -164,6 +209,8 @@ const makeFirebaseRequest = async (url: string, options: RequestInit = {}): Prom
     
     return await handleResponse(response);
   } catch (error) {
+    // Check if this is a permission error
+    handlePermissionError(error);
     console.error(`Error making Firebase request to ${url}:`, error);
     throw error;
   }
@@ -291,6 +338,41 @@ const retry = async <T>(operation: () => Promise<T>, maxRetries = 3, delayMs = 1
  * Save a post to Firestore with retry
  */
 export const savePost = async (post: Post): Promise<boolean> => {
+  // Always save to local storage regardless of API availability
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(`giga-aura-post-${post.id}`, JSON.stringify(post));
+      
+      // Update posts list in localStorage
+      const cachedPostIds = localStorage.getItem('giga-aura-post-ids');
+      const postIds = cachedPostIds ? JSON.parse(cachedPostIds) : [];
+      if (!postIds.includes(post.id)) {
+        postIds.unshift(post.id);
+        localStorage.setItem('giga-aura-post-ids', JSON.stringify(postIds));
+      }
+      
+      // Update in-memory cache
+      const existingPostIndex = postsCache.findIndex(p => p.id === post.id);
+      if (existingPostIndex >= 0) {
+        postsCache[existingPostIndex] = post;
+      } else {
+        postsCache.unshift(post);
+      }
+      
+      // Also update the full posts cache
+      localStorage.setItem('giga-aura-posts', JSON.stringify(postsCache));
+      console.log('Post saved to local storage:', post.id);
+    } catch (e) {
+      console.warn('Failed to save post to localStorage:', e);
+    }
+  }
+  
+  // If we know there are API permission issues, don't attempt to save to Firestore
+  if (hasApiPermissionIssue) {
+    console.log('Skipping Firestore save due to known permission issues');
+    return true; // Consider it a success since we saved locally
+  }
+
   return retry(async () => {
     try {
       // Ensure post has all required fields
@@ -320,56 +402,28 @@ export const savePost = async (post: Post): Promise<boolean> => {
         })
       });
       
-      // Update local cache
-      const existingPostIndex = postsCache.findIndex(p => p.id === post.id);
-      if (existingPostIndex >= 0) {
-        postsCache[existingPostIndex] = post;
-      } else {
-        postsCache.unshift(post);
-      }
-      
-      // Store in localStorage as backup
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem(`giga-aura-post-${post.id}`, JSON.stringify(post));
-          
-          // Update posts list in localStorage
-          const cachedPostIds = localStorage.getItem('giga-aura-post-ids');
-          const postIds = cachedPostIds ? JSON.parse(cachedPostIds) : [];
-          if (!postIds.includes(post.id)) {
-            postIds.unshift(post.id);
-            localStorage.setItem('giga-aura-post-ids', JSON.stringify(postIds));
-          }
-        } catch (e) {
-          console.warn('Failed to save post to localStorage:', e);
-        }
-      }
-      
-      console.log('Post saved to Firestore (or local cache):', post.id);
+      console.log('Post saved to Firestore:', post.id);
       return true;
     } catch (error) {
-      console.error('Error saving post:', error);
-      
-      // Still consider it a success if we've updated the local cache
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem(`giga-aura-post-${post.id}`, JSON.stringify(post));
-          console.log('Post saved to local cache after API error');
-          return true;
-        } catch (e) {
-          console.warn('Failed to save post to localStorage after API error:', e);
-        }
-      }
-      
-      return false;
+      handlePermissionError(error);
+      console.error('Error saving post to Firestore:', error);
+      // We already saved to local storage at the start of this function,
+      // so we can still consider this a success
+      return true;
     }
-  }, 3);
+  }, 2);
 };
 
 /**
  * Get all posts from Firestore with retry
  */
 export const getPosts = async (): Promise<Post[]> => {
+  // If we know there are permission issues, skip API calls and use local cache directly
+  if (hasApiPermissionIssue) {
+    console.log('Using local cache due to Firebase permission issues');
+    return getLocalPosts();
+  }
+
   return retry(async () => {
     try {
       // Use cache as immediate fallback if available
@@ -417,64 +471,71 @@ export const getPosts = async (): Promise<Post[]> => {
         
         return posts;
       } catch (apiError) {
+        handlePermissionError(apiError);
         console.error('Error fetching from Firestore API, using fallbacks:', apiError);
         throw apiError; // Pass to fallback handlers
       }
     } catch (error) {
       console.warn('Using cached posts due to API error:', error);
-      
-      // If we have cached posts, use them
-      if (postsCache.length > 0) {
-        return postsCache;
-      }
-      
-      // Try to load from localStorage as last resort
-      if (typeof window !== 'undefined') {
-        try {
-          // First try to load the aggregate posts
-          const localPosts = localStorage.getItem('giga-aura-posts');
-          if (localPosts) {
-            const parsed = JSON.parse(localPosts);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              postsCache = parsed;
-              return parsed;
-            }
-          }
-          
-          // If that fails, try to reconstruct from individual post cache
-          const postIds = localStorage.getItem('giga-aura-post-ids');
-          if (postIds) {
-            const ids = JSON.parse(postIds);
-            if (Array.isArray(ids) && ids.length > 0) {
-              const posts: Post[] = [];
-              
-              for (const id of ids) {
-                const postData = localStorage.getItem(`giga-aura-post-${id}`);
-                if (postData) {
-                  try {
-                    const post = JSON.parse(postData);
-                    posts.push(post);
-                  } catch (e) {
-                    console.warn(`Failed to parse post ${id} from localStorage:`, e);
-                  }
-                }
-              }
-              
-              if (posts.length > 0) {
-                postsCache = posts;
-                return posts;
-              }
-            }
-          }
-        } catch (e) {
-          console.warn('Failed to parse local posts:', e);
+      return getLocalPosts();
+    }
+  }, 2); // Reduce retries to 2 for faster fallback
+};
+
+/**
+ * Helper function to get posts from local storage
+ */
+const getLocalPosts = (): Post[] => {
+  // If we have cached posts, use them
+  if (postsCache.length > 0) {
+    return postsCache;
+  }
+  
+  // Try to load from localStorage as last resort
+  if (typeof window !== 'undefined') {
+    try {
+      // First try to load the aggregate posts
+      const localPosts = localStorage.getItem('giga-aura-posts');
+      if (localPosts) {
+        const parsed = JSON.parse(localPosts);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          postsCache = parsed;
+          return parsed;
         }
       }
       
-      // No posts available anywhere
-      return [];
+      // If that fails, try to reconstruct from individual post cache
+      const postIds = localStorage.getItem('giga-aura-post-ids');
+      if (postIds) {
+        const ids = JSON.parse(postIds);
+        if (Array.isArray(ids) && ids.length > 0) {
+          const posts: Post[] = [];
+          
+          for (const id of ids) {
+            const postData = localStorage.getItem(`giga-aura-post-${id}`);
+            if (postData) {
+              try {
+                const post = JSON.parse(postData);
+                posts.push(post);
+              } catch (e) {
+                console.warn(`Failed to parse post ${id} from localStorage:`, e);
+              }
+            }
+          }
+          
+          if (posts.length > 0) {
+            postsCache = posts;
+            return posts;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse local posts:', e);
     }
-  }, 2); // Reduce retries to 2 for faster fallback
+  }
+  
+  // No posts available anywhere, return empty array
+  return [];
 };
 
 /**
@@ -560,71 +621,15 @@ export const updatePost = async (post: Post): Promise<boolean> => {
 };
 
 /**
- * Save aura points to Firestore
- */
-export const saveAuraPoints = async (walletAddress: string, points: AuraPointsState): Promise<boolean> => {
-  if (!walletAddress) return false;
-  
-  return retry(async () => {
-    try {
-      const document = {
-        fields: {
-          walletAddress: { stringValue: walletAddress },
-          points: { integerValue: points.totalPoints.toString() },
-          transactions: {
-            arrayValue: {
-              values: (points.transactions || []).map(transaction => ({
-                mapValue: transformToFirestore(transaction)
-              }))
-            }
-          },
-          updatedAt: { timestampValue: new Date().toISOString() }
-        }
-      };
-      
-      await makeFirebaseRequest(`${BASE_URL}/auraPoints/${walletAddress}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          name: `projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/auraPoints/${walletAddress}`,
-          ...document
-        })
-      });
-      
-      // Also save to localStorage as backup
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem(`giga-aura-points-${walletAddress}`, JSON.stringify(points));
-        } catch (e) {
-          console.warn(`Failed to save aura points to localStorage for ${walletAddress}:`, e);
-        }
-      }
-      
-      console.log(`Aura points saved for ${walletAddress}`);
-      return true;
-    } catch (error) {
-      console.error(`Error saving aura points for ${walletAddress}:`, error);
-      
-      // Still consider it a success if we've updated localStorage
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem(`giga-aura-points-${walletAddress}`, JSON.stringify(points));
-          console.log(`Aura points saved to local cache for ${walletAddress} after API error`);
-          return true;
-        } catch (e) {
-          console.warn(`Failed to save aura points to localStorage for ${walletAddress}:`, e);
-        }
-      }
-      
-      return false;
-    }
-  });
-};
-
-/**
  * Get aura points from Firestore
  */
 export const getAuraPoints = async (walletAddress: string): Promise<AuraPointsState | null> => {
   if (!walletAddress) return null;
+  
+  // If we know there are API permission issues, use local storage directly
+  if (hasApiPermissionIssue) {
+    return getLocalAuraPoints(walletAddress);
+  }
   
   return retry(async () => {
     try {
@@ -659,31 +664,96 @@ export const getAuraPoints = async (walletAddress: string): Promise<AuraPointsSt
           transactions: []
         };
       } catch (apiError) {
+        handlePermissionError(apiError);
         console.error(`Error fetching aura points from API for ${walletAddress}:`, apiError);
         throw apiError; // Pass to fallback handlers
       }
     } catch (error) {
       console.warn(`Using cached aura points for ${walletAddress} due to API error:`, error);
-      
-      // Try to load from localStorage as fallback
-      if (typeof window !== 'undefined') {
-        try {
-          const localPoints = localStorage.getItem(`giga-aura-points-${walletAddress}`);
-          if (localPoints) {
-            return JSON.parse(localPoints);
-          }
-        } catch (e) {
-          console.warn(`Failed to parse local aura points for ${walletAddress}:`, e);
-        }
-      }
-      
-      // Return default if nothing found
-      return {
-        totalPoints: 100,
-        transactions: []
-      };
+      return getLocalAuraPoints(walletAddress);
     }
   });
+};
+
+/**
+ * Helper function to get aura points from local storage
+ */
+const getLocalAuraPoints = (walletAddress: string): AuraPointsState => {
+  if (typeof window !== 'undefined') {
+    try {
+      const localPoints = localStorage.getItem(`giga-aura-points-${walletAddress}`);
+      if (localPoints) {
+        return JSON.parse(localPoints);
+      }
+    } catch (e) {
+      console.warn(`Failed to parse local aura points for ${walletAddress}:`, e);
+    }
+  }
+  
+  // Return default if nothing found
+  return {
+    totalPoints: 100,
+    transactions: []
+  };
+};
+
+/**
+ * Save aura points to Firestore
+ */
+export const saveAuraPoints = async (walletAddress: string, points: AuraPointsState): Promise<boolean> => {
+  if (!walletAddress) return false;
+  
+  // Always save to local storage
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(`giga-aura-points-${walletAddress}`, JSON.stringify(points));
+      console.log(`Aura points saved to local storage for ${walletAddress}`);
+    } catch (e) {
+      console.warn(`Failed to save aura points to localStorage for ${walletAddress}:`, e);
+    }
+  }
+  
+  // Skip API if we know there are permission issues
+  if (hasApiPermissionIssue) {
+    console.log('Skipping Firestore save for aura points due to known permission issues');
+    return true; // Consider it a success since we saved locally
+  }
+  
+  return retry(async () => {
+    try {
+      const document = {
+        fields: {
+          walletAddress: { stringValue: walletAddress },
+          points: { integerValue: points.totalPoints.toString() },
+          transactions: {
+            arrayValue: {
+              values: (points.transactions || []).map(transaction => ({
+                mapValue: transformToFirestore(transaction)
+              }))
+            }
+          },
+          updatedAt: { timestampValue: new Date().toISOString() }
+        }
+      };
+      
+      await makeFirebaseRequest(`${BASE_URL}/auraPoints/${walletAddress}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: `projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/auraPoints/${walletAddress}`,
+          ...document
+        })
+      });
+      
+      console.log(`Aura points saved to Firestore for ${walletAddress}`);
+      return true;
+    } catch (error) {
+      handlePermissionError(error);
+      console.error(`Error saving aura points to Firestore for ${walletAddress}:`, error);
+      // We already saved to local storage at the start of this function,
+      // so we can still consider this a success
+      return true;
+    }
+  }, 2);
 };
 
 /**
@@ -743,7 +813,9 @@ export const listenToPosts = (callback: (posts: Post[]) => void): (() => void) =
   fetchPosts();
   
   // Set up polling every 15 seconds
-  pollInterval = setInterval(fetchPosts, 15000);
+  // Use longer interval if we're in local-only mode to reduce console noise
+  const pollTime = hasApiPermissionIssue ? 30000 : 15000;
+  pollInterval = setInterval(fetchPosts, pollTime);
   
   // Track this listener
   const unsubscribe = () => {
