@@ -143,7 +143,7 @@ const AuraSidebar = () => {
                 <span className="user-handle block">{person.handle}</span>
               </div>
             </div>
-            <button className="bg-black dark:bg-white text-white dark:text-black font-bold rounded-full px-4 py-1.5 text-sm">
+            <button className="bg-black dark:bg-white text-white dark:text-black font-bold rounded-full px-4 py-1.5 text-sm hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors">
               Follow
             </button>
           </div>

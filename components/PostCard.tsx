@@ -2,7 +2,7 @@ import React, { useState, FormEvent, useEffect } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
-import { Post, Comment, likePost, unlikePost, addComment } from '../lib/slices/postsSlice';
+import { Post, Comment, likePost, unlikePost, addComment, sharePost } from '../lib/slices/postsSlice';
 import { addTransaction } from '../lib/slices/auraPointsSlice';
 import { addNotification } from '../lib/slices/notificationsSlice';
 import { useWallet } from '../contexts/WalletContext';
@@ -49,10 +49,12 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
   const isFollowing = following.includes(post.authorWallet);
 
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [hasShared, setHasShared] = useState(false);
 
   // Load bookmarked state from localStorage when component mounts
   useEffect(() => {
     if (typeof window !== 'undefined' && connected && walletAddress) {
+      // Check bookmarks
       const bookmarksKey = `bookmarks-${walletAddress}`;
       const savedBookmarks = localStorage.getItem(bookmarksKey);
       
@@ -64,8 +66,11 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
           console.error('Error parsing bookmarks from localStorage:', error);
         }
       }
+      
+      // Check if already shared
+      setHasShared(post.sharedBy?.includes(walletAddress) || false);
     }
-  }, [post.id, connected, walletAddress]);
+  }, [post.id, post.sharedBy, connected, walletAddress]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -271,17 +276,78 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
     return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
   };
   
-  const handleBookmark = () => {
+  const handleSharePost = async () => {
     if (!connected) {
-      const confirm = window.confirm('Please connect your wallet to bookmark posts. Would you like to connect now?');
+      const confirm = window.confirm('Please connect your wallet to share posts. Would you like to connect now?');
       if (confirm) {
-        connectWallet();
+        await connectWallet();
+        if (!connected) return;
+      } else {
+        return;
       }
-      return;
     }
     
     if (!walletAddress) return;
     
+    try {
+      // Call the sharePost action
+      dispatch(sharePost({ postId: post.id, walletAddress }));
+      setHasShared(true);
+      
+      // Add notification for the post creator if it's not the user's own post
+      if (post.authorWallet !== walletAddress) {
+        dispatch(addNotification({
+          type: 'share',
+          message: `${username || walletAddress} shared your post`,
+          fromWallet: walletAddress,
+          fromUsername: username || undefined,
+          postId: post.id,
+        }));
+        
+        // Add Aura Points transaction for post creator
+        dispatch(addTransaction({
+          id: uuidv4(),
+          amount: 15, // Points for getting a share
+          timestamp: new Date().toISOString(),
+          action: 'post_shared',
+          counterpartyName: username || walletAddress.substring(0, 6),
+          counterpartyWallet: walletAddress
+        }));
+      }
+      
+      // Copy post URL to clipboard
+      const postUrl = `${window.location.origin}/post/${post.id}`;
+      navigator.clipboard.writeText(postUrl)
+        .then(() => {
+          toast.success('Post link copied to clipboard!');
+        })
+        .catch(err => {
+          console.error('Could not copy text: ', err);
+        });
+      
+      if (onShare) {
+        onShare();
+      }
+    } catch (error) {
+      console.error('Error sharing post:', error);
+      toast.error('Failed to share post. Please try again.');
+    }
+  };
+  
+  const handleBookmark = async () => {
+    if (!connected) {
+      const confirm = window.confirm('Please connect your wallet to bookmark posts. Would you like to connect now?');
+      if (confirm) {
+        await connectWallet();
+        if (!connected) return;
+      } else {
+        return;
+      }
+    }
+    
+    if (!walletAddress) return;
+    
+    // Toggle bookmarked state
     const newBookmarkedState = !isBookmarked;
     setIsBookmarked(newBookmarkedState);
     
@@ -295,6 +361,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
         bookmarkedPosts = JSON.parse(savedBookmarks);
       } catch (error) {
         console.error('Error parsing bookmarks from localStorage:', error);
+        bookmarkedPosts = [];
       }
     }
     
@@ -374,11 +441,11 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
               <span className="text-sm group-hover:text-primary">{post.comments}</span>
             </button>
             <button 
-              className="flex items-center group text-gray-500 hover:text-green-500"
-              onClick={onShare}
+              className={`flex items-center group ${hasShared ? 'text-green-500' : 'text-gray-500 hover:text-green-500'}`}
+              onClick={handleSharePost}
             >
-              <ArrowPathRoundedSquareIcon className="h-5 w-5 mr-2 group-hover:text-green-500" />
-              <span className="text-sm group-hover:text-green-500">{post.shares}</span>
+              <ArrowPathRoundedSquareIcon className={`h-5 w-5 mr-2 ${hasShared ? 'text-green-500' : 'group-hover:text-green-500'}`} />
+              <span className={`text-sm ${hasShared ? 'text-green-500' : 'group-hover:text-green-500'}`}>{post.shares}</span>
             </button>
             <button 
               className={`flex items-center group ${isLiked ? 'text-pink-500' : 'text-gray-500 hover:text-pink-500'}`}
@@ -396,7 +463,12 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
             <div className="flex space-x-3">
               <button 
                 className="flex items-center text-gray-500 hover:text-primary"
-                onClick={() => onShare && onShare()}
+                onClick={() => {
+                  const postUrl = `${window.location.origin}/post/${post.id}`;
+                  navigator.clipboard.writeText(postUrl)
+                    .then(() => toast.success('Post link copied to clipboard!'))
+                    .catch(() => toast.error('Failed to copy link'));
+                }}
               >
                 <ShareIcon className="h-5 w-5" />
               </button>

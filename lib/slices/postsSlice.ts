@@ -21,6 +21,7 @@ export interface Post {
   shares: number;
   likedBy: string[];
   isLiked?: boolean;
+  sharedBy?: string[];
 }
 
 export interface Comment {
@@ -133,6 +134,36 @@ export const postsSlice = createSlice({
       cacheFeed(state.feed);
       cacheUserPosts(state.userPosts);
     },
+    sharePost: (state, action: PayloadAction<{ postId: string; walletAddress: string }>) => {
+      const { postId, walletAddress } = action.payload;
+      
+      const updatePost = (post: Post) => {
+        if (post.id === postId) {
+          // Initialize sharedBy array if it doesn't exist
+          if (!post.sharedBy) {
+            post.sharedBy = [];
+          }
+          
+          // Only increment share count if this user hasn't shared before
+          if (!post.sharedBy.includes(walletAddress)) {
+            post.shares += 1;
+            post.sharedBy.push(walletAddress);
+          }
+        }
+        return post;
+      };
+      
+      state.feed = state.feed.map(updatePost);
+      state.userPosts = state.userPosts.map(updatePost);
+      
+      if (state.currentPost && state.currentPost.id === postId) {
+        state.currentPost = updatePost({ ...state.currentPost });
+      }
+      
+      // Cache updated lists
+      cacheFeed(state.feed);
+      cacheUserPosts(state.userPosts);
+    },
     setCurrentPost: (state, action: PayloadAction<Post>) => {
       state.currentPost = action.payload;
     },
@@ -213,6 +244,7 @@ export const {
   addPost,
   likePost,
   unlikePost,
+  sharePost,
   setCurrentPost,
   setComments,
   addComment,

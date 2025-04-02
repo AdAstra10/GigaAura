@@ -11,6 +11,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
 import { BookmarkIcon } from '@heroicons/react/24/outline';
 import { Post } from '../lib/slices/postsSlice';
+import { toast } from 'react-hot-toast';
 
 // Simple LoadingSpinner component
 const LoadingSpinner = () => (
@@ -146,6 +147,11 @@ const Bookmarks: React.FC = () => {
     // Save updated bookmarks back to localStorage
     const bookmarksKey = `bookmarks-${walletAddress}`;
     localStorage.setItem(bookmarksKey, JSON.stringify(updatedBookmarks));
+    
+    // Update UI immediately by removing the post from displayed bookmarks
+    setBookmarks(prevBookmarks => prevBookmarks.filter(post => post.id !== postId));
+    
+    toast.success('Post removed from bookmarks');
   };
   
   // If not mounted yet, show minimal UI to avoid hydration issues
@@ -220,6 +226,7 @@ const Bookmarks: React.FC = () => {
                         key={post.id}
                         post={post}
                         onShare={() => {}}
+                        comments={[]}
                       />
                     ))}
                   </div>
