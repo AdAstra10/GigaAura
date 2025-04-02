@@ -9,11 +9,14 @@ import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
 import AuraSidebar from '../components/AuraSidebar';
 import { Post } from '../lib/slices/postsSlice';
+import PostCard from '../components/PostCard';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import toast from 'react-hot-toast';
-import { FaCalendarAlt, FaCamera } from 'react-icons/fa';
+import { FaCalendarAlt, FaCamera, FaTimes, FaArrowLeft } from 'react-icons/fa';
 import { format } from 'date-fns';
+import { CheckBadgeIcon, XMarkIcon, CameraIcon } from '@heroicons/react/24/solid';
+import Image from 'next/image';
 
 const ProfilePage = () => {
   const dispatch = useDispatch();
@@ -21,7 +24,7 @@ const ProfilePage = () => {
   const { walletAddress, connectWallet, connecting } = useWallet();
   const { isDarkMode } = useDarkMode();
   const user = useSelector((state: RootState) => state.user);
-  const { userPosts } = useSelector((state: RootState) => state.posts);
+  const { userPosts, feed } = useSelector((state: RootState) => state.posts);
   const { totalPoints } = useSelector((state: RootState) => state.auraPoints);
   
   const [isEditing, setIsEditing] = useState(false);
@@ -31,6 +34,7 @@ const ProfilePage = () => {
   const [bannerUrl, setBannerUrl] = useState(user.bannerImage || '');
   const [isSaving, setIsSaving] = useState(false);
   const [editJoinDate] = useState(new Date(2025, 2, 1)); // March 2025
+  const [activeTab, setActiveTab] = useState('posts');
   
   // Profile picture upload
   const [showPfpModal, setShowPfpModal] = useState(false);
@@ -40,6 +44,9 @@ const ProfilePage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   
+  // User posts - filter from the main feed
+  const [myPosts, setMyPosts] = useState<Post[]>([]);
+  
   // Update form when user data changes
   useEffect(() => {
     if (user.username) setUsername(user.username);
@@ -47,6 +54,14 @@ const ProfilePage = () => {
     if (user.avatar) setAvatarUrl(user.avatar);
     if (user.bannerImage) setBannerUrl(user.bannerImage);
   }, [user.username, user.bio, user.avatar, user.bannerImage]);
+  
+  // Get user posts from the feed
+  useEffect(() => {
+    if (walletAddress && feed.length > 0) {
+      const filtered = feed.filter(post => post.authorWallet === walletAddress);
+      setMyPosts(filtered);
+    }
+  }, [walletAddress, feed]);
 
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>, isBanner = false) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -140,7 +155,6 @@ const ProfilePage = () => {
         saveProfileData();
         
         // Force a reload of profile data to ensure it's updated across the app
-        // This is important for ensuring that Header component also sees the changes
         dispatch(updateProfile({
           username,
           bio,
@@ -184,7 +198,7 @@ const ProfilePage = () => {
           <meta name="description" content="Your GigaAura profile" />
         </Head>
         
-        <div className="min-h-screen bg-light dark:bg-gray-900">
+        <div className="min-h-screen bg-light dark:bg-dark">
           <Header />
           
           <main className="container mx-auto px-4 py-6">
@@ -215,247 +229,192 @@ const ProfilePage = () => {
   return (
     <>
       <Head>
-        <title>Profile | GigaAura</title>
+        <title>{username || 'My Profile'} | GigaAura</title>
         <meta name="description" content="Your GigaAura profile" />
       </Head>
       
-      <div className="min-h-screen bg-light dark:bg-gray-900">
+      <div className="min-h-screen bg-light dark:bg-dark">
         <Header />
         
-        <main className="container mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-12 gap-6">
-          <div className="hidden md:block md:col-span-3 sidebar-column">
-            <Sidebar className="sticky top-20" />
+        <main className="container mx-auto grid grid-cols-1 md:grid-cols-12 md:divide-x md:divide-[var(--border-color)]">
+          <div className="hidden md:block md:col-span-3">
+            <Sidebar className="sticky top-20 px-4" />
           </div>
           
-          <div className="col-span-1 md:col-span-6 space-y-6 content-column">
-            {/* Profile Header */}
-            <div className="bg-white dark:bg-gray-800 transparent-bg rounded-lg shadow-md no-shadow overflow-hidden card-outline">
+          <div className="col-span-1 md:col-span-6 fixed-width-container">
+            <div className="feed-container fixed-width-container">
+              {/* Profile header with back button and name */}
+              <div className="sticky top-0 bg-light dark:bg-dark z-10 px-4 py-3 border-b border-[var(--border-color)] flex items-center">
+                <Link href="/home" className="mr-4">
+                  <div className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800">
+                    <FaArrowLeft className="text-black dark:text-white" />
+                  </div>
+                </Link>
+                <div>
+                  <h1 className="text-xl font-bold text-black dark:text-white">{username || 'Profile'}</h1>
+                  <span className="text-gray-500 text-sm">{myPosts.length} posts</span>
+                </div>
+              </div>
+              
               {/* Banner Image */}
-              <div className="relative h-40 bg-gradient-to-r from-yellow-400 via-green-400 to-blue-400">
+              <div className="relative h-48 bg-gray-300 dark:bg-gray-700">
                 {bannerUrl && (
                   <img src={bannerUrl} alt="Profile Banner" className="w-full h-full object-cover" />
                 )}
-                {isEditing && (
+                
+                {/* Profile Picture - positioned to overlap banner */}
+                <div className="absolute -bottom-16 left-4">
+                  <div className="w-32 h-32 rounded-full border-4 border-white dark:border-dark bg-gray-300 dark:bg-gray-700 overflow-hidden">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-white text-4xl font-bold">
+                        {username?.charAt(0)?.toUpperCase() || walletAddress?.charAt(0)?.toUpperCase() || '?'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Edit Profile Button */}
+                <div className="absolute top-4 right-4">
                   <button 
-                    onClick={() => bannerInputRef.current?.click()}
-                    className="absolute bottom-2 right-2 bg-black/50 text-white p-2 rounded-full"
+                    onClick={() => setIsEditing(true)}
+                    className="bg-black/30 text-white dark:bg-white/20 dark:text-white font-bold py-1 px-4 rounded-full hover:bg-black/40 dark:hover:bg-white/30 transition"
                   >
-                    <FaCamera size={16} />
+                    Edit profile
                   </button>
+                </div>
+              </div>
+              
+              {/* Profile Info */}
+              <div className="px-4 pt-20 pb-4 border-b border-[var(--border-color)]">
+                <h1 className="text-xl font-bold text-black dark:text-white flex items-center">
+                  {username || 'Anonymous'}
+                  {/* Verified badge */}
+                  <CheckBadgeIcon className="h-5 w-5 text-primary ml-1" />
+                </h1>
+                <p className="text-gray-500">@{truncateWallet(walletAddress)}</p>
+                
+                <p className="text-black dark:text-white mt-3">
+                  {bio || 'No bio yet'}
+                </p>
+                
+                <div className="flex items-center text-gray-500 mt-3 space-x-4">
+                  <div className="flex items-center">
+                    <FaCalendarAlt className="mr-2" />
+                    <span>Joined {format(editJoinDate, 'MMMM yyyy')}</span>
+                  </div>
+                  <div>
+                    <span className="font-bold text-black dark:text-white">{totalPoints}</span> Aura Points
+                  </div>
+                </div>
+                
+                <div className="flex space-x-5 mt-3">
+                  <div>
+                    <span className="font-bold text-black dark:text-white">175</span>
+                    <span className="text-gray-500 ml-1">Following</span>
+                  </div>
+                  <div>
+                    <span className="font-bold text-black dark:text-white">248</span>
+                    <span className="text-gray-500 ml-1">Followers</span>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Profile Tabs */}
+              <div className="border-b border-[var(--border-color)]">
+                <div className="flex">
+                  <button
+                    className={`flex-1 py-4 text-center font-medium relative ${
+                      activeTab === 'posts' 
+                        ? 'text-black dark:text-white font-bold' 
+                        : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    }`}
+                    onClick={() => setActiveTab('posts')}
+                  >
+                    Posts
+                    {activeTab === 'posts' && (
+                      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-12 h-1 bg-primary rounded-full"></div>
+                    )}
+                  </button>
+                  <button
+                    className={`flex-1 py-4 text-center font-medium relative ${
+                      activeTab === 'replies' 
+                        ? 'text-black dark:text-white font-bold' 
+                        : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    }`}
+                    onClick={() => setActiveTab('replies')}
+                  >
+                    Replies
+                    {activeTab === 'replies' && (
+                      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-12 h-1 bg-primary rounded-full"></div>
+                    )}
+                  </button>
+                  <button
+                    className={`flex-1 py-4 text-center font-medium relative ${
+                      activeTab === 'media' 
+                        ? 'text-black dark:text-white font-bold' 
+                        : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    }`}
+                    onClick={() => setActiveTab('media')}
+                  >
+                    Media
+                    {activeTab === 'media' && (
+                      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-12 h-1 bg-primary rounded-full"></div>
+                    )}
+                  </button>
+                  <button
+                    className={`flex-1 py-4 text-center font-medium relative ${
+                      activeTab === 'likes' 
+                        ? 'text-black dark:text-white font-bold' 
+                        : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    }`}
+                    onClick={() => setActiveTab('likes')}
+                  >
+                    Likes
+                    {activeTab === 'likes' && (
+                      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-12 h-1 bg-primary rounded-full"></div>
+                    )}
+                  </button>
+                </div>
+              </div>
+              
+              {/* User Posts */}
+              <div>
+                {myPosts.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+                    <h2 className="text-3xl font-bold text-black dark:text-white mb-2">
+                      {activeTab === 'posts' ? 'You haven\'t posted yet' : 
+                       activeTab === 'replies' ? 'No replies yet' :
+                       activeTab === 'media' ? 'No media yet' : 'No likes yet'}
+                    </h2>
+                    <p className="text-gray-500 max-w-md">
+                      {activeTab === 'posts' ? 'When you make a post, it will show up here.' : 
+                       activeTab === 'replies' ? 'When you reply to a post, it will show up here.' :
+                       activeTab === 'media' ? 'Posts with images or videos will show up here.' : 
+                       'Posts you\'ve liked will show up here.'}
+                    </p>
+                  </div>
+                ) : (
+                  activeTab === 'posts' && myPosts.map(post => (
+                    <PostCard key={post.id} post={post} />
+                  ))
                 )}
-                <input
-                  type="file"
-                  ref={bannerInputRef}
-                  accept="image/*"
-                  onChange={(e) => handleImageUpload(e, true)}
-                  style={{ display: 'none' }}
-                />
-              </div>
-              
-              <div className="p-6 pt-16">
-                <div className="flex flex-col sm:flex-row sm:items-start gap-6">
-                  <div className="relative -mt-24 z-10">
-                    <div className="w-32 h-32 rounded-full overflow-hidden bg-[#60C5D1] border-4 border-white dark:border-gray-800">
-                      {avatarUrl ? (
-                        <img src={avatarUrl} alt={username || 'User'} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-white text-4xl font-bold">
-                          {username ? username.charAt(0).toUpperCase() : walletAddress.substring(0, 2)}
-                        </div>
-                      )}
-                    </div>
-                    
-                    {isEditing && (
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="absolute bottom-0 right-0 bg-primary text-white p-2 rounded-full"
-                      >
-                        <FaCamera size={16} />
-                      </button>
-                    )}
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      accept="image/*"
-                      onChange={(e) => handleImageUpload(e, false)}
-                      style={{ display: 'none' }}
-                    />
+                
+                {activeTab !== 'posts' && (
+                  <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+                    <h2 className="text-3xl font-bold text-black dark:text-white mb-2">
+                      {activeTab === 'replies' ? 'No replies yet' :
+                       activeTab === 'media' ? 'No media yet' : 'No likes yet'}
+                    </h2>
+                    <p className="text-gray-500 max-w-md">
+                      {activeTab === 'replies' ? 'When you reply to a post, it will show up here.' :
+                       activeTab === 'media' ? 'Posts with images or videos will show up here.' : 
+                       'Posts you\'ve liked will show up here.'}
+                    </p>
                   </div>
-                  
-                  <div className="flex-1 text-center sm:text-left">
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        className={`w-full p-2 text-2xl font-bold border border-gray-300 rounded-md mb-2 ${
-                          isDarkMode 
-                            ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-400' 
-                            : 'bg-white text-gray-900'
-                        }`}
-                        placeholder="Username"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        maxLength={20}
-                      />
-                    ) : (
-                      <h1 className="text-2xl font-bold mb-1 dark:text-white">{username || 'Anonymous User'}</h1>
-                    )}
-                    
-                    <p className="text-gray-500 dark:text-gray-400 mb-1">@{username || truncateWallet(walletAddress)}</p>
-                    
-                    <div className="flex items-center justify-center sm:justify-start text-gray-500 dark:text-gray-400 mb-3">
-                      <FaCalendarAlt className="mr-1" size={14} />
-                      <span className="text-sm">Joined {format(editJoinDate, 'MMMM yyyy')}</span>
-                    </div>
-                    
-                    {isEditing ? (
-                      <textarea
-                        className={`w-full p-2 border border-gray-300 rounded-md mb-4 ${
-                          isDarkMode 
-                            ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-400' 
-                            : 'bg-white text-gray-900'
-                        }`}
-                        placeholder="Bio"
-                        value={bio}
-                        onChange={(e) => setBio(e.target.value)}
-                        rows={3}
-                        maxLength={160}
-                      />
-                    ) : (
-                      <p className="mb-4 dark:text-gray-300">{bio || 'No bio yet'}</p>
-                    )}
-                    
-                    <div className="flex flex-wrap gap-4 mb-4">
-                      <div className="bg-[#F6E04C]/10 dark:bg-[#F6E04C]/5 px-4 py-2 rounded-md">
-                        <p className="text-lg font-semibold dark:text-white">{userPosts.length}</p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Posts</p>
-                      </div>
-                      <div className="bg-[#F0A830]/10 dark:bg-[#F0A830]/5 px-4 py-2 rounded-md">
-                        <p className="text-lg font-semibold dark:text-white">{user.followers?.length || 0}</p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Followers</p>
-                      </div>
-                      <div className="bg-[#2C89B7]/10 dark:bg-[#2C89B7]/5 px-4 py-2 rounded-md">
-                        <p className="text-lg font-semibold dark:text-white">{user.following?.length || 0}</p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Following</p>
-                      </div>
-                      <div className="bg-[#F6B73C]/10 dark:bg-[#F6B73C]/5 px-4 py-2 rounded-md">
-                        <p className="text-lg font-semibold dark:text-white">{totalPoints}</p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Aura Points</p>
-                      </div>
-                    </div>
-                    
-                    {isEditing ? (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleSaveProfile}
-                          disabled={isSaving}
-                          className="px-4 py-2 bg-[#2C89B7] text-white rounded-md hover:bg-[#2C89B7]/90 flex-1"
-                        >
-                          {isSaving ? 'Saving...' : 'Save Profile'}
-                        </button>
-                        <button
-                          onClick={() => setIsEditing(false)}
-                          className="px-4 py-2 bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 hover-effect"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setIsEditing(true)}
-                        className="px-4 py-2 bg-[#F6B73C] text-white rounded-md hover:bg-[#F6B73C]/90"
-                      >
-                        Edit Profile
-                      </button>
-                    )}
-                  </div>
-                </div>
+                )}
               </div>
-            </div>
-            
-            {/* User Posts */}
-            <div>
-              <h2 className="text-xl font-semibold mb-4 dark:text-white">Your Posts</h2>
-              
-              {userPosts.length === 0 ? (
-                <div className="bg-white dark:bg-gray-800 transparent-bg rounded-lg shadow-md no-shadow p-6 text-center card-outline">
-                  <p className="text-gray-500 dark:text-gray-400">You haven't created any posts yet.</p>
-                  <p className="mt-2 dark:text-gray-300">
-                    <a href="/" className="text-[#2C89B7] hover:underline">Go to home</a> to create your first post and earn Aura Points!
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {userPosts.map((post: Post) => (
-                    <div key={post.id} className="bg-white dark:bg-gray-800 transparent-bg rounded-lg shadow-md no-shadow p-4 card-outline">
-                      <div className="flex items-start space-x-4">
-                        <div className="flex-shrink-0">
-                          <div className="w-10 h-10 rounded-full overflow-hidden bg-[#60C5D1]">
-                            {user.avatar ? (
-                              <img src={user.avatar} alt={user.username || 'User'} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-white font-bold">
-                                {user.username ? user.username.charAt(0).toUpperCase() : walletAddress.substring(0, 2)}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="flex-1">
-                          <div className="flex items-center">
-                            <h3 className="font-medium dark:text-white">{user.username || 'Anonymous User'}</h3>
-                            <span className="text-gray-500 dark:text-gray-400 text-sm ml-2">
-                              • {new Date(post.createdAt).toLocaleDateString()}
-                            </span>
-                          </div>
-                          
-                          <p className="my-2 dark:text-gray-200">{post.content}</p>
-                          
-                          {post.mediaUrl && (
-                            <div className="mt-2 rounded-lg overflow-hidden">
-                              {post.mediaType === 'image' ? (
-                                <img 
-                                  src={post.mediaUrl} 
-                                  alt="Post media" 
-                                  className="w-full h-auto"
-                                />
-                              ) : (
-                                <video 
-                                  src={post.mediaUrl} 
-                                  controls 
-                                  className="w-full"
-                                ></video>
-                              )}
-                            </div>
-                          )}
-                          
-                          <div className="mt-3 flex space-x-4 text-sm">
-                            <div className="flex items-center space-x-1 text-gray-500 dark:text-gray-400">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                              </svg>
-                              <span>{post.likes}</span>
-                            </div>
-                            
-                            <div className="flex items-center space-x-1 text-gray-500 dark:text-gray-400">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                              </svg>
-                              <span>{post.comments}</span>
-                            </div>
-                            
-                            <div className="flex items-center space-x-1 text-gray-500 dark:text-gray-400">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                              </svg>
-                              <span>{post.shares}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
           
@@ -464,59 +423,173 @@ const ProfilePage = () => {
           </div>
         </main>
       </div>
-
-      {/* Image Edit Modal for both profile picture and banner */}
-      {showPfpModal && tempImageUrl && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-xl w-full">
-            <h3 className="text-xl font-bold mb-4 dark:text-white">
-              {editingBanner ? 'Edit Banner Image' : 'Set Profile Picture'}
-            </h3>
+      
+      {/* Edit Profile Modal (displays over the page when editing is true) */}
+      {isEditing && (
+        <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 overflow-auto">
+          <div className="bg-white dark:bg-dark w-full max-w-xl mx-auto mt-16 rounded-xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-[var(--border-color)]">
+              <div className="flex items-center space-x-4">
+                <button onClick={() => setIsEditing(false)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800">
+                  <XMarkIcon className="h-5 w-5 text-black dark:text-white" />
+                </button>
+                <h2 className="text-xl font-bold text-black dark:text-white">Edit profile</h2>
+              </div>
+              <button 
+                onClick={handleSaveProfile}
+                disabled={isSaving}
+                className="bg-black dark:bg-white text-white dark:text-black font-bold px-4 py-1.5 rounded-full hover:bg-gray-800 dark:hover:bg-gray-100"
+              >
+                Save
+              </button>
+            </div>
             
-            <div className="flex justify-center mb-4 overflow-hidden">
-              <div className={`overflow-hidden ${editingBanner ? 'w-full h-48 aspect-[3/1]' : 'w-64 h-64 rounded-full'}`}>
+            {/* Banner Image */}
+            <div className="relative h-36 bg-gray-300 dark:bg-gray-700">
+              {bannerUrl && (
+                <img src={bannerUrl} alt="Profile Banner" className="w-full h-full object-cover" />
+              )}
+              <button 
+                onClick={() => bannerInputRef.current?.click()}
+                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/50 text-white p-3 rounded-full"
+              >
+                <CameraIcon className="h-6 w-6" />
+              </button>
+              <input
+                type="file"
+                ref={bannerInputRef}
+                accept="image/*"
+                onChange={(e) => handleImageUpload(e, true)}
+                className="hidden"
+              />
+            </div>
+            
+            {/* Profile Picture */}
+            <div className="relative mx-4 -mt-12">
+              <div className="w-24 h-24 rounded-full border-4 border-white dark:border-dark bg-gray-300 dark:bg-gray-700 overflow-hidden">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-white text-2xl font-bold">
+                    {username?.charAt(0)?.toUpperCase() || walletAddress?.charAt(0)?.toUpperCase() || '?'}
+                  </div>
+                )}
+              </div>
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full"
+              >
+                <CameraIcon className="h-5 w-5" />
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                onChange={(e) => handleImageUpload(e, false)}
+                className="hidden"
+              />
+            </div>
+            
+            {/* Edit Form */}
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">Name</label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Add your name"
+                  className="w-full p-3 bg-transparent border border-[var(--border-color)] rounded-md text-black dark:text-white focus:outline-none focus:ring-1 focus:ring-primary"
+                  maxLength={50}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">Bio</label>
+                <textarea
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  placeholder="Add your bio"
+                  className="w-full p-3 bg-transparent border border-[var(--border-color)] rounded-md text-black dark:text-white focus:outline-none focus:ring-1 focus:ring-primary"
+                  rows={3}
+                  maxLength={160}
+                ></textarea>
+              </div>
+              
+              <div>
+                <p className="text-gray-500 text-sm">
+                  Your blue checkmark will be hidden for a period of time after you edit your display
+                  name or profile photo until it is reviewed.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Profile Picture Crop/Zoom Modal */}
+      {showPfpModal && tempImageUrl && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-dark w-full max-w-md rounded-xl p-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-black dark:text-white">
+                {editingBanner ? 'Edit banner' : 'Edit profile picture'}
+              </h3>
+              <button 
+                onClick={() => {
+                  setShowPfpModal(false);
+                  setTempImageUrl(null);
+                }}
+                className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="relative overflow-hidden">
+              <div 
+                className={`${
+                  editingBanner ? 'w-full h-40' : 'w-64 h-64 mx-auto rounded-full'
+                } overflow-hidden bg-gray-200 dark:bg-gray-700`}
+              >
                 <img 
                   src={tempImageUrl} 
-                  alt={editingBanner ? "Banner" : "Profile"} 
-                  className="w-full h-full object-cover transform"
+                  alt="Preview" 
+                  className="w-full h-full object-cover"
                   style={{ transform: `scale(${imageZoom})` }}
                 />
               </div>
             </div>
             
-            <div className="mb-4">
-              <label className="text-sm text-gray-600 dark:text-gray-300 mb-1 block">Zoom</label>
-              <input 
-                type="range" 
-                min="1" 
-                max="2" 
-                step="0.01" 
-                value={imageZoom} 
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Zoom: {Math.round(imageZoom * 100)}%
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="2"
+                step="0.01"
+                value={imageZoom}
                 onChange={(e) => setImageZoom(parseFloat(e.target.value))}
                 className="w-full"
               />
             </div>
             
-            <p className="text-gray-600 dark:text-gray-300 mb-4 text-center text-sm">
-              {editingBanner 
-                ? 'Recommended banner size is 1500×500 pixels (3:1 aspect ratio)' 
-                : 'Recommended profile picture size is 400×400 pixels'}
-            </p>
-            
-            <div className="flex justify-end space-x-3">
+            <div className="flex justify-end mt-4 space-x-3">
               <button
                 onClick={() => {
                   setShowPfpModal(false);
                   setTempImageUrl(null);
-                  setEditingBanner(false);
                 }}
-                className="px-4 py-2 bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 rounded-md"
+                className="px-4 py-2 border border-[var(--border-color)] rounded-full text-black dark:text-white"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmProfilePicture}
-                className="px-4 py-2 bg-primary text-white rounded-md"
+                className="px-4 py-2 bg-primary text-white rounded-full"
               >
                 Apply
               </button>

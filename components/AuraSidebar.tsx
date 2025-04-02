@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { useRouter } from 'next/router';
 import { RootState } from '../lib/store';
 import { AuraTransaction } from '../lib/slices/auraPointsSlice';
@@ -7,6 +7,11 @@ import AuraPointsCounter from './AuraPointsCounter';
 import { FaSearch, FaGem, FaCheck } from 'react-icons/fa';
 import Image from 'next/image';
 import { MagnifyingGlassIcon, CheckBadgeIcon } from '@heroicons/react/24/solid';
+import { useWallet } from '../contexts/WalletContext';
+import { followUser, unfollowUser } from '../lib/slices/userSlice';
+import { addTransaction } from '../lib/slices/auraPointsSlice';
+import { toast } from 'react-hot-toast';
+import { v4 as uuidv4 } from 'uuid';
 
 const AuraSidebar = () => {
   const router = useRouter();
@@ -84,6 +89,52 @@ const AuraSidebar = () => {
     }
   };
 
+  const FollowButton = ({ username, wallet }: { username: string, wallet: string }) => {
+    const dispatch = useDispatch();
+    const { walletAddress } = useWallet();
+    const following = useSelector((state: RootState) => state.user.following);
+    const isFollowing = following?.includes(wallet);
+
+    const handleFollow = () => {
+      if (!walletAddress) {
+        toast.error('Please connect your wallet to follow users');
+        return;
+      }
+
+      if (isFollowing) {
+        dispatch(unfollowUser(wallet));
+        toast.success(`You unfollowed ${username}`);
+      } else {
+        dispatch(followUser(wallet));
+        
+        // Add transaction for Aura Points
+        dispatch(addTransaction({
+          id: uuidv4(),
+          amount: 5,
+          timestamp: new Date().toISOString(),
+          action: 'follower_gained',
+          counterpartyName: username,
+          counterpartyWallet: wallet
+        }));
+        
+        toast.success(`You followed ${username}`);
+      }
+    };
+
+    return (
+      <button
+        onClick={handleFollow}
+        className={`${
+          isFollowing 
+            ? 'bg-transparent border border-[var(--border-color)] text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
+            : 'bg-black dark:bg-white text-white dark:text-black hover:bg-opacity-90 dark:hover:bg-opacity-90'
+        } font-bold py-1.5 px-4 rounded-full transition`}
+      >
+        {isFollowing ? 'Following' : 'Follow'}
+      </button>
+    );
+  };
+
   return (
     <div className="hidden md:flex flex-col space-y-4 py-4 pl-4 pr-6 sticky top-0 h-screen max-h-screen right-sidebar">
       {/* Search */}
@@ -143,9 +194,7 @@ const AuraSidebar = () => {
                 <span className="user-handle block">{person.handle}</span>
               </div>
             </div>
-            <button className="bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white hover:text-white dark:text-black dark:hover:text-black font-bold rounded-full px-4 py-1.5 text-sm transition-colors">
-              Follow
-            </button>
+            <FollowButton username={person.name} wallet={person.handle} />
           </div>
         ))}
         

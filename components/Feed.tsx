@@ -113,7 +113,7 @@ function FeedSafetyWrapper(props: Record<string, any>) {
 function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   const [activeTab, setActiveTab] = useState('for-you');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const feedRef = useRef<HTMLDivElement>(null);
   const { showBoundary } = useErrorBoundary();
   const [newPostContent, setNewPostContent] = useState('');
@@ -149,62 +149,44 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         const mockPosts: Post[] = [
           {
             id: uuidv4(),
-            content: 'Just deployed my first #Web3 dApp on @GigaAura! The experience was seamless. Looking forward to building more with this amazing platform. #Blockchain #Crypto',
-            authorUsername: 'alexjohnson',
-            authorWallet: '0xabc123def456',
-            authorAvatar: 'https://i.pravatar.cc/150?img=1',
-            createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(), // 1 hour ago
-            likes: 142,
-            comments: 23,
-            shares: 7,
-            likedBy: []
-          },
-          {
-            id: uuidv4(),
-            content: 'Breaking: Major update coming to #GigaAura next week! Sources say it will include new wallet integration features and enhanced social capabilities. Stay tuned for the official announcement! #Web3News',
-            authorUsername: 'cryptodaily',
-            authorWallet: '0x789abc012def',
-            authorAvatar: 'https://i.pravatar.cc/150?img=2',
-            createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(), // 12 hours ago
-            likes: 358,
-            comments: 47,
-            shares: 112,
-            likedBy: []
-          },
-          {
-            id: uuidv4(),
-            content: 'Tutorial: How to earn Aura Points on @GigaAura\n\n1. Create quality posts\n2. Engage with community\n3. Complete challenges\n4. Verify your profile\n\nHas anyone reached Elite status yet? Share your tips below! #AuraPoints #GigaAura',
-            authorUsername: 'web3dev',
-            authorWallet: '0x345ghi678jkl',
-            authorAvatar: 'https://i.pravatar.cc/150?img=3',
-            createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
-            likes: 89,
-            comments: 31,
+            content: 'Welcome to GigaAura! The future of social networking on blockchain.',
+            authorUsername: 'GigaAura',
+            authorWallet: '0x1234567890abcdef',
+            authorAvatar: undefined,
+            mediaUrl: undefined,
+            mediaType: undefined,
+            likes: 42,
+            comments: 7,
             shares: 12,
+            createdAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
             likedBy: []
           },
           {
             id: uuidv4(),
-            content: "We're excited to announce our new partnership with @PhantomWallet! This collaboration will bring enhanced features and a smoother experience to all GigaAura users. #Web3 #Partnership",
-            authorUsername: 'gigaauraofficial',
-            authorWallet: '0x901mno234pqr',
-            authorAvatar: 'https://i.pravatar.cc/150?img=4',
-            createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
-            likes: 721,
-            comments: 134,
-            shares: 203,
+            content: 'Just minted my first NFT! Check it out at opensea.io/collection/myawesomenft',
+            authorUsername: 'NFTEnthusiast',
+            authorWallet: '0xabcdef1234567890',
+            authorAvatar: undefined,
+            mediaUrl: undefined,
+            mediaType: undefined,
+            likes: 15,
+            comments: 3,
+            shares: 2,
+            createdAt: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
             likedBy: []
           },
           {
             id: uuidv4(),
-            content: 'Just hit 5000 Aura Points and unlocked Elite Status! 🌟 The perks are amazing - especially loving the custom badge and boosts. Thank you @GigaAura for creating such a rewarding ecosystem! #AuraPoints #EliteStatus',
-            authorUsername: 'blockchainenth',
-            authorWallet: '0x567stu890vwx',
-            authorAvatar: 'https://i.pravatar.cc/150?img=5',
-            createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), // 4 days ago
-            likes: 176,
-            comments: 42,
-            shares: 15,
+            content: 'This is how Web3 will change everything we know about social media! Thread 🧵👇',
+            authorUsername: 'Web3Guru',
+            authorWallet: '0x9876543210abcdef',
+            authorAvatar: undefined,
+            mediaUrl: undefined,
+            mediaType: undefined,
+            likes: 28,
+            comments: 5,
+            shares: 8,
+            createdAt: new Date(Date.now() - 10800000).toISOString(), // 3 hours ago
             likedBy: []
           }
         ];
@@ -214,7 +196,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         setError(null);
       } catch (err) {
         console.error('Error loading posts:', err);
-        setError(err instanceof Error ? err : new Error('Failed to fetch posts'));
+        setError('Failed to load posts. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -230,59 +212,84 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   };
   
   const handleCreatePost = async () => {
-    if (!newPostContent.trim()) return;
-    
-    if (!connected) {
-      const confirm = window.confirm('Please connect your wallet to post. Would you like to connect now?');
-      if (confirm) {
-        await connectWallet();
-        if (!connected) return;
-      } else {
-        return;
-      }
+    if (!newPostContent.trim()) {
+      toast.error('Please enter some content for your post');
+      return;
     }
+    
+    if (!connected || !walletAddress) {
+      toast.error('Please connect your wallet to create a post');
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
     
     try {
-      // Create new post using Redux
-      const newPostPayload = {
+      // Create a new post object
+      const newPost: Post = {
+        id: uuidv4(),
         content: newPostContent,
-        authorWallet: walletAddress || 'anonymous',
-        authorUsername: username || undefined,
-        authorAvatar: avatar || `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 70)}`,
+        authorUsername: username || truncateWallet(walletAddress),
+        authorWallet: walletAddress,
+        authorAvatar: avatar || undefined,
+        mediaUrl: undefined,
+        mediaType: undefined,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        createdAt: new Date().toISOString(),
+        likedBy: []
       };
       
-      // Dispatch to Redux store
-      dispatch(addPost(newPostPayload));
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Add Aura Points for creating a post
-      if (walletAddress) {
-        dispatch(addTransaction({
-          id: uuidv4(),
-          amount: 20, // 20 points for creating a post
-          timestamp: new Date().toISOString(),
-          action: 'post_created',
-          counterpartyName: 'GigaAura',
-          counterpartyWallet: 'system'
-        }));
-      }
+      // Add post to the Redux store - this will make it available for all users
+      dispatch(addPost(newPost));
       
-      // Clear input
+      // Add transaction for earning Aura Points
+      dispatch(addTransaction({
+        id: uuidv4(),
+        amount: 10,
+        timestamp: new Date().toISOString(),
+        action: 'post_created',
+        counterpartyName: undefined,
+        counterpartyWallet: undefined
+      }));
+      
+      // Clear the input field
       setNewPostContent('');
       
-      // Show success message
+      // Show success notification
       toast.success('Post created successfully!');
       
-    } catch (error) {
-      console.error('Error creating post:', error);
+    } catch (err) {
+      console.error('Error creating post:', err);
+      setError('Failed to create post. Please try again.');
       toast.error('Failed to create post. Please try again.');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // Helper function to truncate wallet addresses
+  const truncateWallet = (wallet: string) => {
+    if (!wallet) return '';
+    return `${wallet.substring(0, 6)}...${wallet.substring(wallet.length - 4)}`;
+  };
+
+  // Handle share post functionality
+  const handleSharePost = (postId: string) => {
+    // Implement sharing functionality
+    toast.success('Post shared!');
   };
 
   if (error) {
     return (
       <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4 my-4">
         <h3 className="text-red-800 dark:text-red-400 font-medium">Error loading feed</h3>
-        <p className="text-red-700 dark:text-red-300 text-sm">{error.message}</p>
+        <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
         <button 
           onClick={() => window.location.reload()}
           className="mt-2 text-white bg-red-600 hover:bg-red-700 px-4 py-1 rounded-full text-sm"
@@ -341,7 +348,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           </div>
           <div className="flex-grow">
             <textarea
-              placeholder={connected ? "What's happening?" : "Connect wallet to post..."}
+              placeholder="What's happening?"
               className="w-full p-2 bg-transparent text-black dark:text-white border-b border-[var(--border-color)] focus:outline-none focus:border-primary resize-none"
               rows={2}
               value={newPostContent}
@@ -373,7 +380,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
                 onClick={handleCreatePost}
                 disabled={!newPostContent.trim() || !connected}
               >
-                Post
+                {loading ? 'Posting...' : 'Post'}
               </button>
             </div>
           </div>
