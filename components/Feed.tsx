@@ -16,6 +16,7 @@ import CreatePostForm from './CreatePostForm';
 import { store } from '../lib/store';
 import { cacheFeed, cacheUserPosts } from '../services/cache';
 import db from '../services/db';
+import { listenToPosts, getPosts, cleanupAllListeners } from '../services/db';
 
 // Import the emoji picker dynamically to avoid SSR issues
 // IMPORTANT: Keep this import outside of the component to prevent rendering issues
@@ -130,164 +131,82 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   const reduxPosts = useSelector((state: RootState) => state.posts.feed);
   const reduxComments = useSelector((state: RootState) => state.posts.comments);
 
-  // First load - get data from Firebase Firestore
   useEffect(() => {
-    let isMounted = true;
-    console.log("LOADING POSTS...");
-    
-    const loadPostsFromLocalStorage = () => {
-      try {
-        const cachedFeed = localStorage.getItem('gigaaura_feed');
-        if (cachedFeed) {
-          try {
-            const parsedFeed = JSON.parse(cachedFeed);
-            if (Array.isArray(parsedFeed) && parsedFeed.length > 0) {
-              console.log("FOUND LOCAL CACHED POSTS:", parsedFeed.length);
-              dispatch(setFeed(parsedFeed));
-              return true;
-            }
-          } catch (e) {
-            console.error("Error parsing cached feed:", e);
-          }
-        }
-        return false;
-      } catch (e) {
-        console.error("Error accessing localStorage:", e);
-        return false;
-      }
-    };
-    
-    const loadPostsFromFirestore = async () => {
-      if (!isMounted) return;
+    const loadPosts = async () => {
+      setLoading(true);
       
       try {
-        setLoading(true);
-        
-        // First try to load from localStorage for immediate display
-        const hasLocalPosts = loadPostsFromLocalStorage();
-        
-        // Then, regardless of whether we found local posts or not, 
-        // fetch the latest from Firestore to update the UI
-        console.log("LOADING POSTS FROM CLOUD DATABASE...");
-        
-        // Fetch posts from Firestore in the background
-        const posts = await db.getPosts();
-        
-        if (!isMounted) return;
-        
-        if (posts && Array.isArray(posts) && posts.length > 0) {
-          console.log("FOUND CLOUD DATABASE POSTS:", posts.length);
-          
-          // Update Redux store with posts from cloud
-          dispatch(setFeed(posts));
-          
-          // Also update localStorage as backup
+        // First try to load posts from localStorage for immediate display
+        const localPostsString = localStorage.getItem('giga-aura-posts');
+        if (localPostsString) {
           try {
-            localStorage.setItem('gigaaura_feed', JSON.stringify(posts));
-            console.log("Updated localStorage with cloud posts");
+            const localPosts = JSON.parse(localPostsString);
+            if (Array.isArray(localPosts) && localPosts.length > 0) {
+              dispatch(setFeed(localPosts));
+              console.log('Loaded posts from local storage:', localPosts.length);
+            }
           } catch (e) {
-            console.error("Error saving cloud posts to localStorage:", e);
+            console.warn('Failed to parse local posts:', e);
           }
-        } else if (!hasLocalPosts) {
-          // If no posts in Firestore and no local posts, create mock posts
-          console.log("No posts found in any storage, will create mock posts");
         }
         
-        if (isMounted) {
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error("Error loading posts from Firestore:", error);
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-    
-    loadPostsFromFirestore();
-    
-    return () => {
-      isMounted = false;
-    };
-  }, [dispatch]);
-
-  // This useEffect now just creates mock posts if no posts were found
-  useEffect(() => {
-    // Only run if we have no posts in Redux after the first load
-    if (reduxPosts.length === 0 && !loading) {
-      const createMockPosts = async () => {
-        try {
-          console.log("Creating mock posts for first-time users");
+        // Then fetch the latest posts from Firestore
+        const firebasePosts = await getPosts();
+        if (firebasePosts && firebasePosts.length > 0) {
+          dispatch(setFeed(firebasePosts));
+          console.log('Loaded posts from Firebase:', firebasePosts.length);
           
-          // Create mock posts as proper Post objects
-          const mockPosts: Post[] = [
+          // Save to localStorage as backup
+          localStorage.setItem('giga-aura-posts', JSON.stringify(firebasePosts));
+        }
+        
+        // Set up real-time listener for post updates
+        const unsubscribe = listenToPosts((updatedPosts) => {
+          if (updatedPosts && updatedPosts.length > 0) {
+            dispatch(setFeed(updatedPosts));
+            console.log('Real-time posts update:', updatedPosts.length);
+            
+            // Update localStorage backup
+            localStorage.setItem('giga-aura-posts', JSON.stringify(updatedPosts));
+          }
+        });
+        
+        setLoading(false);
+        
+        // Cleanup function to remove listener when component unmounts
+        return () => {
+          console.log('Cleaning up Feed listeners');
+          unsubscribe();
+          cleanupAllListeners();
+        };
+      } catch (error) {
+        console.error('Error loading posts:', error);
+        setLoading(false);
+        
+        // Fallback to mock posts if everything fails and we have no posts
+        if (!reduxPosts || reduxPosts.length === 0) {
+          const mockPosts = [
             {
-              id: uuidv4(),
-              content: 'Welcome to GigaAura! The future of social networking on blockchain.',
-              authorUsername: 'GigaAura',
-              authorWallet: '0x1234567890abcdef',
-              authorAvatar: undefined,
-              mediaUrl: undefined,
-              mediaType: undefined,
-              likes: 42,
-              comments: 7,
-              shares: 12,
-              createdAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-              likedBy: []
-            },
-            {
-              id: uuidv4(),
-              content: 'Just minted my first NFT! Check it out at opensea.io/collection/myawesomenft',
-              authorUsername: 'NFTEnthusiast',
-              authorWallet: '0xabcdef1234567890',
-              authorAvatar: undefined,
-              mediaUrl: undefined,
-              mediaType: undefined,
-              likes: 15,
-              comments: 3,
-              shares: 2,
-              createdAt: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
-              likedBy: []
-            },
-            {
-              id: uuidv4(),
-              content: 'This is how Web3 will change everything we know about social media! Thread 🧵👇',
-              authorUsername: 'Web3Guru',
-              authorWallet: '0x9876543210abcdef',
-              authorAvatar: undefined,
-              mediaUrl: undefined,
-              mediaType: undefined,
-              likes: 28,
-              comments: 5,
-              shares: 8,
-              createdAt: new Date(Date.now() - 10800000).toISOString(), // 3 hours ago
+              id: 'mock1',
+              authorWallet: walletAddress || '0x123',
+              authorUsername: 'gigaaura',
+              authorAvatar: '/images/avatar.png',
+              content: 'Welcome to GigaAura! This is a demo post.',
+              createdAt: new Date().toISOString(),
+              likes: 0,
+              comments: 0,
+              shares: 0,
               likedBy: []
             }
           ];
-          
-          console.log("Created mock posts:", mockPosts.length);
-          
-          // Save each mock post to Firestore FIRST
-          let savedCount = 0;
-          for (const post of mockPosts) {
-            const success = await db.savePost(post);
-            if (success) savedCount++;
-          }
-          console.log(`Saved ${savedCount}/${mockPosts.length} mock posts to cloud database`);
-          
-          // Now update Redux
           dispatch(setFeed(mockPosts));
-        } catch (err) {
-          console.error('Error creating mock posts:', err);
         }
-      };
-      
-      createMockPosts().catch(err => {
-        console.error("Unhandled error in createMockPosts:", err);
-      });
-    }
-  }, [dispatch, reduxPosts.length, loading, showBoundary]);
-  
+      }
+    };
+    
+    loadPosts();
+  }, [dispatch, walletAddress]);
+
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
   };
