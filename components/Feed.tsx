@@ -132,21 +132,54 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
 
   // First load - get data from Firebase Firestore
   useEffect(() => {
-    console.log("LOADING POSTS FROM CLOUD DATABASE...");
+    let isMounted = true;
+    console.log("LOADING POSTS...");
+    
+    const loadPostsFromLocalStorage = () => {
+      try {
+        const cachedFeed = localStorage.getItem('gigaaura_feed');
+        if (cachedFeed) {
+          try {
+            const parsedFeed = JSON.parse(cachedFeed);
+            if (Array.isArray(parsedFeed) && parsedFeed.length > 0) {
+              console.log("FOUND LOCAL CACHED POSTS:", parsedFeed.length);
+              dispatch(setFeed(parsedFeed));
+              return true;
+            }
+          } catch (e) {
+            console.error("Error parsing cached feed:", e);
+          }
+        }
+        return false;
+      } catch (e) {
+        console.error("Error accessing localStorage:", e);
+        return false;
+      }
+    };
     
     const loadPostsFromFirestore = async () => {
+      if (!isMounted) return;
+      
       try {
         setLoading(true);
         
-        // ALWAYS get posts from Firestore first
+        // First try to load from localStorage for immediate display
+        const hasLocalPosts = loadPostsFromLocalStorage();
+        
+        // Then, regardless of whether we found local posts or not, 
+        // fetch the latest from Firestore to update the UI
+        console.log("LOADING POSTS FROM CLOUD DATABASE...");
+        
+        // Fetch posts from Firestore in the background
         const posts = await db.getPosts();
+        
+        if (!isMounted) return;
         
         if (posts && Array.isArray(posts) && posts.length > 0) {
           console.log("FOUND CLOUD DATABASE POSTS:", posts.length);
           
           // Update Redux store with posts from cloud
           dispatch(setFeed(posts));
-          setLoading(false);
           
           // Also update localStorage as backup
           try {
@@ -155,51 +188,27 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           } catch (e) {
             console.error("Error saving cloud posts to localStorage:", e);
           }
-          return;
+        } else if (!hasLocalPosts) {
+          // If no posts in Firestore and no local posts, create mock posts
+          console.log("No posts found in any storage, will create mock posts");
         }
         
-        console.log("No posts found in cloud database, checking local storage...");
-        
-        // If no posts in Firestore, try localStorage as fallback
-        try {
-          const directFeed = localStorage.getItem('gigaaura_feed');
-          if (directFeed) {
-            try {
-              const parsedDirectFeed = JSON.parse(directFeed);
-              if (Array.isArray(parsedDirectFeed) && parsedDirectFeed.length > 0) {
-                console.log("FOUND LOCAL CACHED POSTS:", parsedDirectFeed.length);
-                
-                // Save these posts to Firestore for future use
-                console.log("Uploading cached posts to cloud database...");
-                let savedCount = 0;
-                for (const post of parsedDirectFeed) {
-                  const success = await db.savePost(post);
-                  if (success) savedCount++;
-                }
-                console.log(`Uploaded ${savedCount}/${parsedDirectFeed.length} posts to cloud`);
-                
-                dispatch(setFeed(parsedDirectFeed));
-                setLoading(false);
-                return;
-              }
-            } catch (e) {
-              console.error("Error parsing direct feed:", e);
-            }
-          }
-        } catch (e) {
-          console.error("Error accessing localStorage:", e);
+        if (isMounted) {
+          setLoading(false);
         }
-        
-        // If still no posts, we'll create mock posts
-        console.log("No posts found in any storage, will create mock posts");
-        setLoading(false);
       } catch (error) {
         console.error("Error loading posts from Firestore:", error);
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
     
     loadPostsFromFirestore();
+    
+    return () => {
+      isMounted = false;
+    };
   }, [dispatch]);
 
   // This useEffect now just creates mock posts if no posts were found

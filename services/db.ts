@@ -38,43 +38,47 @@ const firebaseConfig = {
 // Track active listeners for proper cleanup
 const activeListeners: Unsubscribe[] = [];
 
+// Track if Firebase is already initialized
+let isInitialized = false;
+
 // Initialize Firebase with proper type annotations
 let app: FirebaseApp | undefined;
 let db: Firestore | undefined;
 
-try {
-  app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
-  console.log('Firebase initialized successfully');
+/**
+ * Lazily initialize Firebase only when needed
+ */
+const initializeFirebase = () => {
+  if (isInitialized) return { app, db };
   
-  // Add event listener to delete Firebase app on page unload
-  if (typeof window !== 'undefined') {
-    const unloadCallback = () => {
-      if (app) {
-        console.log('Cleaning up Firebase app before unload');
-        
-        // Detach all listeners first
-        cleanupAllListeners();
-        
-        deleteApp(app)
-          .then(() => console.log('Firebase app deleted successfully'))
-          .catch(error => console.error('Error deleting Firebase app:', error));
-      }
-    };
+  try {
+    app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    isInitialized = true;
+    console.log('Firebase initialized successfully');
     
-    window.addEventListener('beforeunload', unloadCallback);
-    
-    // Also clean up on route changes within Next.js
+    // Add event listener to delete Firebase app on page unload
     if (typeof window !== 'undefined') {
-      // Check if Next.js Router is available
-      import('next/router').then(({ default: Router }) => {
-        Router.events.on('routeChangeStart', unloadCallback);
-      }).catch(err => console.error('Could not set up Next.js router event', err));
+      const unloadCallback = () => {
+        cleanupFirebase(false); // Pass false to avoid redundant logging during page transitions
+      };
+      
+      window.addEventListener('beforeunload', unloadCallback);
+      
+      // Also clean up on route changes within Next.js
+      if (typeof window !== 'undefined') {
+        // Check if Next.js Router is available
+        import('next/router').then(({ default: Router }) => {
+          Router.events.on('routeChangeStart', unloadCallback);
+        }).catch(err => console.error('Could not set up Next.js router event', err));
+      }
     }
+  } catch (error) {
+    console.error('Error initializing Firebase:', error);
   }
-} catch (error) {
-  console.error('Error initializing Firebase:', error);
-}
+  
+  return { app, db };
+};
 
 /**
  * Helper function to track listener subscriptions
@@ -88,23 +92,28 @@ export const addListener = (unsubscribe: Unsubscribe): void => {
  * Detach all active listeners
  */
 export const cleanupAllListeners = (): void => {
-  console.log(`Cleaning up ${activeListeners.length} Firestore listeners`);
-  activeListeners.forEach(unsubscribe => unsubscribe());
-  activeListeners.length = 0; // Clear the array
+  if (activeListeners.length > 0) {
+    console.log(`Cleaning up ${activeListeners.length} Firestore listeners`);
+    activeListeners.forEach(unsubscribe => unsubscribe());
+    activeListeners.length = 0; // Clear the array
+  }
 };
 
 /**
  * Delete Firebase app instance and clean up all listeners
  */
-export const cleanupFirebase = async (): Promise<void> => {
+export const cleanupFirebase = async (verbose = true): Promise<void> => {
   try {
     // First detach all listeners
     cleanupAllListeners();
     
-    // Then delete the app
+    // Then delete the app if it exists
     if (app) {
       await deleteApp(app);
-      console.log('Firebase app deleted successfully');
+      if (verbose) console.log('Firebase app deleted successfully');
+      isInitialized = false;
+      app = undefined;
+      db = undefined;
     }
   } catch (error) {
     console.error('Error deleting Firebase app:', error);
@@ -115,6 +124,7 @@ export const cleanupFirebase = async (): Promise<void> => {
  * Save a post to Firestore
  */
 export const savePost = async (post: Post): Promise<boolean> => {
+  const { db } = initializeFirebase();
   try {
     if (!db) return false;
     
@@ -148,6 +158,7 @@ export const savePost = async (post: Post): Promise<boolean> => {
  * Get all posts from Firestore
  */
 export const getPosts = async (): Promise<Post[]> => {
+  const { db } = initializeFirebase();
   try {
     if (!db) return [];
     
@@ -173,6 +184,7 @@ export const getPosts = async (): Promise<Post[]> => {
  * Get a user's posts from Firestore
  */
 export const getUserPosts = async (walletAddress: string): Promise<Post[]> => {
+  const { db } = initializeFirebase();
   try {
     if (!db || !walletAddress) return [];
     
@@ -201,6 +213,7 @@ export const getUserPosts = async (walletAddress: string): Promise<Post[]> => {
  * Update a post in Firestore (for likes, comments, etc.)
  */
 export const updatePost = async (post: Post): Promise<boolean> => {
+  const { db } = initializeFirebase();
   try {
     if (!db) return false;
     
@@ -228,6 +241,7 @@ export const updatePost = async (post: Post): Promise<boolean> => {
  * Save or update Aura Points for a wallet
  */
 export const saveAuraPoints = async (walletAddress: string, auraPoints: AuraPointsState): Promise<boolean> => {
+  const { db } = initializeFirebase();
   try {
     if (!db || !walletAddress) return false;
     
@@ -262,6 +276,7 @@ export const saveAuraPoints = async (walletAddress: string, auraPoints: AuraPoin
  * Get Aura Points for a wallet
  */
 export const getAuraPoints = async (walletAddress: string): Promise<AuraPointsState | null> => {
+  const { db } = initializeFirebase();
   try {
     if (!db || !walletAddress) return null;
     
@@ -313,6 +328,7 @@ export const getAuraPoints = async (walletAddress: string): Promise<AuraPointsSt
  * Add a transaction for a wallet
  */
 export const addTransaction = async (walletAddress: string, transaction: AuraTransaction): Promise<boolean> => {
+  const { db } = initializeFirebase();
   try {
     if (!db || !walletAddress) return false;
     
@@ -354,6 +370,7 @@ export const addTransaction = async (walletAddress: string, transaction: AuraTra
  * Returns an unsubscribe function to stop listening
  */
 export const listenToPosts = (callback: (posts: Post[]) => void): Unsubscribe => {
+  const { db } = initializeFirebase();
   if (!db) {
     console.error('Firebase not initialized');
     return () => {}; // Return empty function

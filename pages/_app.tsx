@@ -137,13 +137,15 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
   
   useEffect(() => {
     if (walletAddress && !loaded) {
-      // Load wallet-specific data when wallet connects
+      // Load wallet-specific data when wallet connects - let's optimize this
       console.log("Loading data for wallet:", walletAddress);
       
       try {
-        // Load Aura Points
+        // OPTIMIZATION: Load from localStorage first for immediate UI update
+        let hasLoadedAuraPoints = false;
+        
+        // Load Aura Points from localStorage first
         try {
-          // Try to load aura points from localStorage or set default
           const pointsStr = localStorage.getItem(`auraPoints_${walletAddress}`);
           if (pointsStr) {
             try {
@@ -153,12 +155,14 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
               
               // Dispatch the full state object to Redux
               store.dispatch(loadWalletPoints(auraPointsState));
+              hasLoadedAuraPoints = true;
             } catch (e) {
               console.error("Error parsing aura points JSON:", e);
               // Try to handle legacy format (if it's just a number)
               const points = parseInt(pointsStr, 10);
               if (!isNaN(points)) {
                 store.dispatch(loadWalletPoints(points)); 
+                hasLoadedAuraPoints = true;
               } else {
                 store.dispatch(loadWalletPoints(100)); // Default
               }
@@ -172,7 +176,7 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
           store.dispatch(loadWalletPoints(100)); // Default
         }
         
-        // Load profile data from localStorage
+        // Load profile data from localStorage - this is already optimized
         try {
           // Load profile picture
           const profilePictures = safeJSONParse(localStorage.getItem('profilePictures') || '{}', {});
@@ -203,7 +207,27 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
           console.error('Error loading profile data:', error);
         }
         
+        // Mark as loaded to prevent duplicate loading
         setLoaded(true);
+        
+        // OPTIMIZATION: Load cloud data in background after UI is ready
+        if (hasLoadedAuraPoints) {
+          // We don't need to wait for this to finish
+          import('../services/db').then(async (db) => {
+            try {
+              const cloudAuraPoints = await db.default.getAuraPoints(walletAddress);
+              if (cloudAuraPoints) {
+                console.log("FOUND CLOUD AURA POINTS for " + walletAddress + ":", cloudAuraPoints);
+                store.dispatch(loadWalletPoints(cloudAuraPoints));
+                console.log("Updated state with data from cloud database");
+              }
+            } catch (error) {
+              console.error("Error loading cloud aura points:", error);
+            }
+          }).catch(error => {
+            console.error("Error loading db module:", error);
+          });
+        }
       } catch (err) {
         console.error("Error in wallet data loading:", err);
         setError(err instanceof Error ? err : new Error(String(err)));

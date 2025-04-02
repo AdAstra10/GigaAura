@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
+  reactStrictMode: false,
   swcMinify: true,
   images: {
     domains: ['cloudinary.com', 's3.amazonaws.com', 'i.pravatar.cc', 'images.unsplash.com', 'picsum.photos'],
@@ -49,6 +49,12 @@ const nextConfig = {
       },
     ]
   },
+  // Optimize loading performance
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
+  },
+  // Minimize the impact of runtime JavaScript
+  poweredByHeader: false,
 };
 
 module.exports = nextConfig; 
