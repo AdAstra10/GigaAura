@@ -3,6 +3,7 @@ import { useDispatch } from 'react-redux';
 import { setWalletAddress, logout, setUser } from '../lib/slices/userSlice';
 import { loadWalletPoints } from '../lib/slices/auraPointsSlice';
 import { toast } from 'react-hot-toast';
+import { getWalletAuraPoints } from '../services/cache';
 
 // Basic interface for the phantom wallet
 interface PhantomWallet {
@@ -130,6 +131,14 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       try {
         setIsLoading(true);
         
+        // Check if we have a saved wallet address in localStorage first
+        const savedWalletAddress = localStorage.getItem('walletAddress');
+        const walletWasConnected = localStorage.getItem('walletConnected') === 'true';
+        
+        if (savedWalletAddress && walletWasConnected) {
+          console.log("Found saved wallet address:", savedWalletAddress);
+        }
+        
         // Try to safely get the provider without conflicting with other wallet extensions
         const provider = getProvider();
 
@@ -148,19 +157,54 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
                 setWalletState(address);
                 setWalletConnected(true);
                 dispatch(setWalletAddress(address));
+                
+                // Save the wallet address in localStorage
+                localStorage.setItem('walletAddress', address);
+                localStorage.setItem('walletConnected', 'true');
+                
                 loadWalletAuraPoints(address);
                 loadUserProfileData(address); // Load profile data here
                 console.log("Auto-connected to wallet:", address);
               } else {
                 console.error("Couldn't extract address from publicKey");
+                
+                // Try to use saved address if available
+                if (savedWalletAddress) {
+                  setWalletState(savedWalletAddress);
+                  setWalletConnected(true);
+                  dispatch(setWalletAddress(savedWalletAddress));
+                  loadWalletAuraPoints(savedWalletAddress);
+                  loadUserProfileData(savedWalletAddress);
+                  console.log("Using saved wallet address:", savedWalletAddress);
+                }
               }
             }
           } catch (error) {
             // Not connected yet (normal, will connect later when user clicks)
-            console.log("Wallet not connected yet (expected)");
+            console.log("Wallet not auto-connected. Using saved wallet if available.");
+            
+            // Try to use saved address if available
+            if (savedWalletAddress && walletWasConnected) {
+              setWalletState(savedWalletAddress);
+              setWalletConnected(true);
+              dispatch(setWalletAddress(savedWalletAddress));
+              loadWalletAuraPoints(savedWalletAddress);
+              loadUserProfileData(savedWalletAddress);
+              console.log("Using saved wallet address:", savedWalletAddress);
+            }
           }
         } else {
           console.log("Compatible wallet not found. Please install Phantom wallet extension.");
+          
+          // Even without wallet extension, try to use saved wallet data
+          if (savedWalletAddress && walletWasConnected) {
+            setWalletState(savedWalletAddress);
+            setWalletConnected(true);
+            dispatch(setWalletAddress(savedWalletAddress));
+            loadWalletAuraPoints(savedWalletAddress);
+            loadUserProfileData(savedWalletAddress);
+            console.log("Using saved wallet address without provider:", savedWalletAddress);
+          }
         }
       } catch (error) {
         console.error("Wallet initialization error:", error);
@@ -179,9 +223,43 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   // Load Aura Points from localStorage or initialize to default value
   const loadWalletAuraPoints = (address: string) => {
     try {
+      // Use our improved cache function to get wallet-specific Aura Points
+      const auraPointsState = getWalletAuraPoints(address);
+      
+      if (auraPointsState && typeof auraPointsState === 'object') {
+        console.log(`Loaded aura points for ${address} using cache service:`, auraPointsState);
+        dispatch(loadWalletPoints(auraPointsState));
+        return;
+      }
+      
+      // Try legacy format as a fallback
       const pointsStr = localStorage.getItem(`auraPoints_${address}`);
-      const points = pointsStr ? parseInt(pointsStr, 10) : 100;
-      dispatch(loadWalletPoints(points));
+      if (pointsStr) {
+        try {
+          // Parse the full state object
+          const legacyAuraPointsState = JSON.parse(pointsStr);
+          console.log(`Loaded legacy aura points for ${address}:`, legacyAuraPointsState);
+          
+          // Check if it's a valid object with the expected structure
+          if (legacyAuraPointsState && typeof legacyAuraPointsState === 'object') {
+            dispatch(loadWalletPoints(legacyAuraPointsState));
+            return;
+          }
+        } catch (e) {
+          // If JSON parsing fails, try handling as a legacy number
+          console.error("Error parsing legacy aura points JSON:", e);
+          const points = parseInt(pointsStr, 10);
+          if (!isNaN(points)) {
+            console.log(`Loaded legacy aura points as number for ${address}:`, points);
+            dispatch(loadWalletPoints(points));
+            return;
+          }
+        }
+      }
+      
+      // Default if no valid data found
+      console.log(`No valid aura points found for ${address}, using default`);
+      dispatch(loadWalletPoints(100)); // Default
     } catch (error) {
       console.error("Error loading Aura Points:", error);
       dispatch(loadWalletPoints(100)); // Default
@@ -224,11 +302,14 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       setWalletProvider(provider);
       dispatch(setWalletAddress(walletAddress));
       
+      // Save wallet address in localStorage for persistence
+      localStorage.setItem('walletAddress', walletAddress);
+      localStorage.setItem('walletConnected', 'true');
+      console.log('Wallet connected and saved to localStorage:', walletAddress);
+      
       // Load data for this wallet address
       loadWalletAuraPoints(walletAddress);
       loadUserProfileData(walletAddress);
-      
-      localStorage.setItem('walletConnected', 'true');
       
       // Show success toast
       toast.success("Wallet connected successfully!");
@@ -257,12 +338,17 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     try {
       if (walletProvider) {
         await walletProvider.disconnect();
-        setWalletState(null);
-        setWalletConnected(false);
-        setWalletProvider(null);
-        dispatch(logout());
-        console.log("Wallet disconnected");
       }
+      setWalletState(null);
+      setWalletConnected(false);
+      setWalletProvider(null);
+      dispatch(logout());
+      
+      // Clear the wallet data from localStorage
+      localStorage.removeItem('walletAddress');
+      localStorage.removeItem('walletConnected');
+      
+      console.log("Wallet disconnected and removed from localStorage");
     } catch (error) {
       console.error("Error disconnecting wallet:", error);
     }

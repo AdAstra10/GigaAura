@@ -16,6 +16,7 @@ const CACHE_KEYS = {
   NOTIFICATIONS: 'gigaaura_notifications',
   USER_PROFILE: 'gigaaura_user_profile',
   CACHE_TIMESTAMP: 'gigaaura_cache_timestamp',
+  WALLET_AURA_POINTS: 'gigaaura_wallet_aura_points_', // Prefix for wallet-specific aura points
 };
 
 // Cache expiration in milliseconds (7 days instead of 24 hours for longer post persistence)
@@ -171,7 +172,7 @@ export const cacheUserPosts = (posts: Post[]): void => {
  * Get cached user posts
  */
 export const getCachedUserPosts = (): Post[] | null => {
-  if (!isBrowser || isCacheExpired()) return null;
+  if (!isBrowser) return null;
   
   try {
     const cachedPosts = localStorage.getItem(CACHE_KEYS.USER_POSTS);
@@ -183,13 +184,52 @@ export const getCachedUserPosts = (): Post[] | null => {
 };
 
 /**
- * Cache Aura Points total
+ * Cache Aura Points by wallet address
+ * @param walletAddress The wallet address to use as a key
+ * @param pointsState The full Aura Points state object to cache
  */
-export const cacheAuraPoints = (points: number): void => {
+export const cacheWalletAuraPoints = (walletAddress: string, pointsState: any): void => {
+  if (!isBrowser || !walletAddress) return;
+  
+  try {
+    const key = `${CACHE_KEYS.WALLET_AURA_POINTS}${walletAddress.toLowerCase()}`;
+    localStorage.setItem(key, safeStringify(pointsState));
+    updateCacheTimestamp();
+  } catch (error) {
+    console.error('Error caching Wallet Aura Points:', error);
+  }
+};
+
+/**
+ * Get cached Aura Points for specific wallet
+ * @param walletAddress The wallet address to lookup
+ */
+export const getWalletAuraPoints = (walletAddress: string): any | null => {
+  if (!isBrowser || !walletAddress) return null;
+  
+  try {
+    const key = `${CACHE_KEYS.WALLET_AURA_POINTS}${walletAddress.toLowerCase()}`;
+    const cachedPoints = localStorage.getItem(key);
+    console.log(`Getting wallet aura points for ${walletAddress}:`, cachedPoints);
+    
+    // Return parsed data
+    const result = safeParse(cachedPoints);
+    console.log(`Parsed wallet aura points:`, result);
+    return result;
+  } catch (error) {
+    console.error('Error getting cached Wallet Aura Points:', error);
+    return null;
+  }
+};
+
+/**
+ * Cache Aura Points total - UPDATED to store full state object instead of just number
+ */
+export const cacheAuraPoints = (pointsState: any): void => {
   if (!isBrowser) return;
   
   try {
-    localStorage.setItem(CACHE_KEYS.AURA_POINTS, points.toString());
+    localStorage.setItem(CACHE_KEYS.AURA_POINTS, safeStringify(pointsState));
     updateCacheTimestamp();
   } catch (error) {
     console.error('Error caching Aura Points:', error);
@@ -197,14 +237,22 @@ export const cacheAuraPoints = (points: number): void => {
 };
 
 /**
- * Get cached Aura Points total
+ * Get cached Aura Points - UPDATED to return full state object
  */
-export const getCachedAuraPoints = (): number | null => {
-  if (!isBrowser || isCacheExpired()) return null;
+export const getCachedAuraPoints = (): any | null => {
+  if (!isBrowser) return null;
   
   try {
     const cachedPoints = localStorage.getItem(CACHE_KEYS.AURA_POINTS);
-    return cachedPoints ? parseInt(cachedPoints, 10) : null;
+    console.log('Retrieved cached Aura Points:', cachedPoints);
+    
+    // If it's a simple number (legacy format), convert to object
+    if (cachedPoints && !isNaN(Number(cachedPoints))) {
+      console.log('Converting legacy number format to object');
+      return { total: parseInt(cachedPoints, 10), transactions: [] };
+    }
+    
+    return safeParse(cachedPoints);
   } catch (error) {
     console.error('Error getting cached Aura Points:', error);
     return null;
@@ -234,7 +282,7 @@ export const cacheAuraTransactions = (transactions: AuraTransaction[]): void => 
  * Get cached Aura Transactions
  */
 export const getCachedAuraTransactions = (): AuraTransaction[] | null => {
-  if (!isBrowser || isCacheExpired()) return null;
+  if (!isBrowser) return null;
   
   try {
     const cachedTransactions = localStorage.getItem(CACHE_KEYS.AURA_TRANSACTIONS);
@@ -268,7 +316,7 @@ export const cacheNotifications = (notifications: Notification[]): void => {
  * Get cached notifications
  */
 export const getCachedNotifications = (): Notification[] | null => {
-  if (!isBrowser || isCacheExpired()) return null;
+  if (!isBrowser) return null;
   
   try {
     const cachedNotifications = localStorage.getItem(CACHE_KEYS.NOTIFICATIONS);
@@ -297,7 +345,7 @@ export const cacheUserProfile = (profile: any): void => {
  * Get cached user profile
  */
 export const getCachedUserProfile = (): any | null => {
-  if (!isBrowser || isCacheExpired()) return null;
+  if (!isBrowser) return null;
   
   try {
     const cachedProfile = localStorage.getItem(CACHE_KEYS.USER_PROFILE);

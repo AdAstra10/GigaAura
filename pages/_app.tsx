@@ -141,8 +141,28 @@ const AppWithWallet = ({ Component, pageProps }: { Component: AppProps['Componen
         try {
           // Try to load aura points from localStorage or set default
           const pointsStr = localStorage.getItem(`auraPoints_${walletAddress}`);
-          const points = pointsStr ? parseInt(pointsStr, 10) : 100;
-          store.dispatch(loadWalletPoints(points));
+          if (pointsStr) {
+            try {
+              // Parse the full aura points state object
+              const auraPointsState = JSON.parse(pointsStr);
+              console.log("Loaded aura points from localStorage:", auraPointsState);
+              
+              // Dispatch the full state object to Redux
+              store.dispatch(loadWalletPoints(auraPointsState));
+            } catch (e) {
+              console.error("Error parsing aura points JSON:", e);
+              // Try to handle legacy format (if it's just a number)
+              const points = parseInt(pointsStr, 10);
+              if (!isNaN(points)) {
+                store.dispatch(loadWalletPoints(points)); 
+              } else {
+                store.dispatch(loadWalletPoints(100)); // Default
+              }
+            }
+          } else {
+            console.log("No aura points found for wallet, setting default");
+            store.dispatch(loadWalletPoints(100)); // Default
+          }
         } catch (error) {
           console.error("Error loading aura points:", error);
           store.dispatch(loadWalletPoints(100)); // Default

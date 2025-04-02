@@ -13,6 +13,8 @@ import { FaRegComment, FaRetweet, FaRegHeart, FaShare, FaImage, FaRegSmile, FaRe
 import { useErrorBoundary } from 'react-error-boundary';
 import PostCard from './PostCard';
 import CreatePostForm from './CreatePostForm';
+import { store } from '../lib/store';
+import { cacheFeed, cacheUserPosts } from '../services/cache';
 
 // Import the emoji picker dynamically to avoid SSR issues
 // IMPORTANT: Keep this import outside of the component to prevent rendering issues
@@ -129,10 +131,11 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
 
   // First load - try to get data from cache
   useEffect(() => {
+    console.log("Attempting to load posts from cache...");
     dispatch(loadFromCache());
   }, [dispatch]);
 
-  // Load posts
+  // Load posts - separate effect that only runs once after initial load
   useEffect(() => {
     const loadPosts = async () => {
       try {
@@ -140,9 +143,12 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         
         // If we have posts in Redux store already, use those
         if (reduxPosts.length > 0) {
+          console.log("Using posts from Redux store:", reduxPosts.length);
           setLoading(false);
           return;
         }
+        
+        console.log("No posts in Redux store, creating mock posts");
         
         // Otherwise, load mock posts for initial state
         await new Promise(resolve => setTimeout(resolve, 800));
@@ -194,6 +200,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         ];
         
         // Add posts to Redux
+        console.log("Creating mock posts:", mockPosts.length);
         dispatch(setFeed(mockPosts));
         setError(null);
       } catch (err) {
@@ -204,10 +211,16 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       }
     };
 
-    loadPosts().catch(err => {
-      showBoundary(err);
-    });
-  }, [dispatch, reduxPosts.length, showBoundary]);
+    // Only run this effect once on mount, not when reduxPosts changes
+    // This fixes the issue where mock posts would replace cached posts
+    const onlyRunOnce = true;
+    if (onlyRunOnce) {
+      loadPosts().catch(err => {
+        console.error("Unhandled error in loadPosts:", err);
+        showBoundary(err);
+      });
+    }
+  }, [dispatch, showBoundary]); // removed reduxPosts.length from dependencies
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -246,7 +259,9 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         mediaType: mediaType as 'image' | 'video' | undefined
       };
       
-      // Dispatch to Redux
+      console.log("Creating new post with data:", postData);
+      
+      // Dispatch to Redux - this will also cache it via the reducer
       dispatch(addPost(postData));
       
       // Add transaction for Aura Points
@@ -258,6 +273,25 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         counterpartyName: 'GigaAura',
         counterpartyWallet: 'system'
       }));
+      
+      // Verify that the post was added to the Redux store
+      const currentPosts = store.getState().posts.feed;
+      console.log("Current posts after adding:", currentPosts.length);
+      if (currentPosts.length > 0) {
+        console.log("Latest post:", currentPosts[0]);
+      }
+      
+      // Force a save to localStorage to ensure persistence
+      const force_save = setTimeout(() => {
+        // Re-cache feed to ensure it's saved
+        const latestFeed = store.getState().posts.feed;
+        console.log("Force-saving posts to cache:", latestFeed.length);
+        cacheFeed(latestFeed);
+        
+        // Re-cache user posts
+        const latestUserPosts = store.getState().posts.userPosts;
+        cacheUserPosts(latestUserPosts);
+      }, 500);
       
       // Success message
       toast.success('Post created successfully!');

@@ -207,9 +207,13 @@ export const postsSlice = createSlice({
     // New action to load data from cache
     loadFromCache: (state) => {
       try {
+        console.log('Loading posts from cache...');
         // Get cached data with safety checks
         const cachedFeed = getCachedFeed();
         const cachedUserPosts = getCachedUserPosts();
+        
+        console.log('Cached feed:', cachedFeed);
+        console.log('Cached user posts:', cachedUserPosts);
         
         // Only set feed if valid array
         if (cachedFeed && Array.isArray(cachedFeed)) {
@@ -218,7 +222,10 @@ export const postsSlice = createSlice({
             post && typeof post === 'object' && post.id
           );
           
+          console.log('Valid posts found in cache:', validPosts.length);
           state.feed = validPosts;
+        } else {
+          console.log('No valid cached feed found');
         }
         
         // Only set user posts if valid array
@@ -228,7 +235,10 @@ export const postsSlice = createSlice({
             post && typeof post === 'object' && post.id
           );
           
+          console.log('Valid user posts found in cache:', validUserPosts.length);
           state.userPosts = validUserPosts;
+        } else {
+          console.log('No valid cached user posts found');
         }
       } catch (error) {
         console.error('Error loading from cache:', error);
