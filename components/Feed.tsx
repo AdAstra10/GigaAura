@@ -138,19 +138,29 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       try {
         setLoading(true);
         
-        // Get posts from Firestore
+        // ALWAYS get posts from Firestore first
         const posts = await db.getPosts();
         
         if (posts && Array.isArray(posts) && posts.length > 0) {
           console.log("FOUND CLOUD DATABASE POSTS:", posts.length);
+          
+          // Update Redux store with posts from cloud
           dispatch(setFeed(posts));
           setLoading(false);
+          
+          // Also update localStorage as backup
+          try {
+            localStorage.setItem('gigaaura_feed', JSON.stringify(posts));
+            console.log("Updated localStorage with cloud posts");
+          } catch (e) {
+            console.error("Error saving cloud posts to localStorage:", e);
+          }
           return;
         }
         
-        // If no posts in Firestore, fallback to localStorage
-        console.log("No posts found in cloud database, trying localStorage...");
+        console.log("No posts found in cloud database, checking local storage...");
         
+        // If no posts in Firestore, try localStorage as fallback
         try {
           const directFeed = localStorage.getItem('gigaaura_feed');
           if (directFeed) {
@@ -160,9 +170,13 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
                 console.log("FOUND LOCAL CACHED POSTS:", parsedDirectFeed.length);
                 
                 // Save these posts to Firestore for future use
+                console.log("Uploading cached posts to cloud database...");
+                let savedCount = 0;
                 for (const post of parsedDirectFeed) {
-                  await db.savePost(post);
+                  const success = await db.savePost(post);
+                  if (success) savedCount++;
                 }
+                console.log(`Uploaded ${savedCount}/${parsedDirectFeed.length} posts to cloud`);
                 
                 dispatch(setFeed(parsedDirectFeed));
                 setLoading(false);
@@ -176,17 +190,11 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           console.error("Error accessing localStorage:", e);
         }
         
-        // If all else fails, load from Redux cache
-        console.log("Falling back to Redux cache...");
-        dispatch(loadFromCache());
-        
-        // If still no posts, we'll generate mock posts in the other useEffect
+        // If still no posts, we'll create mock posts
+        console.log("No posts found in any storage, will create mock posts");
+        setLoading(false);
       } catch (error) {
         console.error("Error loading posts from Firestore:", error);
-        
-        // Fallback to cache as last resort
-        dispatch(loadFromCache());
-      } finally {
         setLoading(false);
       }
     };
@@ -194,95 +202,82 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
     loadPostsFromFirestore();
   }, [dispatch]);
 
-  // Load posts - separate effect that only runs once after initial load
+  // This useEffect now just creates mock posts if no posts were found
   useEffect(() => {
-    const loadPosts = async () => {
-      try {
-        // If we have posts in Redux store already, use those
-        if (reduxPosts.length > 0) {
-          console.log("Using posts from Redux store:", reduxPosts.length);
-          setLoading(false);
-          return;
-        }
-        
-        console.log("No posts found, creating mock posts");
-        
-        // Otherwise, load mock posts for initial state
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // Create mock posts as proper Post objects
-        const mockPosts: Post[] = [
-          {
-            id: uuidv4(),
-            content: 'Welcome to GigaAura! The future of social networking on blockchain.',
-            authorUsername: 'GigaAura',
-            authorWallet: '0x1234567890abcdef',
-            authorAvatar: undefined,
-            mediaUrl: undefined,
-            mediaType: undefined,
-            likes: 42,
-            comments: 7,
-            shares: 12,
-            createdAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-            likedBy: []
-          },
-          {
-            id: uuidv4(),
-            content: 'Just minted my first NFT! Check it out at opensea.io/collection/myawesomenft',
-            authorUsername: 'NFTEnthusiast',
-            authorWallet: '0xabcdef1234567890',
-            authorAvatar: undefined,
-            mediaUrl: undefined,
-            mediaType: undefined,
-            likes: 15,
-            comments: 3,
-            shares: 2,
-            createdAt: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
-            likedBy: []
-          },
-          {
-            id: uuidv4(),
-            content: 'This is how Web3 will change everything we know about social media! Thread 🧵👇',
-            authorUsername: 'Web3Guru',
-            authorWallet: '0x9876543210abcdef',
-            authorAvatar: undefined,
-            mediaUrl: undefined,
-            mediaType: undefined,
-            likes: 28,
-            comments: 5,
-            shares: 8,
-            createdAt: new Date(Date.now() - 10800000).toISOString(), // 3 hours ago
-            likedBy: []
+    // Only run if we have no posts in Redux after the first load
+    if (reduxPosts.length === 0 && !loading) {
+      const createMockPosts = async () => {
+        try {
+          console.log("Creating mock posts for first-time users");
+          
+          // Create mock posts as proper Post objects
+          const mockPosts: Post[] = [
+            {
+              id: uuidv4(),
+              content: 'Welcome to GigaAura! The future of social networking on blockchain.',
+              authorUsername: 'GigaAura',
+              authorWallet: '0x1234567890abcdef',
+              authorAvatar: undefined,
+              mediaUrl: undefined,
+              mediaType: undefined,
+              likes: 42,
+              comments: 7,
+              shares: 12,
+              createdAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+              likedBy: []
+            },
+            {
+              id: uuidv4(),
+              content: 'Just minted my first NFT! Check it out at opensea.io/collection/myawesomenft',
+              authorUsername: 'NFTEnthusiast',
+              authorWallet: '0xabcdef1234567890',
+              authorAvatar: undefined,
+              mediaUrl: undefined,
+              mediaType: undefined,
+              likes: 15,
+              comments: 3,
+              shares: 2,
+              createdAt: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
+              likedBy: []
+            },
+            {
+              id: uuidv4(),
+              content: 'This is how Web3 will change everything we know about social media! Thread 🧵👇',
+              authorUsername: 'Web3Guru',
+              authorWallet: '0x9876543210abcdef',
+              authorAvatar: undefined,
+              mediaUrl: undefined,
+              mediaType: undefined,
+              likes: 28,
+              comments: 5,
+              shares: 8,
+              createdAt: new Date(Date.now() - 10800000).toISOString(), // 3 hours ago
+              likedBy: []
+            }
+          ];
+          
+          console.log("Created mock posts:", mockPosts.length);
+          
+          // Save each mock post to Firestore FIRST
+          let savedCount = 0;
+          for (const post of mockPosts) {
+            const success = await db.savePost(post);
+            if (success) savedCount++;
           }
-        ];
-        
-        // Add posts to Redux and to Firestore
-        console.log("Creating mock posts:", mockPosts.length);
-        
-        // Save each mock post to Firestore
-        for (const post of mockPosts) {
-          await db.savePost(post);
+          console.log(`Saved ${savedCount}/${mockPosts.length} mock posts to cloud database`);
+          
+          // Now update Redux
+          dispatch(setFeed(mockPosts));
+        } catch (err) {
+          console.error('Error creating mock posts:', err);
         }
-        
-        dispatch(setFeed(mockPosts));
-        setError(null);
-      } catch (err) {
-        console.error('Error loading posts:', err);
-        setError('Failed to load posts. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    // Only run this effect once on mount
-    const onlyRunOnce = true;
-    if (onlyRunOnce) {
-      loadPosts().catch(err => {
-        console.error("Unhandled error in loadPosts:", err);
-        showBoundary(err);
+      };
+      
+      createMockPosts().catch(err => {
+        console.error("Unhandled error in createMockPosts:", err);
       });
     }
-  }, [dispatch, showBoundary, reduxPosts.length]);
+  }, [dispatch, reduxPosts.length, loading, showBoundary]);
   
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -311,28 +306,23 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         mediaType = mediaFile.type.startsWith('image/') ? 'image' : 'video';
       }
       
-      // Create post object
-      const postData = {
+      // Create a complete post object (not just the data)
+      const newPost: Post = {
+        id: uuidv4(),
         content,
         authorUsername: username || undefined,
         authorWallet: walletAddress,
         authorAvatar: avatar || undefined,
         mediaUrl,
-        mediaType: mediaType as 'image' | 'video' | undefined
-      };
-      
-      console.log("CREATING NEW POST WITH DATA:", postData);
-      
-      // First, create the full post object
-      const newPost: Post = {
-        ...postData,
-        id: uuidv4(),
+        mediaType: mediaType as 'image' | 'video' | undefined,
         createdAt: new Date().toISOString(),
         likes: 0,
         comments: 0,
         shares: 0,
         likedBy: [],
       };
+      
+      console.log("CREATING NEW POST:", newPost);
       
       // Create the transaction for Aura Points
       const newTransaction = {
@@ -344,8 +334,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         counterpartyWallet: 'system'
       };
       
-      // CLOUD-FIRST APPROACH:
-      // 1. SAVE TO FIRESTORE (real-time cloud database)
+      // IMPORTANT: First save post to Firestore
       db.savePost(newPost)
         .then(success => {
           if (success) {
@@ -358,7 +347,10 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           console.error('ERROR SAVING POST TO CLOUD:', error);
         });
       
-      // 2. ALSO ADD TRANSACTION TO CLOUD
+      // Add the post to Redux IMMEDIATELY so it shows up in the feed
+      dispatch(setFeed([newPost, ...reduxPosts]));
+      
+      // Also add transaction to Firestore
       if (walletAddress) {
         db.addTransaction(walletAddress, newTransaction)
           .then(success => {
@@ -371,37 +363,10 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           .catch(error => {
             console.error('ERROR SAVING TRANSACTION TO CLOUD:', error);
           });
-      }
-      
-      // 3. FALLBACK: ALSO SAVE TO LOCAL STORAGE
-      try {
-        const currentFeedStr = localStorage.getItem('gigaaura_feed');
-        let currentFeed: Post[] = [];
         
-        if (currentFeedStr) {
-          try {
-            currentFeed = JSON.parse(currentFeedStr);
-            if (!Array.isArray(currentFeed)) currentFeed = [];
-          } catch (e) {
-            console.error('Error parsing currentFeed:', e);
-            currentFeed = [];
-          }
-        }
-        
-        const updatedFeed = [newPost, ...currentFeed];
-        localStorage.setItem('gigaaura_feed', JSON.stringify(updatedFeed));
-        console.log('POST ALSO SAVED TO LOCAL STORAGE AS BACKUP');
-      } catch (e) {
-        console.error('Error saving to localStorage:', e);
+        // Add transaction to Redux state
+        dispatch(addTransaction(newTransaction));
       }
-      
-      // 4. DISPATCH TO REDUX 
-      console.log('DISPATCHING POST TO REDUX');
-      dispatch(addPost(postData));
-      
-      // 5. DISPATCH TRANSACTION TO REDUX
-      console.log('DISPATCHING TRANSACTION TO REDUX');
-      dispatch(addTransaction(newTransaction));
       
       // Success message
       toast.success('Post created successfully!');

@@ -6,7 +6,8 @@ import Sidebar from '../components/Sidebar';
 import PostCard from '../components/PostCard';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../lib/store';
-import { Post, Comment, loadFromCache } from '../lib/slices/postsSlice';
+import { Post, Comment, loadFromCache, setFeed } from '../lib/slices/postsSlice';
+import db from '../services/db';
 
 const ExplorePage: NextPage = () => {
   const dispatch = useDispatch();
@@ -18,15 +19,32 @@ const ExplorePage: NextPage = () => {
   const [selectedFilter, setSelectedFilter] = useState<'trending' | 'latest' | 'popular'>('trending');
 
   useEffect(() => {
-    // Load posts from cache
-    dispatch(loadFromCache());
+    const loadPosts = async () => {
+      setIsLoading(true);
+      
+      try {
+        // First try to load posts from Firestore
+        console.log("Loading posts from Firestore for Explore page");
+        const posts = await db.getPosts();
+        
+        if (posts && Array.isArray(posts) && posts.length > 0) {
+          console.log("Found posts in Firestore:", posts.length);
+          dispatch(setFeed(posts));
+        } else {
+          // Fallback to local cache if Firestore has no posts
+          console.log("No posts found in Firestore, loading from cache");
+          dispatch(loadFromCache());
+        }
+      } catch (error) {
+        console.error("Error loading posts from Firestore:", error);
+        // Fallback to cache
+        dispatch(loadFromCache());
+      } finally {
+        setIsLoading(false);
+      }
+    };
     
-    // Simulate loading
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
-    
-    return () => clearTimeout(timer);
+    loadPosts();
   }, [dispatch]);
 
   // Get comments for a specific post

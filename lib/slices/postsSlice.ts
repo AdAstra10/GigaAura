@@ -6,6 +6,7 @@ import {
   getCachedFeed, 
   getCachedUserPosts 
 } from '../../services/cache';
+import db from '../../services/db';
 
 export interface Post {
   id: string;
@@ -59,13 +60,21 @@ export const postsSlice = createSlice({
   reducers: {
     setFeed: (state, action: PayloadAction<Post[]>) => {
       state.feed = action.payload;
+      
       // Cache the feed when it's updated
       cacheFeed(action.payload);
+      
+      // No need to sync to Firestore here as this is typically
+      // used when loading FROM Firestore
     },
     setUserPosts: (state, action: PayloadAction<Post[]>) => {
       state.userPosts = action.payload;
+      
       // Cache user posts when they're updated
       cacheUserPosts(action.payload);
+      
+      // No need to sync to Firestore here as this is typically
+      // used when loading FROM Firestore
     },
     addPost: (state, action: PayloadAction<Omit<Post, 'id' | 'createdAt' | 'likes' | 'comments' | 'shares' | 'likedBy'>>) => {
       const newPost: Post = {
@@ -83,6 +92,15 @@ export const postsSlice = createSlice({
       // Cache updated lists
       cacheFeed(state.feed);
       cacheUserPosts(state.userPosts);
+      
+      // Sync to Firestore
+      db.savePost(newPost)
+        .then(success => {
+          console.log(`Post ${success ? 'saved to' : 'failed to save to'} Firestore`);
+        })
+        .catch(error => {
+          console.error('Error syncing post to Firestore:', error);
+        });
     },
     likePost: (state, action: PayloadAction<{ postId: string; walletAddress: string }>) => {
       const { postId, walletAddress } = action.payload;
@@ -108,6 +126,18 @@ export const postsSlice = createSlice({
       // Cache updated lists
       cacheFeed(state.feed);
       cacheUserPosts(state.userPosts);
+      
+      // Sync the updated post to Firestore
+      const updatedPost = state.feed.find(post => post.id === postId);
+      if (updatedPost) {
+        db.updatePost(updatedPost)
+          .then(success => {
+            console.log(`Like ${success ? 'saved to' : 'failed to save to'} Firestore`);
+          })
+          .catch(error => {
+            console.error('Error syncing like to Firestore:', error);
+          });
+      }
     },
     unlikePost: (state, action: PayloadAction<{ postId: string; walletAddress: string }>) => {
       const { postId, walletAddress } = action.payload;
@@ -133,6 +163,18 @@ export const postsSlice = createSlice({
       // Cache updated lists
       cacheFeed(state.feed);
       cacheUserPosts(state.userPosts);
+      
+      // Sync the updated post to Firestore
+      const updatedPost = state.feed.find(post => post.id === postId);
+      if (updatedPost) {
+        db.updatePost(updatedPost)
+          .then(success => {
+            console.log(`Unlike ${success ? 'saved to' : 'failed to save to'} Firestore`);
+          })
+          .catch(error => {
+            console.error('Error syncing unlike to Firestore:', error);
+          });
+      }
     },
     sharePost: (state, action: PayloadAction<{ postId: string; walletAddress: string }>) => {
       const { postId, walletAddress } = action.payload;
@@ -163,6 +205,18 @@ export const postsSlice = createSlice({
       // Cache updated lists
       cacheFeed(state.feed);
       cacheUserPosts(state.userPosts);
+      
+      // Sync the updated post to Firestore
+      const updatedPost = state.feed.find(post => post.id === postId);
+      if (updatedPost) {
+        db.updatePost(updatedPost)
+          .then(success => {
+            console.log(`Share ${success ? 'saved to' : 'failed to save to'} Firestore`);
+          })
+          .catch(error => {
+            console.error('Error syncing share to Firestore:', error);
+          });
+      }
     },
     setCurrentPost: (state, action: PayloadAction<Post>) => {
       state.currentPost = action.payload;
