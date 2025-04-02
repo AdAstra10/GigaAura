@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../lib/store';
-import { setFeed, addPost, Post, addComment, setComments } from '../lib/slices/postsSlice';
+import { setFeed, addPost, Post, addComment, setComments, loadFromCache } from '../lib/slices/postsSlice';
 import { useWallet } from '../contexts/WalletContext';
 import { addTransaction } from '../lib/slices/auraPointsSlice';
+import { addNotification } from '../lib/slices/notificationsSlice';
 import toast from 'react-hot-toast';
 import { v4 as uuidv4 } from 'uuid';
 import { useDarkMode } from '../contexts/DarkModeContext';
@@ -112,7 +113,6 @@ function FeedSafetyWrapper(props: Record<string, any>) {
 function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   const [activeTab, setActiveTab] = useState('for-you');
   const [loading, setLoading] = useState(true);
-  const [posts, setPosts] = useState<any[]>([]);
   const [error, setError] = useState<Error | null>(null);
   const feedRef = useRef<HTMLDivElement>(null);
   const { showBoundary } = useErrorBoundary();
@@ -120,105 +120,110 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   const { connectWallet, connected, walletAddress } = useWallet();
   const { username, avatar } = useSelector((state: RootState) => state.user);
   const dispatch = useDispatch();
+  
+  // Get posts from Redux store
+  const reduxPosts = useSelector((state: RootState) => state.posts.feed);
+  const reduxComments = useSelector((state: RootState) => state.posts.comments);
+
+  // First load - try to get data from cache
+  useEffect(() => {
+    dispatch(loadFromCache());
+  }, [dispatch]);
 
   // Load posts
   useEffect(() => {
-    // Mock function to simulate loading posts
-    const fetchPosts = async () => {
+    const loadPosts = async () => {
       try {
         setLoading(true);
         
-        // Simulate stable feed by using consistent loading time
+        // If we have posts in Redux store already, use those
+        if (reduxPosts.length > 0) {
+          setLoading(false);
+          return;
+        }
+        
+        // Otherwise, load mock posts for initial state
         await new Promise(resolve => setTimeout(resolve, 800));
         
-        // Mock posts data
-        const mockPosts = [
+        // Create mock posts as proper Post objects
+        const mockPosts: Post[] = [
           {
-            id: 1,
-            user: {
-              name: 'Alex Johnson',
-              username: 'alexjohnson',
-              avatar: 'https://i.pravatar.cc/150?img=1',
-              verified: true
-            },
+            id: uuidv4(),
             content: 'Just deployed my first #Web3 dApp on @GigaAura! The experience was seamless. Looking forward to building more with this amazing platform. #Blockchain #Crypto',
-            timestamp: '2023-05-15T14:30:00Z',
+            authorUsername: 'alexjohnson',
+            authorWallet: '0xabc123def456',
+            authorAvatar: 'https://i.pravatar.cc/150?img=1',
+            createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(), // 1 hour ago
             likes: 142,
             comments: 23,
-            reposts: 7
+            shares: 7,
+            likedBy: []
           },
           {
-            id: 2,
-            user: {
-              name: 'Crypto Daily',
-              username: 'cryptodaily',
-              avatar: 'https://i.pravatar.cc/150?img=2',
-              verified: true
-            },
+            id: uuidv4(),
             content: 'Breaking: Major update coming to #GigaAura next week! Sources say it will include new wallet integration features and enhanced social capabilities. Stay tuned for the official announcement! #Web3News',
-            timestamp: '2023-05-14T10:15:00Z',
+            authorUsername: 'cryptodaily',
+            authorWallet: '0x789abc012def',
+            authorAvatar: 'https://i.pravatar.cc/150?img=2',
+            createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(), // 12 hours ago
             likes: 358,
             comments: 47,
-            reposts: 112
+            shares: 112,
+            likedBy: []
           },
           {
-            id: 3,
-            user: {
-              name: 'Web3 Developer',
-              username: 'web3dev',
-              avatar: 'https://i.pravatar.cc/150?img=3',
-              verified: false
-            },
+            id: uuidv4(),
             content: 'Tutorial: How to earn Aura Points on @GigaAura\n\n1. Create quality posts\n2. Engage with community\n3. Complete challenges\n4. Verify your profile\n\nHas anyone reached Elite status yet? Share your tips below! #AuraPoints #GigaAura',
-            timestamp: '2023-05-13T16:45:00Z',
+            authorUsername: 'web3dev',
+            authorWallet: '0x345ghi678jkl',
+            authorAvatar: 'https://i.pravatar.cc/150?img=3',
+            createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
             likes: 89,
             comments: 31,
-            reposts: 12
+            shares: 12,
+            likedBy: []
           },
           {
-            id: 4,
-            user: {
-              name: 'GigaAura Official',
-              username: 'gigaaura',
-              avatar: 'https://i.pravatar.cc/150?img=4',
-              verified: true
-            },
+            id: uuidv4(),
             content: "We're excited to announce our new partnership with @PhantomWallet! This collaboration will bring enhanced features and a smoother experience to all GigaAura users. #Web3 #Partnership",
-            timestamp: '2023-05-12T09:30:00Z',
+            authorUsername: 'gigaauraofficial',
+            authorWallet: '0x901mno234pqr',
+            authorAvatar: 'https://i.pravatar.cc/150?img=4',
+            createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
             likes: 721,
             comments: 134,
-            reposts: 203
+            shares: 203,
+            likedBy: []
           },
           {
-            id: 5,
-            user: {
-              name: 'Blockchain Enthusiast',
-              username: 'blockchainenth',
-              avatar: 'https://i.pravatar.cc/150?img=5',
-              verified: false
-            },
+            id: uuidv4(),
             content: 'Just hit 5000 Aura Points and unlocked Elite Status! 🌟 The perks are amazing - especially loving the custom badge and boosts. Thank you @GigaAura for creating such a rewarding ecosystem! #AuraPoints #EliteStatus',
-            timestamp: '2023-05-11T13:20:00Z',
+            authorUsername: 'blockchainenth',
+            authorWallet: '0x567stu890vwx',
+            authorAvatar: 'https://i.pravatar.cc/150?img=5',
+            createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), // 4 days ago
             likes: 176,
             comments: 42,
-            reposts: 15
+            shares: 15,
+            likedBy: []
           }
         ];
         
-        setPosts(mockPosts);
+        // Add posts to Redux
+        dispatch(setFeed(mockPosts));
         setError(null);
       } catch (err) {
-        console.error('Error fetching posts:', err);
+        console.error('Error loading posts:', err);
         setError(err instanceof Error ? err : new Error('Failed to fetch posts'));
       } finally {
         setLoading(false);
       }
     };
 
-    fetchPosts().catch(err => {
+    loadPosts().catch(err => {
       showBoundary(err);
     });
-  }, [activeTab, showBoundary]);
+  }, [dispatch, reduxPosts.length, showBoundary]);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -231,30 +236,35 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       const confirm = window.confirm('Please connect your wallet to post. Would you like to connect now?');
       if (confirm) {
         await connectWallet();
+        if (!connected) return;
       } else {
         return;
       }
     }
     
     try {
-      // Create new post
-      const newPost = {
-        id: Date.now(),
-        user: {
-          name: username || 'Anonymous',
-          username: username || walletAddress?.substring(0, 10) || 'anon',
-          avatar: avatar || `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 70)}`,
-          verified: false
-        },
+      // Create new post using Redux
+      const newPostPayload = {
         content: newPostContent,
-        timestamp: new Date().toISOString(),
-        likes: 0,
-        comments: 0,
-        reposts: 0
+        authorWallet: walletAddress || 'anonymous',
+        authorUsername: username || undefined,
+        authorAvatar: avatar || `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 70)}`,
       };
       
-      // Add to beginning of posts array
-      setPosts([newPost, ...posts]);
+      // Dispatch to Redux store
+      dispatch(addPost(newPostPayload));
+      
+      // Add Aura Points for creating a post
+      if (walletAddress) {
+        dispatch(addTransaction({
+          id: uuidv4(),
+          amount: 20, // 20 points for creating a post
+          timestamp: new Date().toISOString(),
+          action: 'post_created',
+          counterpartyName: 'GigaAura',
+          counterpartyWallet: 'system'
+        }));
+      }
       
       // Clear input
       setNewPostContent('');
@@ -266,11 +276,6 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       console.error('Error creating post:', error);
       toast.error('Failed to create post. Please try again.');
     }
-  };
-  
-  const handleSharePost = (postId: number) => {
-    // Implement share functionality
-    toast.success('Post link copied to clipboard!');
   };
 
   if (error) {
@@ -382,24 +387,27 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         </div>
       ) : (
         <div>
-          {posts.map(post => (
-            <PostCard
-              key={post.id}
-              post={{
-                id: post.id.toString(),
-                content: post.content,
-                authorUsername: post.user.username,
-                authorWallet: post.user.username, // Using username as wallet for demo
-                authorAvatar: post.user.avatar,
-                createdAt: post.timestamp,
-                likes: post.likes,
-                comments: post.comments,
-                shares: post.reposts,
-                likedBy: []
-              }}
-              onShare={() => handleSharePost(post.id)}
-            />
-          ))}
+          {reduxPosts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <div className="text-gray-500 dark:text-gray-400 mb-4">
+                <svg className="w-16 h-16 mx-auto" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8.8 7.2H5.6V3.9c0-.4-.3-.8-.8-.8s-.7.4-.7.8v3.3H.8c-.4 0-.8.3-.8.8s.3.8.8.8h3.3v3.3c0 .4.3.8.8.8s.8-.3.8-.8V8.7H9c.4 0 .8-.3.8-.8s-.5-.7-1-.7zm15-4.9v-.1h-.1c-.1 0-9.2 1.2-14.4 11.7-3.8 7.6-3.6 9.9-3.3 9.9.3.1 3.4-6.5 6.7-9.2 5.2-1.1 6.6-3.6 6.6-3.6s-1.5.2-2.1.2c-.8 0-1.4-.2-1.7-.3 1.3-1.2 2.4-1.5 3.5-1.7.9-.2 1.8-.4 3-1.2 2.2-1.6 1.9-5.5 1.8-5.7z"></path>
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-black dark:text-white mb-2">Welcome to your feed!</h3>
+              <p className="text-gray-600 dark:text-gray-400 max-w-md">
+                Connect your wallet and start posting to see updates here. Your feed will show posts from people you follow and trending content.
+              </p>
+            </div>
+          ) : (
+            reduxPosts.map(post => (
+              <PostCard
+                key={post.id}
+                post={post}
+                comments={reduxComments.filter(comment => comment.postId === post.id)}
+              />
+            ))
+          )}
         </div>
       )}
     </div>

@@ -166,6 +166,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
         authorAvatar: avatar || 'https://i.pravatar.cc/150?img=1'
       };
       
+      // Dispatch the comment to Redux
       dispatch(addComment(commentPayload));
       
       // Set showComments to true to make sure comments are visible
@@ -177,10 +178,10 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
       if (post.authorWallet !== walletAddress) {
         dispatch(addNotification({
           type: 'comment',
-          message: `${username || walletAddress} commented on your post`,
+          message: `${username || truncateWallet(walletAddress)} commented on your post: "${commentText.substring(0, 30)}${commentText.length > 30 ? '...' : ''}"`,
           fromWallet: walletAddress,
           fromUsername: username || undefined,
-          postId: post.id,
+          postId: post.id
         }));
         
         // Add Aura Points transaction for commenter
@@ -189,7 +190,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
           amount: 10, // 10 points for making a comment
           timestamp: new Date().toISOString(),
           action: 'comment_made',
-          counterpartyName: post.authorUsername || post.authorWallet.substring(0, 6),
+          counterpartyName: post.authorUsername || truncateWallet(post.authorWallet),
           counterpartyWallet: post.authorWallet
         }));
         
@@ -199,14 +200,20 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
           amount: 10, // 10 points for received comment
           timestamp: new Date().toISOString(),
           action: 'comment_received',
-          counterpartyName: username || walletAddress.substring(0, 6),
+          counterpartyName: username || truncateWallet(walletAddress),
           counterpartyWallet: walletAddress
         }));
+        
+        // Show toast notification
+        toast.success('Comment posted successfully!');
+      } else {
+        toast.success('Comment added to your post!');
       }
       
       setCommentText('');
     } catch (error) {
       console.error('Error adding comment:', error);
+      toast.error('Failed to post comment. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -298,10 +305,10 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
       if (post.authorWallet !== walletAddress) {
         dispatch(addNotification({
           type: 'share',
-          message: `${username || walletAddress} shared your post`,
+          message: `${username || truncateWallet(walletAddress)} shared your post`,
           fromWallet: walletAddress,
           fromUsername: username || undefined,
-          postId: post.id,
+          postId: post.id
         }));
         
         // Add Aura Points transaction for post creator
@@ -310,7 +317,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
           amount: 15, // Points for getting a share
           timestamp: new Date().toISOString(),
           action: 'post_shared',
-          counterpartyName: username || walletAddress.substring(0, 6),
+          counterpartyName: username || truncateWallet(walletAddress),
           counterpartyWallet: walletAddress
         }));
       }
@@ -323,6 +330,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
         })
         .catch(err => {
           console.error('Could not copy text: ', err);
+          toast.error('Failed to copy link');
         });
       
       if (onShare) {
@@ -359,6 +367,9 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
     if (savedBookmarks) {
       try {
         bookmarkedPosts = JSON.parse(savedBookmarks);
+        if (!Array.isArray(bookmarkedPosts)) {
+          bookmarkedPosts = [];
+        }
       } catch (error) {
         console.error('Error parsing bookmarks from localStorage:', error);
         bookmarkedPosts = [];
@@ -369,6 +380,17 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
       // Add to bookmarks if not already there
       if (!bookmarkedPosts.includes(post.id)) {
         bookmarkedPosts.push(post.id);
+        
+        // Add notification for post creator (optional - silent bookmark)
+        if (post.authorWallet !== walletAddress) {
+          dispatch(addNotification({
+            type: 'system',
+            message: `${username || truncateWallet(walletAddress)} bookmarked your post`,
+            fromWallet: walletAddress,
+            fromUsername: username || undefined,
+            postId: post.id
+          }));
+        }
       }
       toast.success('Post bookmarked successfully!');
     } else {
