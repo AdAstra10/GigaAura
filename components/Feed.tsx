@@ -15,6 +15,7 @@ import PostCard from './PostCard';
 import CreatePostForm from './CreatePostForm';
 import { store } from '../lib/store';
 import { cacheFeed, cacheUserPosts } from '../services/cache';
+import db from '../services/db';
 
 // Import the emoji picker dynamically to avoid SSR issues
 // IMPORTANT: Keep this import outside of the component to prevent rendering issues
@@ -129,55 +130,74 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   const reduxPosts = useSelector((state: RootState) => state.posts.feed);
   const reduxComments = useSelector((state: RootState) => state.posts.comments);
 
-  // First load - try to get data from cache with multiple fallbacks
+  // First load - get data from Firebase Firestore
   useEffect(() => {
-    console.log("LOADING POSTS FROM ALL CACHE SOURCES...");
+    console.log("LOADING POSTS FROM CLOUD DATABASE...");
     
-    // 1. FIRST TRY DIRECT LOCALSTORAGE (most reliable)
-    try {
-      const directFeed = localStorage.getItem('gigaaura_feed');
-      if (directFeed) {
+    const loadPostsFromFirestore = async () => {
+      try {
+        setLoading(true);
+        
+        // Get posts from Firestore
+        const posts = await db.getPosts();
+        
+        if (posts && Array.isArray(posts) && posts.length > 0) {
+          console.log("FOUND CLOUD DATABASE POSTS:", posts.length);
+          dispatch(setFeed(posts));
+          setLoading(false);
+          return;
+        }
+        
+        // If no posts in Firestore, fallback to localStorage
+        console.log("No posts found in cloud database, trying localStorage...");
+        
         try {
-          const parsedDirectFeed = JSON.parse(directFeed);
-          if (Array.isArray(parsedDirectFeed) && parsedDirectFeed.length > 0) {
-            console.log("FOUND DIRECT CACHE POSTS:", parsedDirectFeed.length);
-            dispatch(setFeed(parsedDirectFeed));
-            return; // Exit if we successfully loaded
+          const directFeed = localStorage.getItem('gigaaura_feed');
+          if (directFeed) {
+            try {
+              const parsedDirectFeed = JSON.parse(directFeed);
+              if (Array.isArray(parsedDirectFeed) && parsedDirectFeed.length > 0) {
+                console.log("FOUND LOCAL CACHED POSTS:", parsedDirectFeed.length);
+                
+                // Save these posts to Firestore for future use
+                for (const post of parsedDirectFeed) {
+                  await db.savePost(post);
+                }
+                
+                dispatch(setFeed(parsedDirectFeed));
+                setLoading(false);
+                return;
+              }
+            } catch (e) {
+              console.error("Error parsing direct feed:", e);
+            }
           }
         } catch (e) {
-          console.error("Error parsing direct feed:", e);
+          console.error("Error accessing localStorage:", e);
         }
+        
+        // If all else fails, load from Redux cache
+        console.log("Falling back to Redux cache...");
+        dispatch(loadFromCache());
+        
+        // If still no posts, we'll generate mock posts in the other useEffect
+      } catch (error) {
+        console.error("Error loading posts from Firestore:", error);
+        
+        // Fallback to cache as last resort
+        dispatch(loadFromCache());
+      } finally {
+        setLoading(false);
       }
-      
-      // 2. TRY BACKUP LOCALSTORAGE
-      const backupFeed = localStorage.getItem('gigaaura_feed_backup');
-      if (backupFeed) {
-        try {
-          const parsedBackupFeed = JSON.parse(backupFeed);
-          if (Array.isArray(parsedBackupFeed) && parsedBackupFeed.length > 0) {
-            console.log("FOUND BACKUP CACHE POSTS:", parsedBackupFeed.length);
-            dispatch(setFeed(parsedBackupFeed));
-            return; // Exit if we successfully loaded
-          }
-        } catch (e) {
-          console.error("Error parsing backup feed:", e);
-        }
-      }
-    } catch (e) {
-      console.error("Error accessing direct localStorage:", e);
-    }
+    };
     
-    // 3. FINALLY, TRY THE REDUX CACHE SERVICE
-    console.log("Attempting to load posts from cache service...");
-    dispatch(loadFromCache());
+    loadPostsFromFirestore();
   }, [dispatch]);
 
   // Load posts - separate effect that only runs once after initial load
   useEffect(() => {
     const loadPosts = async () => {
       try {
-        setLoading(true);
-        
         // If we have posts in Redux store already, use those
         if (reduxPosts.length > 0) {
           console.log("Using posts from Redux store:", reduxPosts.length);
@@ -185,7 +205,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           return;
         }
         
-        console.log("No posts in Redux store, creating mock posts");
+        console.log("No posts found, creating mock posts");
         
         // Otherwise, load mock posts for initial state
         await new Promise(resolve => setTimeout(resolve, 800));
@@ -236,8 +256,14 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           }
         ];
         
-        // Add posts to Redux
+        // Add posts to Redux and to Firestore
         console.log("Creating mock posts:", mockPosts.length);
+        
+        // Save each mock post to Firestore
+        for (const post of mockPosts) {
+          await db.savePost(post);
+        }
+        
         dispatch(setFeed(mockPosts));
         setError(null);
       } catch (err) {
@@ -248,8 +274,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       }
     };
 
-    // Only run this effect once on mount, not when reduxPosts changes
-    // This fixes the issue where mock posts would replace cached posts
+    // Only run this effect once on mount
     const onlyRunOnce = true;
     if (onlyRunOnce) {
       loadPosts().catch(err => {
@@ -257,8 +282,8 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         showBoundary(err);
       });
     }
-  }, [dispatch, showBoundary]); // removed reduxPosts.length from dependencies
-
+  }, [dispatch, showBoundary, reduxPosts.length]);
+  
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
   };
@@ -319,8 +344,36 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         counterpartyWallet: 'system'
       };
       
-      // 1. SAVE DIRECTLY TO LOCALSTORAGE FIRST (most reliable approach)
-      // Get current posts from localStorage
+      // CLOUD-FIRST APPROACH:
+      // 1. SAVE TO FIRESTORE (real-time cloud database)
+      db.savePost(newPost)
+        .then(success => {
+          if (success) {
+            console.log('POST SAVED TO CLOUD DATABASE SUCCESSFULLY');
+          } else {
+            console.error('FAILED TO SAVE POST TO CLOUD DATABASE');
+          }
+        })
+        .catch(error => {
+          console.error('ERROR SAVING POST TO CLOUD:', error);
+        });
+      
+      // 2. ALSO ADD TRANSACTION TO CLOUD
+      if (walletAddress) {
+        db.addTransaction(walletAddress, newTransaction)
+          .then(success => {
+            if (success) {
+              console.log('TRANSACTION SAVED TO CLOUD DATABASE SUCCESSFULLY');
+            } else {
+              console.error('FAILED TO SAVE TRANSACTION TO CLOUD DATABASE');
+            }
+          })
+          .catch(error => {
+            console.error('ERROR SAVING TRANSACTION TO CLOUD:', error);
+          });
+      }
+      
+      // 3. FALLBACK: ALSO SAVE TO LOCAL STORAGE
       try {
         const currentFeedStr = localStorage.getItem('gigaaura_feed');
         let currentFeed: Post[] = [];
@@ -335,57 +388,20 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           }
         }
         
-        // Add the new post to the beginning of the feed
         const updatedFeed = [newPost, ...currentFeed];
-        
-        // Save back to localStorage immediately
-        console.log('SAVING POSTS DIRECTLY TO LOCALSTORAGE:', updatedFeed.length);
         localStorage.setItem('gigaaura_feed', JSON.stringify(updatedFeed));
-        
-        // Verify it saved correctly
-        const verifyFeed = localStorage.getItem('gigaaura_feed');
-        if (verifyFeed) {
-          try {
-            const parsedFeed = JSON.parse(verifyFeed);
-            console.log('DIRECT SAVE VERIFIED:', parsedFeed.length, 'posts in localStorage');
-          } catch (e) {
-            console.error('Error verifying feed save:', e);
-          }
-        }
+        console.log('POST ALSO SAVED TO LOCAL STORAGE AS BACKUP');
       } catch (e) {
-        console.error('Error saving directly to localStorage:', e);
+        console.error('Error saving to localStorage:', e);
       }
       
-      // 2. NOW DISPATCH TO REDUX (this will also trigger the reducer's cache logic)
+      // 4. DISPATCH TO REDUX 
       console.log('DISPATCHING POST TO REDUX');
       dispatch(addPost(postData));
       
-      // 3. ADD TRANSACTION FOR AURA POINTS
+      // 5. DISPATCH TRANSACTION TO REDUX
       console.log('DISPATCHING TRANSACTION TO REDUX');
       dispatch(addTransaction(newTransaction));
-      
-      // 4. FORCE SYNC WITH MULTIPLE APPROACHES (belt and suspenders)
-      const syncTimeout = setTimeout(() => {
-        try {
-          // Get current posts from Redux store
-          const currentReduxFeed = store.getState().posts.feed;
-          console.log('FORCE SYNCING FEED:', currentReduxFeed.length, 'posts');
-          
-          // Save again via cache service
-          cacheFeed(currentReduxFeed);
-          
-          // Also save user posts
-          const currentUserPosts = store.getState().posts.userPosts;
-          cacheUserPosts(currentUserPosts);
-          
-          // Direct save as additional backup
-          localStorage.setItem('gigaaura_feed_backup', JSON.stringify(currentReduxFeed));
-          
-          console.log('COMPLETED ALL SYNC OPERATIONS');
-        } catch (e) {
-          console.error('Error in sync timeout:', e);
-        }
-      }, 100);
       
       // Success message
       toast.success('Post created successfully!');
