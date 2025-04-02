@@ -20,6 +20,55 @@ let postsCache: Post[] = [];
 let activeListeners: (() => void)[] = [];
 
 /**
+ * Get Firebase auth token for REST API requests
+ * For simplicity in this implementation we'll use anonymous authentication
+ */
+const getAuthToken = async (): Promise<string> => {
+  try {
+    // First check if we have a cached token
+    if (typeof window !== 'undefined') {
+      const cachedToken = localStorage.getItem('giga-aura-auth-token');
+      const tokenExpiry = localStorage.getItem('giga-aura-auth-token-expiry');
+      
+      // If we have a valid token that is not expired, use it
+      if (cachedToken && tokenExpiry && parseInt(tokenExpiry) > Date.now()) {
+        return cachedToken;
+      }
+    }
+    
+    // Otherwise, get a new token using the Firebase Auth REST API
+    const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_CONFIG.apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        returnSecureToken: true
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get auth token: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    const token = data.idToken;
+    const expiresIn = parseInt(data.expiresIn); // This is in seconds
+    
+    // Cache the token and its expiry time
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('giga-aura-auth-token', token);
+      localStorage.setItem('giga-aura-auth-token-expiry', (Date.now() + (expiresIn * 1000)).toString());
+    }
+    
+    return token;
+  } catch (error) {
+    console.error('Error getting auth token:', error);
+    throw error;
+  }
+};
+
+/**
  * Helper to handle REST API responses and catch errors
  */
 const handleResponse = async (response: Response) => {
@@ -160,6 +209,9 @@ export const savePost = async (post: Post): Promise<boolean> => {
         return false;
       }
       
+      // Get auth token
+      const token = await getAuthToken();
+      
       // Prepare document for Firestore
       const document = transformToFirestore(post);
       
@@ -168,7 +220,7 @@ export const savePost = async (post: Post): Promise<boolean> => {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'X-Firebase-Token': FIREBASE_CONFIG.apiKey
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           name: `projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/posts/${post.id}`,
@@ -183,7 +235,7 @@ export const savePost = async (post: Post): Promise<boolean> => {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'X-Firebase-Token': FIREBASE_CONFIG.apiKey
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           name: `projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/users/${post.authorWallet}/posts/${post.id}`,
@@ -221,10 +273,13 @@ export const getPosts = async (): Promise<Post[]> => {
         console.log('Using cached posts while fetching from API');
       }
       
+      // Get auth token
+      const token = await getAuthToken();
+      
       const response = await fetch(`${BASE_URL}/posts?pageSize=100&orderBy=serverTimestamp desc`, {
         headers: {
           'Content-Type': 'application/json',
-          'X-Firebase-Token': FIREBASE_CONFIG.apiKey
+          'Authorization': `Bearer ${token}`
         }
       });
       
@@ -294,10 +349,13 @@ export const getUserPosts = async (walletAddress: string): Promise<Post[]> => {
   
   return retry(async () => {
     try {
+      // Get auth token
+      const token = await getAuthToken();
+      
       const response = await fetch(`${BASE_URL}/users/${walletAddress}/posts?pageSize=50&orderBy=serverTimestamp desc`, {
         headers: {
           'Content-Type': 'application/json',
-          'X-Firebase-Token': FIREBASE_CONFIG.apiKey
+          'Authorization': `Bearer ${token}`
         }
       });
       
@@ -334,6 +392,9 @@ export const updatePost = async (post: Post): Promise<boolean> => {
   
   return retry(async () => {
     try {
+      // Get auth token
+      const token = await getAuthToken();
+      
       // Prepare document for Firestore
       const document = transformToFirestore(post);
       
@@ -345,7 +406,7 @@ export const updatePost = async (post: Post): Promise<boolean> => {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'X-Firebase-Token': FIREBASE_CONFIG.apiKey
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           name: `projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/posts/${post.id}`,
@@ -361,7 +422,7 @@ export const updatePost = async (post: Post): Promise<boolean> => {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            'X-Firebase-Token': FIREBASE_CONFIG.apiKey
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
             name: `projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/users/${post.authorWallet}/posts/${post.id}`,
@@ -395,6 +456,9 @@ export const saveAuraPoints = async (walletAddress: string, points: AuraPointsSt
   
   return retry(async () => {
     try {
+      // Get auth token
+      const token = await getAuthToken();
+      
       const document = {
         fields: {
           walletAddress: { stringValue: walletAddress },
@@ -414,7 +478,7 @@ export const saveAuraPoints = async (walletAddress: string, points: AuraPointsSt
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'X-Firebase-Token': FIREBASE_CONFIG.apiKey
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           name: `projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/auraPoints/${walletAddress}`,
@@ -441,10 +505,13 @@ export const getAuraPoints = async (walletAddress: string): Promise<AuraPointsSt
   
   return retry(async () => {
     try {
+      // Get auth token
+      const token = await getAuthToken();
+      
       const response = await fetch(`${BASE_URL}/auraPoints/${walletAddress}`, {
         headers: {
           'Content-Type': 'application/json',
-          'X-Firebase-Token': FIREBASE_CONFIG.apiKey
+          'Authorization': `Bearer ${token}`
         }
       });
       
