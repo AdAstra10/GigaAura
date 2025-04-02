@@ -9,6 +9,10 @@ import { loadWalletPoints } from '../lib/slices/auraPointsSlice';
 import { updateProfile } from '../lib/slices/userSlice';
 import '../styles/globals.css';
 import Router, { useRouter } from 'next/router';
+import { cleanupFirebase } from '../services/db';
+
+// Force dynamic rendering to ensure nonces are properly handled
+export const dynamic = 'force-dynamic';
 
 // Add these helper functions for safe data handling
 function safeToString(value: any): string {
@@ -294,6 +298,32 @@ function MyApp({ Component, pageProps }: AppProps) {
     return () => {
       window.removeEventListener('error', handleError, true);
       window.removeEventListener('unhandledrejection', handleRejection);
+    };
+  }, []);
+  
+  // Handle route changes and cleanup Firebase
+  useEffect(() => {
+    const handleRouteChangeStart = () => {
+      // Clean up Firebase connections on route change
+      cleanupFirebase()
+        .then(() => console.log('Firebase cleaned up on route change'))
+        .catch(err => console.error('Error cleaning up Firebase:', err));
+    };
+
+    const handleBeforeUnload = () => {
+      cleanupFirebase()
+        .then(() => console.log('Firebase cleaned up before page unload'))
+        .catch(err => console.error('Error cleaning up Firebase:', err));
+    };
+
+    // Add event listeners
+    Router.events.on('routeChangeStart', handleRouteChangeStart);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Clean up event listeners
+    return () => {
+      Router.events.off('routeChangeStart', handleRouteChangeStart);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, []);
   

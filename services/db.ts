@@ -3,7 +3,7 @@
  * Uses Firebase Firestore for persistent cloud storage
  */
 
-import { initializeApp, FirebaseApp } from 'firebase/app';
+import { initializeApp, FirebaseApp, deleteApp } from 'firebase/app';
 import { 
   getFirestore, 
   collection, 
@@ -18,7 +18,9 @@ import {
   where,
   Timestamp,
   serverTimestamp,
-  Firestore
+  Firestore,
+  onSnapshot,
+  Unsubscribe
 } from 'firebase/firestore';
 import { Post } from '@lib/slices/postsSlice';
 import { AuraPointsState, AuraTransaction } from '@lib/slices/auraPointsSlice';
@@ -33,6 +35,9 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:637403180608:web:a81343a6d7af4dbe6e7cf5"
 };
 
+// Track active listeners for proper cleanup
+const activeListeners: Unsubscribe[] = [];
+
 // Initialize Firebase with proper type annotations
 let app: FirebaseApp | undefined;
 let db: Firestore | undefined;
@@ -41,9 +46,70 @@ try {
   app = initializeApp(firebaseConfig);
   db = getFirestore(app);
   console.log('Firebase initialized successfully');
+  
+  // Add event listener to delete Firebase app on page unload
+  if (typeof window !== 'undefined') {
+    const unloadCallback = () => {
+      if (app) {
+        console.log('Cleaning up Firebase app before unload');
+        
+        // Detach all listeners first
+        cleanupAllListeners();
+        
+        deleteApp(app)
+          .then(() => console.log('Firebase app deleted successfully'))
+          .catch(error => console.error('Error deleting Firebase app:', error));
+      }
+    };
+    
+    window.addEventListener('beforeunload', unloadCallback);
+    
+    // Also clean up on route changes within Next.js
+    if (typeof window !== 'undefined') {
+      // Check if Next.js Router is available
+      import('next/router').then(({ default: Router }) => {
+        Router.events.on('routeChangeStart', unloadCallback);
+      }).catch(err => console.error('Could not set up Next.js router event', err));
+    }
+  }
 } catch (error) {
   console.error('Error initializing Firebase:', error);
 }
+
+/**
+ * Helper function to track listener subscriptions
+ */
+export const addListener = (unsubscribe: Unsubscribe): void => {
+  activeListeners.push(unsubscribe);
+  console.log(`Added Firestore listener (total: ${activeListeners.length})`);
+};
+
+/**
+ * Detach all active listeners
+ */
+export const cleanupAllListeners = (): void => {
+  console.log(`Cleaning up ${activeListeners.length} Firestore listeners`);
+  activeListeners.forEach(unsubscribe => unsubscribe());
+  activeListeners.length = 0; // Clear the array
+};
+
+/**
+ * Delete Firebase app instance and clean up all listeners
+ */
+export const cleanupFirebase = async (): Promise<void> => {
+  try {
+    // First detach all listeners
+    cleanupAllListeners();
+    
+    // Then delete the app
+    if (app) {
+      await deleteApp(app);
+      console.log('Firebase app deleted successfully');
+    }
+  } catch (error) {
+    console.error('Error deleting Firebase app:', error);
+  }
+};
 
 /**
  * Save a post to Firestore
@@ -283,6 +349,41 @@ export const addTransaction = async (walletAddress: string, transaction: AuraTra
   }
 };
 
+/**
+ * Listen to post updates in real-time using onSnapshot
+ * Returns an unsubscribe function to stop listening
+ */
+export const listenToPosts = (callback: (posts: Post[]) => void): Unsubscribe => {
+  if (!db) {
+    console.error('Firebase not initialized');
+    return () => {}; // Return empty function
+  }
+  
+  try {
+    // Create a query for the posts collection
+    const postsQuery = query(collection(db, 'posts'), orderBy('serverTimestamp', 'desc'));
+    
+    // Set up the listener
+    const unsubscribe = onSnapshot(postsQuery, (snapshot) => {
+      const posts: Post[] = [];
+      snapshot.forEach((doc) => {
+        posts.push(doc.data() as Post);
+      });
+      callback(posts);
+    }, (error) => {
+      console.error('Error in Firestore listener:', error);
+    });
+    
+    // Track this listener
+    addListener(unsubscribe);
+    
+    return unsubscribe;
+  } catch (error) {
+    console.error('Error setting up posts listener:', error);
+    return () => {}; // Return empty function
+  }
+};
+
 export default {
   savePost,
   getPosts,
@@ -290,5 +391,6 @@ export default {
   updatePost,
   saveAuraPoints,
   getAuraPoints,
-  addTransaction
+  addTransaction,
+  listenToPosts
 }; 

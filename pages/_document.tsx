@@ -43,8 +43,8 @@ class MyDocument extends Document {
                       script-src 'self' 'unsafe-inline' 'unsafe-eval' 'nonce-${this.nonce}' https://static.cloudflareinsights.com https://www.gigaaura.com; 
                       style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; 
                       font-src 'self' https://fonts.gstatic.com; 
-                      img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com; 
-                      connect-src 'self' https://*.gigaaura.com https://*.onrender.com https://cloudflareinsights.com;
+                      img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com https://*.googleapis.com https://*.gstatic.com; 
+                      connect-src 'self' https://*.gigaaura.com https://*.onrender.com https://cloudflareinsights.com https://*.googleapis.com https://firestore.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://*.firebase.googleapis.com https://*.gstatic.com;
                       worker-src 'self' blob:;
                       child-src 'self' blob:;
                       object-src 'none';
@@ -85,10 +85,10 @@ class MyDocument extends Document {
           <link rel="preconnect" href="https://gigaaura.onrender.com" />
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+          <link rel="preconnect" href="https://firestore.googleapis.com" />
           
-          {/* Security headers */}
+          {/* Security headers - X-Frame-Options is set at the server level in next.config.js */}
           <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-          <meta httpEquiv="X-Frame-Options" content="SAMEORIGIN" />
           <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
           <meta httpEquiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
           <meta httpEquiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), interest-cohort=()" />
