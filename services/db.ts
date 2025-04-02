@@ -1,55 +1,128 @@
 /**
  * Cloud Database Service for GigaAura
- * Uses Firebase Firestore for persistent cloud storage
+ * Uses Firebase Firestore REST API for persistent cloud storage
  */
 
-import { initializeApp, FirebaseApp, deleteApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  collection, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  updateDoc, 
-  arrayUnion, 
-  query, 
-  orderBy, 
-  getDocs,
-  where,
-  Timestamp,
-  serverTimestamp,
-  Firestore,
-  onSnapshot,
-  Unsubscribe,
-  connectFirestoreEmulator,
-  enableIndexedDbPersistence,
-  CACHE_SIZE_UNLIMITED,
-  QuerySnapshot,
-  DocumentData,
-  SnapshotListenOptions
-} from 'firebase/firestore';
 import { Post } from '@lib/slices/postsSlice';
 import { AuraPointsState, AuraTransaction } from '@lib/slices/auraPointsSlice';
 
 // Firebase configuration
-const firebaseConfig = {
+const FIREBASE_CONFIG = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyDgvgA9uxsZCIGTGiPsH5ZcUw2AQ9MBHSw",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "gigaaura-app.firebaseapp.com",
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "gigaaura-app",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "gigaaura-app.appspot.com",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "637403180608",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:637403180608:web:a81343a6d7af4dbe6e7cf5"
 };
 
-// Track active listeners for proper cleanup
-const activeListeners: Unsubscribe[] = [];
+// Base URL for Firestore REST API
+const BASE_URL = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents`;
 
-// Track if Firebase is already initialized
-let isInitialized = false;
+// In-memory post cache for immediate display without waiting for API
+let postsCache: Post[] = [];
+let activeListeners: (() => void)[] = [];
 
-// Initialize Firebase with proper type annotations
-let app: FirebaseApp | undefined;
-let db: Firestore | undefined;
+/**
+ * Helper to handle REST API responses and catch errors
+ */
+const handleResponse = async (response: Response) => {
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Firebase REST API error (${response.status}): ${errorText}`);
+  }
+  return response.json();
+};
+
+/**
+ * Transform Firestore REST API document to app model
+ */
+const transformDocument = (document: any): any => {
+  if (!document || !document.fields) return null;
+  
+  const result: any = {};
+  
+  for (const [key, value] of Object.entries(document.fields)) {
+    // Skip server-specific fields
+    if (key === 'serverTimestamp') continue;
+    
+    // Extract the actual value based on Firestore's type system
+    const fieldValue = value as any;
+    const fieldType = Object.keys(fieldValue)[0];
+    
+    if (fieldType === 'stringValue') {
+      result[key] = fieldValue.stringValue;
+    } else if (fieldType === 'integerValue') {
+      result[key] = parseInt(fieldValue.integerValue, 10);
+    } else if (fieldType === 'doubleValue') {
+      result[key] = fieldValue.doubleValue;
+    } else if (fieldType === 'booleanValue') {
+      result[key] = fieldValue.booleanValue;
+    } else if (fieldType === 'timestampValue') {
+      result[key] = new Date(fieldValue.timestampValue).toISOString();
+    } else if (fieldType === 'arrayValue') {
+      result[key] = (fieldValue.arrayValue.values || []).map((v: any) => transformDocument({ fields: { value: v } }).value);
+    } else if (fieldType === 'mapValue') {
+      result[key] = transformDocument(fieldValue.mapValue);
+    } else if (fieldType === 'nullValue') {
+      result[key] = null;
+    }
+  }
+  
+  return result;
+};
+
+/**
+ * Transform app model to Firestore REST API document
+ */
+const transformToFirestore = (data: any): any => {
+  const fields: any = {};
+  
+  for (const [key, value] of Object.entries(data)) {
+    if (value === undefined) continue;
+    
+    if (value === null) {
+      fields[key] = { nullValue: null };
+    } else if (typeof value === 'string') {
+      fields[key] = { stringValue: value };
+    } else if (typeof value === 'number') {
+      if (Number.isInteger(value)) {
+        fields[key] = { integerValue: value.toString() };
+      } else {
+        fields[key] = { doubleValue: value };
+      }
+    } else if (typeof value === 'boolean') {
+      fields[key] = { booleanValue: value };
+    } else if (value instanceof Date) {
+      fields[key] = { timestampValue: value.toISOString() };
+    } else if (Array.isArray(value)) {
+      fields[key] = {
+        arrayValue: {
+          values: value.map(item => {
+            // Handle primitive types in arrays
+            if (item === null) return { nullValue: null };
+            if (typeof item === 'string') return { stringValue: item };
+            if (typeof item === 'number') {
+              return Number.isInteger(item) 
+                ? { integerValue: item.toString() } 
+                : { doubleValue: item };
+            }
+            if (typeof item === 'boolean') return { booleanValue: item };
+            // For objects in arrays, convert them to map values
+            return { mapValue: transformToFirestore(item) };
+          })
+        }
+      };
+    } else if (typeof value === 'object') {
+      fields[key] = { mapValue: transformToFirestore(value) };
+    }
+  }
+  
+  // Add server timestamp for ordering if saving a document
+  if (!fields.serverTimestamp && !fields.createdAt) {
+    fields.serverTimestamp = { 
+      timestampValue: new Date().toISOString()
+    };
+  }
+  
+  return { fields };
+};
 
 /**
  * Exponential backoff for retrying operations
@@ -76,73 +149,419 @@ const retry = async <T>(operation: () => Promise<T>, maxRetries = 3, delayMs = 1
 };
 
 /**
- * Lazily initialize Firebase only when needed
+ * Save a post to Firestore with retry
  */
-const initializeFirebase = () => {
-  if (isInitialized && app && db) return { app, db };
-  
-  try {
-    // If we already have an app but somehow lost the db reference, delete it and start fresh
-    if (app) {
-      try {
-        deleteApp(app).catch(e => console.error('Error deleting existing app:', e));
-        app = undefined;
-      } catch (e) {
-        console.error('Error cleaning up existing app:', e);
+export const savePost = async (post: Post): Promise<boolean> => {
+  return retry(async () => {
+    try {
+      // Ensure post has all required fields
+      if (!post.id || !post.authorWallet) {
+        console.error('Invalid post data:', post);
+        return false;
       }
+      
+      // Prepare document for Firestore
+      const document = transformToFirestore(post);
+      
+      // Save to main posts collection
+      const response = await fetch(`${BASE_URL}/posts/${post.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Firebase-Token': FIREBASE_CONFIG.apiKey
+        },
+        body: JSON.stringify({
+          name: `projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/posts/${post.id}`,
+          ...document
+        })
+      });
+      
+      await handleResponse(response);
+      
+      // Also add to user's posts collection
+      const userCollectionResponse = await fetch(`${BASE_URL}/users/${post.authorWallet}/posts/${post.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Firebase-Token': FIREBASE_CONFIG.apiKey
+        },
+        body: JSON.stringify({
+          name: `projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/users/${post.authorWallet}/posts/${post.id}`,
+          ...document
+        })
+      });
+      
+      await handleResponse(userCollectionResponse);
+      
+      // Update local cache
+      const existingPostIndex = postsCache.findIndex(p => p.id === post.id);
+      if (existingPostIndex >= 0) {
+        postsCache[existingPostIndex] = post;
+      } else {
+        postsCache.unshift(post);
+      }
+      
+      console.log('Post saved to Firestore:', post.id);
+      return true;
+    } catch (error) {
+      console.error('Error saving post:', error);
+      return false;
     }
-    
-    app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-    
-    // Enable offline persistence
-    if (typeof window !== 'undefined') {
-      enableIndexedDbPersistence(db).catch(err => {
-        if (err.code === 'failed-precondition') {
-          console.warn('Multiple tabs open, persistence can only be enabled in one tab at a time.');
-        } else if (err.code === 'unimplemented') {
-          console.warn('The current browser does not support offline persistence.');
-        } else {
-          console.error('Failed to enable persistence:', err);
+  }, 3);
+};
+
+/**
+ * Get all posts from Firestore with retry
+ */
+export const getPosts = async (): Promise<Post[]> => {
+  return retry(async () => {
+    try {
+      // Use cache as immediate fallback if available
+      if (postsCache.length > 0) {
+        console.log('Using cached posts while fetching from API');
+      }
+      
+      const response = await fetch(`${BASE_URL}/posts?pageSize=100&orderBy=serverTimestamp desc`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Firebase-Token': FIREBASE_CONFIG.apiKey
         }
       });
+      
+      const data = await handleResponse(response);
+      
+      if (!data.documents) {
+        console.log('No posts found in Firestore');
+        return postsCache.length > 0 ? postsCache : [];
+      }
+      
+      const posts = data.documents.map((doc: any) => {
+        const post = transformDocument(doc);
+        // Extract ID from the document path
+        const pathParts = doc.name.split('/');
+        post.id = pathParts[pathParts.length - 1];
+        return post as Post;
+      });
+      
+      // Update cache with fresh data
+      postsCache = posts;
+      console.log('Retrieved posts from Firestore API:', posts.length);
+      
+      // Store in localStorage as backup
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
+        } catch (e) {
+          console.warn('Failed to save posts to localStorage:', e);
+        }
+      }
+      
+      return posts;
+    } catch (error) {
+      console.error('Error getting posts from Firestore API:', error);
+      
+      // If we have cached posts, use them
+      if (postsCache.length > 0) {
+        return postsCache;
+      }
+      
+      // Try to load from localStorage as last resort
+      if (typeof window !== 'undefined') {
+        try {
+          const localPosts = localStorage.getItem('giga-aura-posts');
+          if (localPosts) {
+            const parsed = JSON.parse(localPosts);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              postsCache = parsed;
+              return parsed;
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to parse local posts:', e);
+        }
+      }
+      
+      return [];
     }
-    
-    isInitialized = true;
-    console.log('Firebase initialized successfully');
-    
-    // Add event listener to delete Firebase app on page unload
-    if (typeof window !== 'undefined') {
-      const unloadCallback = () => {
-        cleanupFirebase(false); // Pass false to avoid redundant logging during page transitions
+  }, 3);
+};
+
+/**
+ * Get posts by a specific user
+ */
+export const getUserPosts = async (walletAddress: string): Promise<Post[]> => {
+  if (!walletAddress) return [];
+  
+  return retry(async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/users/${walletAddress}/posts?pageSize=50&orderBy=serverTimestamp desc`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Firebase-Token': FIREBASE_CONFIG.apiKey
+        }
+      });
+      
+      const data = await handleResponse(response);
+      
+      if (!data.documents) {
+        console.log(`No posts found for user ${walletAddress}`);
+        return [];
+      }
+      
+      const posts = data.documents.map((doc: any) => {
+        const post = transformDocument(doc);
+        // Extract ID from the document path
+        const pathParts = doc.name.split('/');
+        post.id = pathParts[pathParts.length - 1];
+        return post as Post;
+      });
+      
+      console.log(`Retrieved ${posts.length} posts for user ${walletAddress}`);
+      
+      return posts;
+    } catch (error) {
+      console.error(`Error getting posts for user ${walletAddress}:`, error);
+      return [];
+    }
+  });
+};
+
+/**
+ * Update an existing post
+ */
+export const updatePost = async (post: Post): Promise<boolean> => {
+  if (!post.id) return false;
+  
+  return retry(async () => {
+    try {
+      // Prepare document for Firestore
+      const document = transformToFirestore(post);
+      
+      // Add last updated field
+      document.fields.lastUpdated = { timestampValue: new Date().toISOString() };
+      
+      // Update in main posts collection
+      const response = await fetch(`${BASE_URL}/posts/${post.id}?updateMask.fieldPaths=likes&updateMask.fieldPaths=comments&updateMask.fieldPaths=shares&updateMask.fieldPaths=likedBy&updateMask.fieldPaths=lastUpdated`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Firebase-Token': FIREBASE_CONFIG.apiKey
+        },
+        body: JSON.stringify({
+          name: `projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/posts/${post.id}`,
+          ...document
+        })
+      });
+      
+      await handleResponse(response);
+      
+      // Also update in user's posts collection if we have the author wallet
+      if (post.authorWallet) {
+        const userPostResponse = await fetch(`${BASE_URL}/users/${post.authorWallet}/posts/${post.id}?updateMask.fieldPaths=likes&updateMask.fieldPaths=comments&updateMask.fieldPaths=shares&updateMask.fieldPaths=likedBy&updateMask.fieldPaths=lastUpdated`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Firebase-Token': FIREBASE_CONFIG.apiKey
+          },
+          body: JSON.stringify({
+            name: `projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/users/${post.authorWallet}/posts/${post.id}`,
+            ...document
+          })
+        });
+        
+        await handleResponse(userPostResponse);
+      }
+      
+      // Update post in local cache
+      const postIndex = postsCache.findIndex(p => p.id === post.id);
+      if (postIndex >= 0) {
+        postsCache[postIndex] = post;
+      }
+      
+      console.log('Post updated in Firestore:', post.id);
+      return true;
+    } catch (error) {
+      console.error(`Error updating post ${post.id}:`, error);
+      return false;
+    }
+  });
+};
+
+/**
+ * Save aura points to Firestore
+ */
+export const saveAuraPoints = async (walletAddress: string, points: AuraPointsState): Promise<boolean> => {
+  if (!walletAddress) return false;
+  
+  return retry(async () => {
+    try {
+      const document = {
+        fields: {
+          walletAddress: { stringValue: walletAddress },
+          points: { integerValue: points.totalPoints.toString() },
+          transactions: {
+            arrayValue: {
+              values: (points.transactions || []).map(transaction => ({
+                mapValue: transformToFirestore(transaction)
+              }))
+            }
+          },
+          updatedAt: { timestampValue: new Date().toISOString() }
+        }
       };
       
-      window.addEventListener('beforeunload', unloadCallback);
+      const response = await fetch(`${BASE_URL}/auraPoints/${walletAddress}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Firebase-Token': FIREBASE_CONFIG.apiKey
+        },
+        body: JSON.stringify({
+          name: `projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/auraPoints/${walletAddress}`,
+          ...document
+        })
+      });
       
-      // Also clean up on route changes within Next.js
-      if (typeof window !== 'undefined') {
-        // Check if Next.js Router is available
-        import('next/router').then(({ default: Router }) => {
-          Router.events.on('routeChangeStart', unloadCallback);
-        }).catch(err => console.error('Could not set up Next.js router event', err));
-      }
+      await handleResponse(response);
+      
+      console.log(`Aura points saved for ${walletAddress}`);
+      return true;
+    } catch (error) {
+      console.error(`Error saving aura points for ${walletAddress}:`, error);
+      return false;
     }
-  } catch (error) {
-    console.error('Error initializing Firebase:', error);
-    
-    // Reset flags for next attempt
-    isInitialized = false;
-    app = undefined;
-    db = undefined;
-  }
+  });
+};
+
+/**
+ * Get aura points from Firestore
+ */
+export const getAuraPoints = async (walletAddress: string): Promise<AuraPointsState | null> => {
+  if (!walletAddress) return null;
   
-  return { app, db };
+  return retry(async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/auraPoints/${walletAddress}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Firebase-Token': FIREBASE_CONFIG.apiKey
+        }
+      });
+      
+      // Handle 404 - return default points
+      if (response.status === 404) {
+        return {
+          totalPoints: 100,
+          transactions: []
+        };
+      }
+      
+      const data = await handleResponse(response);
+      
+      if (!data.fields) {
+        console.log(`No data found for user ${walletAddress}`);
+        return {
+          totalPoints: 100,
+          transactions: []
+        };
+      }
+      
+      const transformedData = transformDocument(data);
+      
+      return {
+        totalPoints: transformedData.points || 100,
+        transactions: transformedData.transactions || []
+      };
+    } catch (error) {
+      console.error(`Error getting aura points for ${walletAddress}:`, error);
+      return {
+        totalPoints: 100,
+        transactions: []
+      };
+    }
+  });
+};
+
+/**
+ * Add a transaction to a user's aura points history
+ */
+export const addTransaction = async (walletAddress: string, transaction: AuraTransaction): Promise<boolean> => {
+  if (!walletAddress) return false;
+  
+  return retry(async () => {
+    try {
+      // First, get current aura points
+      const userPoints = await getAuraPoints(walletAddress);
+      
+      // If we got null or couldn't fetch, create a new points object
+      const updatedPoints: AuraPointsState = userPoints || {
+        totalPoints: 100,
+        transactions: []
+      };
+      
+      // Add the new transaction
+      updatedPoints.totalPoints += transaction.amount;
+      updatedPoints.transactions = [...(updatedPoints.transactions || []), transaction];
+      
+      // Save back to Firestore
+      const success = await saveAuraPoints(walletAddress, updatedPoints);
+      
+      console.log(`Transaction added for ${walletAddress}: ${transaction.amount} points`);
+      return success;
+    } catch (error) {
+      console.error(`Error adding transaction for ${walletAddress}:`, error);
+      return false;
+    }
+  });
+};
+
+/**
+ * Set up polling for real-time updates (simulates onSnapshot)
+ */
+export const listenToPosts = (callback: (posts: Post[]) => void): (() => void) => {
+  let isListening = true;
+  let pollInterval: any;
+  
+  const fetchPosts = async () => {
+    if (!isListening) return;
+    
+    try {
+      const posts = await getPosts();
+      if (posts && posts.length > 0 && isListening) {
+        callback(posts);
+      }
+    } catch (error) {
+      console.error('Error in posts listener:', error);
+    }
+  };
+  
+  // Initial fetch
+  fetchPosts();
+  
+  // Set up polling every 15 seconds
+  pollInterval = setInterval(fetchPosts, 15000);
+  
+  // Track this listener
+  const unsubscribe = () => {
+    isListening = false;
+    clearInterval(pollInterval);
+    // Remove from active listeners
+    const index = activeListeners.indexOf(unsubscribe);
+    if (index >= 0) {
+      activeListeners.splice(index, 1);
+    }
+  };
+  
+  activeListeners.push(unsubscribe);
+  console.log(`Added post listener (total: ${activeListeners.length})`);
+  
+  return unsubscribe;
 };
 
 /**
  * Helper function to track listener subscriptions
  */
-export const addListener = (unsubscribe: Unsubscribe): void => {
+export const addListener = (unsubscribe: () => void): void => {
   activeListeners.push(unsubscribe);
   console.log(`Added Firestore listener (total: ${activeListeners.length})`);
 };
@@ -165,324 +584,16 @@ export const cleanupAllListeners = (): void => {
 };
 
 /**
- * Delete Firebase app instance and clean up all listeners
+ * Clean up Firebase-related resources
  */
 export const cleanupFirebase = async (verbose = true): Promise<void> => {
   try {
-    // First detach all listeners
+    // Detach all listeners
     cleanupAllListeners();
     
-    // Then delete the app if it exists
-    if (app) {
-      try {
-        await deleteApp(app);
-        if (verbose) console.log('Firebase app deleted successfully');
-      } catch (e) {
-        console.error('Error deleting Firebase app:', e);
-      }
-      
-      isInitialized = false;
-      app = undefined;
-      db = undefined;
-    }
+    if (verbose) console.log('Firebase resources cleaned up successfully');
   } catch (error) {
-    console.error('Error cleaning up Firebase:', error);
-  }
-};
-
-/**
- * Save a post to Firestore with retry
- */
-export const savePost = async (post: Post): Promise<boolean> => {
-  return retry(async () => {
-    const { db } = initializeFirebase();
-    if (!db) return false;
-    
-    // Ensure post has all required fields
-    if (!post.id || !post.authorWallet) {
-      console.error('Invalid post data:', post);
-      return false;
-    }
-    
-    // Set a server timestamp for real-time ordering
-    const postWithTimestamp = {
-      ...post,
-      serverTimestamp: serverTimestamp()
-    };
-    
-    // Save to main posts collection
-    await setDoc(doc(db, 'posts', post.id), postWithTimestamp);
-    
-    // Also add to user's posts collection
-    await setDoc(doc(db, 'users', post.authorWallet, 'posts', post.id), postWithTimestamp);
-    
-    console.log('Post saved to Firestore:', post.id);
-    return true;
-  }, 3);
-};
-
-/**
- * Get all posts from Firestore with retry
- */
-export const getPosts = async (): Promise<Post[]> => {
-  return retry(async () => {
-    const { db } = initializeFirebase();
-    if (!db) return [];
-    
-    try {
-      // First try to get posts from cache for immediate display
-      const postsQuery = query(collection(db, 'posts'), orderBy('serverTimestamp', 'desc'));
-      const querySnapshot = await getDocs(postsQuery);
-      
-      const posts: Post[] = [];
-      querySnapshot.forEach((docSnapshot) => {
-        const postData = docSnapshot.data() as Post;
-        posts.push(postData);
-      });
-      
-      console.log('Retrieved posts from Firestore:', posts.length);
-      return posts;
-    } catch (error) {
-      console.error('Error getting posts from Firestore:', error);
-      return [];
-    }
-  }, 3);
-};
-
-/**
- * Get a user's posts from Firestore
- */
-export const getUserPosts = async (walletAddress: string): Promise<Post[]> => {
-  const { db } = initializeFirebase();
-  try {
-    if (!db || !walletAddress) return [];
-    
-    // Query user's posts subcollection
-    const userPostsQuery = query(
-      collection(db, 'users', walletAddress, 'posts'), 
-      orderBy('serverTimestamp', 'desc')
-    );
-    const querySnapshot = await getDocs(userPostsQuery);
-    
-    const posts: Post[] = [];
-    querySnapshot.forEach((docSnapshot) => {
-      const postData = docSnapshot.data() as Post;
-      posts.push(postData);
-    });
-    
-    console.log(`Retrieved ${posts.length} posts for user ${walletAddress}`);
-    return posts;
-  } catch (error) {
-    console.error('Error getting user posts from Firestore:', error);
-    return [];
-  }
-};
-
-/**
- * Update a post in Firestore (for likes, comments, etc.)
- */
-export const updatePost = async (post: Post): Promise<boolean> => {
-  const { db } = initializeFirebase();
-  try {
-    if (!db) return false;
-    
-    // Update in main posts collection
-    await updateDoc(doc(db, 'posts', post.id), {
-      ...post,
-      lastUpdated: serverTimestamp()
-    });
-    
-    // Also update in user's posts subcollection
-    await updateDoc(doc(db, 'users', post.authorWallet, 'posts', post.id), {
-      ...post,
-      lastUpdated: serverTimestamp()
-    });
-    
-    console.log('Post updated in Firestore:', post.id);
-    return true;
-  } catch (error) {
-    console.error('Error updating post in Firestore:', error);
-    return false;
-  }
-};
-
-/**
- * Save or update Aura Points for a wallet
- */
-export const saveAuraPoints = async (walletAddress: string, auraPoints: AuraPointsState): Promise<boolean> => {
-  const { db } = initializeFirebase();
-  try {
-    if (!db || !walletAddress) return false;
-    
-    // Save to users collection
-    await setDoc(doc(db, 'users', walletAddress), {
-      auraPoints: auraPoints.totalPoints,
-      lastUpdated: serverTimestamp()
-    }, { merge: true });
-    
-    // Also save detailed transactions in a subcollection
-    if (auraPoints.transactions && auraPoints.transactions.length > 0) {
-      // Get the latest transaction
-      const latestTransaction = auraPoints.transactions[auraPoints.transactions.length - 1];
-      
-      if (latestTransaction && latestTransaction.id) {
-        await setDoc(doc(db, 'users', walletAddress, 'transactions', latestTransaction.id), {
-          ...latestTransaction,
-          timestamp: Timestamp.fromDate(new Date(latestTransaction.timestamp))
-        });
-      }
-    }
-    
-    console.log(`Aura points saved for ${walletAddress}: ${auraPoints.totalPoints}`);
-    return true;
-  } catch (error) {
-    console.error('Error saving aura points to Firestore:', error);
-    return false;
-  }
-};
-
-/**
- * Get Aura Points for a wallet
- */
-export const getAuraPoints = async (walletAddress: string): Promise<AuraPointsState | null> => {
-  const { db } = initializeFirebase();
-  try {
-    if (!db || !walletAddress) return null;
-    
-    // Get user document
-    const userDoc = await getDoc(doc(db, 'users', walletAddress));
-    
-    if (!userDoc.exists()) {
-      console.log(`No data found for user ${walletAddress}`);
-      return null;
-    }
-    
-    const userData = userDoc.data();
-    const auraPoints = userData.auraPoints || 100; // Default to 100 if not found
-    
-    // Get transactions from subcollection
-    const transactionsQuery = query(
-      collection(db, 'users', walletAddress, 'transactions'),
-      orderBy('timestamp', 'desc')
-    );
-    
-    const transactionsSnapshot = await getDocs(transactionsQuery);
-    const transactions: AuraTransaction[] = [];
-    
-    transactionsSnapshot.forEach((docSnapshot) => {
-      const transactionData = docSnapshot.data();
-      const timestamp = transactionData.timestamp?.toDate?.() 
-        ? transactionData.timestamp.toDate().toISOString() 
-        : new Date().toISOString();
-      
-      transactions.push({
-        ...transactionData,
-        timestamp,
-      } as AuraTransaction);
-    });
-    
-    console.log(`Retrieved aura points for ${walletAddress}: ${auraPoints}, transactions: ${transactions.length}`);
-    
-    return {
-      totalPoints: auraPoints,
-      transactions
-    };
-  } catch (error) {
-    console.error('Error getting aura points from Firestore:', error);
-    return null;
-  }
-};
-
-/**
- * Add a transaction for a wallet
- */
-export const addTransaction = async (walletAddress: string, transaction: AuraTransaction): Promise<boolean> => {
-  const { db } = initializeFirebase();
-  try {
-    if (!db || !walletAddress) return false;
-    
-    // Add transaction to user's transactions subcollection
-    await setDoc(doc(db, 'users', walletAddress, 'transactions', transaction.id), {
-      ...transaction,
-      timestamp: Timestamp.fromDate(new Date(transaction.timestamp))
-    });
-    
-    // Update total aura points in user document
-    const userDocRef = doc(db, 'users', walletAddress);
-    const userDoc = await getDoc(userDocRef);
-    
-    if (userDoc.exists()) {
-      const userData = userDoc.data();
-      const currentPoints = userData.auraPoints || 100;
-      await updateDoc(userDocRef, {
-        auraPoints: currentPoints + transaction.amount,
-        lastUpdated: serverTimestamp()
-      });
-    } else {
-      // Create user document if it doesn't exist
-      await setDoc(userDocRef, {
-        auraPoints: 100 + transaction.amount, // Default 100 + transaction amount
-        lastUpdated: serverTimestamp()
-      });
-    }
-    
-    console.log(`Transaction added for ${walletAddress}: ${transaction.amount} points`);
-    return true;
-  } catch (error) {
-    console.error('Error adding transaction to Firestore:', error);
-    return false;
-  }
-};
-
-/**
- * Listen to post updates in real-time using onSnapshot
- * Returns an unsubscribe function to stop listening
- */
-export const listenToPosts = (callback: (posts: Post[]) => void): Unsubscribe => {
-  const { db } = initializeFirebase();
-  if (!db) {
-    console.error('Firebase not initialized');
-    return () => {}; // Return empty function
-  }
-  
-  try {
-    // Create a query for the posts collection
-    const postsQuery = query(collection(db, 'posts'), orderBy('serverTimestamp', 'desc'));
-    
-    // Set up the listener with error handling
-    const unsubscribe = onSnapshot(
-      postsQuery, 
-      (snapshot: QuerySnapshot<DocumentData>) => {
-        const posts: Post[] = [];
-        snapshot.forEach((docSnapshot) => {
-          try {
-            posts.push(docSnapshot.data() as Post);
-          } catch (e) {
-            console.error('Error parsing document data:', e);
-          }
-        });
-        callback(posts);
-      }, 
-      (error) => {
-        console.error('Error in Firestore listener:', error);
-        // Try to reinitialize on error
-        if (error.code === 'permission-denied' || error.code === 'unavailable') {
-          setTimeout(() => {
-            console.log('Attempting to reinitialize Firebase after error');
-            cleanupFirebase(false);
-            initializeFirebase();
-          }, 5000);
-        }
-      }
-    );
-    
-    // Track this listener
-    addListener(unsubscribe);
-    
-    return unsubscribe;
-  } catch (error) {
-    console.error('Error setting up posts listener:', error);
-    return () => {}; // Return empty function
+    console.error('Error cleaning up Firebase resources:', error);
   }
 };
 
