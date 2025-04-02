@@ -15,45 +15,13 @@ const CACHE_KEYS = {
   AURA_TRANSACTIONS: 'gigaaura_aura_transactions',
   NOTIFICATIONS: 'gigaaura_notifications',
   USER_PROFILE: 'gigaaura_user_profile',
-  CACHE_TIMESTAMP: 'gigaaura_cache_timestamp',
   WALLET_AURA_POINTS: 'gigaaura_wallet_aura_points_', // Prefix for wallet-specific aura points
 };
-
-// Cache expiration in milliseconds (7 days instead of 24 hours for longer post persistence)
-const CACHE_EXPIRATION = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Check if we're in a browser environment
  */
 const isBrowser = typeof window !== 'undefined';
-
-/**
- * Get current timestamp
- */
-const getCurrentTimestamp = (): number => Date.now();
-
-/**
- * Update the cache timestamp
- */
-const updateCacheTimestamp = (): void => {
-  if (!isBrowser) return;
-  localStorage.setItem(CACHE_KEYS.CACHE_TIMESTAMP, getCurrentTimestamp().toString());
-};
-
-/**
- * Check if cache is expired
- */
-const isCacheExpired = (): boolean => {
-  if (!isBrowser) return true;
-
-  const timestamp = localStorage.getItem(CACHE_KEYS.CACHE_TIMESTAMP);
-  if (!timestamp) return true;
-
-  const cacheTime = parseInt(timestamp, 10);
-  const now = getCurrentTimestamp();
-  
-  return now - cacheTime > CACHE_EXPIRATION;
-};
 
 /**
  * Clear all cached data
@@ -62,61 +30,14 @@ export const clearCache = (): void => {
   if (!isBrowser) return;
 
   Object.values(CACHE_KEYS).forEach(key => {
-    localStorage.removeItem(key);
+    if (typeof key === 'string' && !key.includes('_wallet_aura_points_')) {
+      localStorage.removeItem(key);
+    }
   });
 };
 
 /**
- * Safely stringify data to prevent circular reference errors
- * @param data Data to stringify 
- */
-const safeStringify = (data: any): string => {
-  try {
-    // Handle common edge cases
-    if (data === null || data === undefined) {
-      return '""';
-    }
-    
-    // Remove circular references
-    const seen = new WeakSet();
-    return JSON.stringify(data, (key, value) => {
-      // Handle null values explicitly
-      if (value === null || value === undefined) {
-        return value === null ? null : undefined;
-      }
-      
-      // Detect circular reference
-      if (typeof value === 'object' && value !== null) {
-        if (seen.has(value)) {
-          return '[Circular]'; // Replace circular reference
-        }
-        seen.add(value);
-      }
-      return value;
-    });
-  } catch (error) {
-    console.error('Error in safeStringify:', error);
-    return JSON.stringify(null); // Return null string as fallback
-  }
-};
-
-/**
- * Safely parse JSON string with error handling
- * @param str JSON string to parse
- */
-const safeParse = <T>(str: string | null): T | null => {
-  if (!str) return null;
-  
-  try {
-    return JSON.parse(str) as T;
-  } catch (error) {
-    console.error('Error in safeParse:', error);
-    return null;
-  }
-};
-
-/**
- * Cache feed posts
+ * Cache feed posts - SIMPLIFIED
  */
 export const cacheFeed = (posts: Post[]): void => {
   if (!isBrowser) return;
@@ -127,22 +48,34 @@ export const cacheFeed = (posts: Post[]): void => {
       post && typeof post === 'object' && post.id
     );
     
-    localStorage.setItem(CACHE_KEYS.FEED, safeStringify(safePosts));
-    updateCacheTimestamp();
+    console.log('SAVING FEED TO CACHE', safePosts.length, 'posts');
+    localStorage.setItem(CACHE_KEYS.FEED, JSON.stringify(safePosts));
+    
+    // Immediately verify the data was saved
+    const savedData = localStorage.getItem(CACHE_KEYS.FEED);
+    if (savedData) {
+      const parsed = JSON.parse(savedData);
+      console.log('VERIFIED FEED CACHE:', parsed.length, 'posts saved successfully');
+    }
   } catch (error) {
     console.error('Error caching feed:', error);
   }
 };
 
 /**
- * Get cached feed posts - without expiration check for feed to ensure posts remain
+ * Get cached feed posts - SIMPLIFIED
  */
 export const getCachedFeed = (): Post[] | null => {
   if (!isBrowser) return null;
   
   try {
     const cachedFeed = localStorage.getItem(CACHE_KEYS.FEED);
-    return safeParse<Post[]>(cachedFeed);
+    console.log('GETTING CACHED FEED', cachedFeed ? 'found' : 'not found');
+    if (!cachedFeed) return null;
+    
+    const parsed = JSON.parse(cachedFeed) as Post[];
+    console.log('PARSED CACHED FEED', parsed.length, 'posts');
+    return parsed;
   } catch (error) {
     console.error('Error getting cached feed:', error);
     return null;
@@ -150,33 +83,44 @@ export const getCachedFeed = (): Post[] | null => {
 };
 
 /**
- * Cache user posts
+ * Cache user posts - SIMPLIFIED
  */
 export const cacheUserPosts = (posts: Post[]): void => {
   if (!isBrowser) return;
   
   try {
-    // Filter out any potentially problematic posts first
+    // Filter out any potentially problematic posts
     const safePosts = posts.filter(post => 
       post && typeof post === 'object' && post.id
     );
     
-    localStorage.setItem(CACHE_KEYS.USER_POSTS, safeStringify(safePosts));
-    updateCacheTimestamp();
+    console.log('SAVING USER POSTS TO CACHE', safePosts.length, 'posts');
+    localStorage.setItem(CACHE_KEYS.USER_POSTS, JSON.stringify(safePosts));
+    
+    // Immediately verify the data was saved
+    const savedData = localStorage.getItem(CACHE_KEYS.USER_POSTS);
+    if (savedData) {
+      const parsed = JSON.parse(savedData);
+      console.log('VERIFIED USER POSTS CACHE:', parsed.length, 'posts saved successfully');
+    }
   } catch (error) {
     console.error('Error caching user posts:', error);
   }
 };
 
 /**
- * Get cached user posts
+ * Get cached user posts - SIMPLIFIED
  */
 export const getCachedUserPosts = (): Post[] | null => {
   if (!isBrowser) return null;
   
   try {
     const cachedPosts = localStorage.getItem(CACHE_KEYS.USER_POSTS);
-    return safeParse<Post[]>(cachedPosts);
+    if (!cachedPosts) return null;
+    
+    const parsed = JSON.parse(cachedPosts) as Post[];
+    console.log('PARSED CACHED USER POSTS', parsed.length, 'posts');
+    return parsed;
   } catch (error) {
     console.error('Error getting cached user posts:', error);
     return null;
@@ -184,38 +128,69 @@ export const getCachedUserPosts = (): Post[] | null => {
 };
 
 /**
- * Cache Aura Points by wallet address
- * @param walletAddress The wallet address to use as a key
- * @param pointsState The full Aura Points state object to cache
+ * Cache Aura Points by wallet address - SIMPLIFIED
  */
 export const cacheWalletAuraPoints = (walletAddress: string, pointsState: any): void => {
   if (!isBrowser || !walletAddress) return;
   
   try {
     const key = `${CACHE_KEYS.WALLET_AURA_POINTS}${walletAddress.toLowerCase()}`;
-    localStorage.setItem(key, safeStringify(pointsState));
-    updateCacheTimestamp();
+    console.log(`SAVING AURA POINTS FOR WALLET ${walletAddress}:`, pointsState);
+    
+    // First save the pure state
+    localStorage.setItem(key, JSON.stringify(pointsState));
+    
+    // Immediately verify that the data was saved correctly
+    const savedData = localStorage.getItem(key);
+    if (savedData) {
+      const parsed = JSON.parse(savedData);
+      console.log('VERIFIED WALLET AURA POINTS:', parsed.totalPoints, 'points saved successfully');
+    }
+    
+    // Also save a backup as direct wallet cache
+    localStorage.setItem(`auraPoints_${walletAddress}`, JSON.stringify(pointsState));
+    
+    // Save total separately for quick access
+    localStorage.setItem(`auraTotal_${walletAddress}`, String(pointsState.totalPoints));
   } catch (error) {
     console.error('Error caching Wallet Aura Points:', error);
   }
 };
 
 /**
- * Get cached Aura Points for specific wallet
- * @param walletAddress The wallet address to lookup
+ * Get cached Aura Points for specific wallet - SIMPLIFIED
  */
 export const getWalletAuraPoints = (walletAddress: string): any | null => {
   if (!isBrowser || !walletAddress) return null;
   
   try {
+    // Try the new format first
     const key = `${CACHE_KEYS.WALLET_AURA_POINTS}${walletAddress.toLowerCase()}`;
     const cachedPoints = localStorage.getItem(key);
-    console.log(`Getting wallet aura points for ${walletAddress}:`, cachedPoints);
     
-    // Return parsed data
-    const result = safeParse(cachedPoints);
-    console.log(`Parsed wallet aura points:`, result);
-    return result;
+    console.log(`GETTING WALLET AURA POINTS FOR ${walletAddress}:`, cachedPoints ? 'found' : 'not found');
+    
+    if (cachedPoints) {
+      const parsed = JSON.parse(cachedPoints);
+      console.log(`PARSED WALLET AURA POINTS:`, parsed);
+      return parsed;
+    }
+    
+    // Try legacy formats as fallback
+    const legacyPoints = localStorage.getItem(`auraPoints_${walletAddress}`);
+    if (legacyPoints) {
+      console.log(`Found legacy aura points for ${walletAddress}`);
+      return JSON.parse(legacyPoints);
+    }
+    
+    const simpleTotalPoints = localStorage.getItem(`auraTotal_${walletAddress}`);
+    if (simpleTotalPoints) {
+      const totalPoints = parseInt(simpleTotalPoints, 10);
+      console.log(`Found simple total points for ${walletAddress}:`, totalPoints);
+      return { totalPoints, transactions: [] };
+    }
+    
+    return null;
   } catch (error) {
     console.error('Error getting cached Wallet Aura Points:', error);
     return null;
@@ -229,8 +204,7 @@ export const cacheAuraPoints = (pointsState: any): void => {
   if (!isBrowser) return;
   
   try {
-    localStorage.setItem(CACHE_KEYS.AURA_POINTS, safeStringify(pointsState));
-    updateCacheTimestamp();
+    localStorage.setItem(CACHE_KEYS.AURA_POINTS, JSON.stringify(pointsState));
   } catch (error) {
     console.error('Error caching Aura Points:', error);
   }
@@ -252,7 +226,8 @@ export const getCachedAuraPoints = (): any | null => {
       return { total: parseInt(cachedPoints, 10), transactions: [] };
     }
     
-    return safeParse(cachedPoints);
+    if (!cachedPoints) return null;
+    return JSON.parse(cachedPoints);
   } catch (error) {
     console.error('Error getting cached Aura Points:', error);
     return null;
@@ -271,8 +246,7 @@ export const cacheAuraTransactions = (transactions: AuraTransaction[]): void => 
       tx && typeof tx === 'object' && tx.id
     );
     
-    localStorage.setItem(CACHE_KEYS.AURA_TRANSACTIONS, safeStringify(safeTransactions));
-    updateCacheTimestamp();
+    localStorage.setItem(CACHE_KEYS.AURA_TRANSACTIONS, JSON.stringify(safeTransactions));
   } catch (error) {
     console.error('Error caching Aura Transactions:', error);
   }
@@ -286,7 +260,8 @@ export const getCachedAuraTransactions = (): AuraTransaction[] | null => {
   
   try {
     const cachedTransactions = localStorage.getItem(CACHE_KEYS.AURA_TRANSACTIONS);
-    return safeParse<AuraTransaction[]>(cachedTransactions);
+    if (!cachedTransactions) return null;
+    return JSON.parse(cachedTransactions);
   } catch (error) {
     console.error('Error getting cached Aura Transactions:', error);
     return null;
@@ -305,8 +280,7 @@ export const cacheNotifications = (notifications: Notification[]): void => {
       n && typeof n === 'object' && n.id
     );
     
-    localStorage.setItem(CACHE_KEYS.NOTIFICATIONS, safeStringify(safeNotifications));
-    updateCacheTimestamp();
+    localStorage.setItem(CACHE_KEYS.NOTIFICATIONS, JSON.stringify(safeNotifications));
   } catch (error) {
     console.error('Error caching notifications:', error);
   }
@@ -320,7 +294,8 @@ export const getCachedNotifications = (): Notification[] | null => {
   
   try {
     const cachedNotifications = localStorage.getItem(CACHE_KEYS.NOTIFICATIONS);
-    return safeParse<Notification[]>(cachedNotifications);
+    if (!cachedNotifications) return null;
+    return JSON.parse(cachedNotifications);
   } catch (error) {
     console.error('Error getting cached notifications:', error);
     return null;
@@ -334,8 +309,7 @@ export const cacheUserProfile = (profile: any): void => {
   if (!isBrowser) return;
   
   try {
-    localStorage.setItem(CACHE_KEYS.USER_PROFILE, safeStringify(profile));
-    updateCacheTimestamp();
+    localStorage.setItem(CACHE_KEYS.USER_PROFILE, JSON.stringify(profile));
   } catch (error) {
     console.error('Error caching user profile:', error);
   }
@@ -349,7 +323,8 @@ export const getCachedUserProfile = (): any | null => {
   
   try {
     const cachedProfile = localStorage.getItem(CACHE_KEYS.USER_PROFILE);
-    return safeParse<any>(cachedProfile);
+    if (!cachedProfile) return null;
+    return JSON.parse(cachedProfile);
   } catch (error) {
     console.error('Error getting cached user profile:', error);
     return null;

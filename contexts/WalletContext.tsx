@@ -223,34 +223,79 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   // Load Aura Points from localStorage or initialize to default value
   const loadWalletAuraPoints = (address: string) => {
     try {
-      // Use our improved cache function to get wallet-specific Aura Points
+      console.log(`LOADING AURA POINTS FOR ${address} FROM ALL SOURCES...`);
+      
+      // 1. FIRST TRY DIRECT BACKUP (most reliable)
+      const directBackupKey = `aura_direct_${address.toLowerCase()}`;
+      const directData = localStorage.getItem(directBackupKey);
+      
+      if (directData) {
+        try {
+          const parsedDirect = JSON.parse(directData);
+          console.log(`FOUND DIRECT AURA BACKUP for ${address}:`, parsedDirect);
+          
+          if (parsedDirect && typeof parsedDirect === 'object' && 'totalPoints' in parsedDirect) {
+            dispatch(loadWalletPoints(parsedDirect));
+            return;
+          }
+        } catch (e) {
+          console.error('Error parsing direct aura backup:', e);
+        }
+      }
+      
+      // 2. TRY SIMPLIFIED TOTAL (even more reliable for just the points)
+      const simpleTotalKey = `aura_total_${address.toLowerCase()}`;
+      const simpleTotal = localStorage.getItem(simpleTotalKey);
+      
+      if (simpleTotal) {
+        const totalPoints = parseInt(simpleTotal, 10);
+        if (!isNaN(totalPoints)) {
+          console.log(`FOUND SIMPLE TOTAL for ${address}:`, totalPoints);
+          dispatch(loadWalletPoints(totalPoints));
+          return;
+        }
+      }
+      
+      // 3. TRY EMERGENCY BACKUP
+      const emergencyKey = `emergency_aura_${address}`;
+      const emergencyData = localStorage.getItem(emergencyKey);
+      
+      if (emergencyData) {
+        const emergencyPoints = parseInt(emergencyData, 10);
+        if (!isNaN(emergencyPoints)) {
+          console.log(`FOUND EMERGENCY BACKUP for ${address}:`, emergencyPoints);
+          dispatch(loadWalletPoints(emergencyPoints));
+          return;
+        }
+      }
+      
+      // 4. TRY CACHE SERVICE
       const auraPointsState = getWalletAuraPoints(address);
       
       if (auraPointsState && typeof auraPointsState === 'object') {
-        console.log(`Loaded aura points for ${address} using cache service:`, auraPointsState);
+        console.log(`FOUND CACHE SERVICE DATA for ${address}:`, auraPointsState);
         dispatch(loadWalletPoints(auraPointsState));
         return;
       }
       
-      // Try legacy format as a fallback
+      // 5. TRY LEGACY FORMAT
       const pointsStr = localStorage.getItem(`auraPoints_${address}`);
       if (pointsStr) {
         try {
           // Parse the full state object
           const legacyAuraPointsState = JSON.parse(pointsStr);
-          console.log(`Loaded legacy aura points for ${address}:`, legacyAuraPointsState);
+          console.log(`FOUND LEGACY FORMAT for ${address}:`, legacyAuraPointsState);
           
-          // Check if it's a valid object with the expected structure
           if (legacyAuraPointsState && typeof legacyAuraPointsState === 'object') {
             dispatch(loadWalletPoints(legacyAuraPointsState));
             return;
           }
         } catch (e) {
           // If JSON parsing fails, try handling as a legacy number
-          console.error("Error parsing legacy aura points JSON:", e);
+          console.error("Error parsing legacy JSON:", e);
           const points = parseInt(pointsStr, 10);
           if (!isNaN(points)) {
-            console.log(`Loaded legacy aura points as number for ${address}:`, points);
+            console.log(`FOUND LEGACY NUMBER for ${address}:`, points);
             dispatch(loadWalletPoints(points));
             return;
           }
@@ -258,8 +303,13 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       }
       
       // Default if no valid data found
-      console.log(`No valid aura points found for ${address}, using default`);
+      console.log(`NO VALID AURA POINTS FOUND for ${address}, using default`);
       dispatch(loadWalletPoints(100)); // Default
+      
+      // Initialize with default and save it immediately
+      const defaultState = { totalPoints: 100, transactions: [] };
+      localStorage.setItem(directBackupKey, JSON.stringify(defaultState));
+      localStorage.setItem(simpleTotalKey, '100');
     } catch (error) {
       console.error("Error loading Aura Points:", error);
       dispatch(loadWalletPoints(100)); // Default

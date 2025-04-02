@@ -129,9 +129,46 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   const reduxPosts = useSelector((state: RootState) => state.posts.feed);
   const reduxComments = useSelector((state: RootState) => state.posts.comments);
 
-  // First load - try to get data from cache
+  // First load - try to get data from cache with multiple fallbacks
   useEffect(() => {
-    console.log("Attempting to load posts from cache...");
+    console.log("LOADING POSTS FROM ALL CACHE SOURCES...");
+    
+    // 1. FIRST TRY DIRECT LOCALSTORAGE (most reliable)
+    try {
+      const directFeed = localStorage.getItem('gigaaura_feed');
+      if (directFeed) {
+        try {
+          const parsedDirectFeed = JSON.parse(directFeed);
+          if (Array.isArray(parsedDirectFeed) && parsedDirectFeed.length > 0) {
+            console.log("FOUND DIRECT CACHE POSTS:", parsedDirectFeed.length);
+            dispatch(setFeed(parsedDirectFeed));
+            return; // Exit if we successfully loaded
+          }
+        } catch (e) {
+          console.error("Error parsing direct feed:", e);
+        }
+      }
+      
+      // 2. TRY BACKUP LOCALSTORAGE
+      const backupFeed = localStorage.getItem('gigaaura_feed_backup');
+      if (backupFeed) {
+        try {
+          const parsedBackupFeed = JSON.parse(backupFeed);
+          if (Array.isArray(parsedBackupFeed) && parsedBackupFeed.length > 0) {
+            console.log("FOUND BACKUP CACHE POSTS:", parsedBackupFeed.length);
+            dispatch(setFeed(parsedBackupFeed));
+            return; // Exit if we successfully loaded
+          }
+        } catch (e) {
+          console.error("Error parsing backup feed:", e);
+        }
+      }
+    } catch (e) {
+      console.error("Error accessing direct localStorage:", e);
+    }
+    
+    // 3. FINALLY, TRY THE REDUX CACHE SERVICE
+    console.log("Attempting to load posts from cache service...");
     dispatch(loadFromCache());
   }, [dispatch]);
 
@@ -259,39 +296,96 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         mediaType: mediaType as 'image' | 'video' | undefined
       };
       
-      console.log("Creating new post with data:", postData);
+      console.log("CREATING NEW POST WITH DATA:", postData);
       
-      // Dispatch to Redux - this will also cache it via the reducer
-      dispatch(addPost(postData));
+      // First, create the full post object
+      const newPost: Post = {
+        ...postData,
+        id: uuidv4(),
+        createdAt: new Date().toISOString(),
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        likedBy: [],
+      };
       
-      // Add transaction for Aura Points
-      dispatch(addTransaction({
+      // Create the transaction for Aura Points
+      const newTransaction = {
         id: uuidv4(),
         amount: 20, // 20 points for creating a post
         timestamp: new Date().toISOString(),
-        action: 'post_created',
+        action: 'post_created' as const,
         counterpartyName: 'GigaAura',
         counterpartyWallet: 'system'
-      }));
+      };
       
-      // Verify that the post was added to the Redux store
-      const currentPosts = store.getState().posts.feed;
-      console.log("Current posts after adding:", currentPosts.length);
-      if (currentPosts.length > 0) {
-        console.log("Latest post:", currentPosts[0]);
+      // 1. SAVE DIRECTLY TO LOCALSTORAGE FIRST (most reliable approach)
+      // Get current posts from localStorage
+      try {
+        const currentFeedStr = localStorage.getItem('gigaaura_feed');
+        let currentFeed: Post[] = [];
+        
+        if (currentFeedStr) {
+          try {
+            currentFeed = JSON.parse(currentFeedStr);
+            if (!Array.isArray(currentFeed)) currentFeed = [];
+          } catch (e) {
+            console.error('Error parsing currentFeed:', e);
+            currentFeed = [];
+          }
+        }
+        
+        // Add the new post to the beginning of the feed
+        const updatedFeed = [newPost, ...currentFeed];
+        
+        // Save back to localStorage immediately
+        console.log('SAVING POSTS DIRECTLY TO LOCALSTORAGE:', updatedFeed.length);
+        localStorage.setItem('gigaaura_feed', JSON.stringify(updatedFeed));
+        
+        // Verify it saved correctly
+        const verifyFeed = localStorage.getItem('gigaaura_feed');
+        if (verifyFeed) {
+          try {
+            const parsedFeed = JSON.parse(verifyFeed);
+            console.log('DIRECT SAVE VERIFIED:', parsedFeed.length, 'posts in localStorage');
+          } catch (e) {
+            console.error('Error verifying feed save:', e);
+          }
+        }
+      } catch (e) {
+        console.error('Error saving directly to localStorage:', e);
       }
       
-      // Force a save to localStorage to ensure persistence
-      const force_save = setTimeout(() => {
-        // Re-cache feed to ensure it's saved
-        const latestFeed = store.getState().posts.feed;
-        console.log("Force-saving posts to cache:", latestFeed.length);
-        cacheFeed(latestFeed);
-        
-        // Re-cache user posts
-        const latestUserPosts = store.getState().posts.userPosts;
-        cacheUserPosts(latestUserPosts);
-      }, 500);
+      // 2. NOW DISPATCH TO REDUX (this will also trigger the reducer's cache logic)
+      console.log('DISPATCHING POST TO REDUX');
+      dispatch(addPost(postData));
+      
+      // 3. ADD TRANSACTION FOR AURA POINTS
+      console.log('DISPATCHING TRANSACTION TO REDUX');
+      dispatch(addTransaction(newTransaction));
+      
+      // 4. FORCE SYNC WITH MULTIPLE APPROACHES (belt and suspenders)
+      const syncTimeout = setTimeout(() => {
+        try {
+          // Get current posts from Redux store
+          const currentReduxFeed = store.getState().posts.feed;
+          console.log('FORCE SYNCING FEED:', currentReduxFeed.length, 'posts');
+          
+          // Save again via cache service
+          cacheFeed(currentReduxFeed);
+          
+          // Also save user posts
+          const currentUserPosts = store.getState().posts.userPosts;
+          cacheUserPosts(currentUserPosts);
+          
+          // Direct save as additional backup
+          localStorage.setItem('gigaaura_feed_backup', JSON.stringify(currentReduxFeed));
+          
+          console.log('COMPLETED ALL SYNC OPERATIONS');
+        } catch (e) {
+          console.error('Error in sync timeout:', e);
+        }
+      }, 100);
       
       // Success message
       toast.success('Post created successfully!');

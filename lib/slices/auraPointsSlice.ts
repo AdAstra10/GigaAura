@@ -97,32 +97,78 @@ const auraPointsSlice = createSlice({
   initialState: loadInitialState(),
   reducers: {
     addTransaction: (state, action: PayloadAction<AuraTransaction>) => {
+      // Push transaction and update total
       state.transactions.push(action.payload);
       state.totalPoints += action.payload.amount;
       
-      // Save to localStorage
+      // Get current wallet address
       const walletAddress = localStorage.getItem('walletAddress');
-      console.log('Adding transaction, current Aura points:', state.totalPoints);
-      saveAuraPointsToStorage(walletAddress, state);
+      console.log('ADDING TRANSACTION, current Aura points:', state.totalPoints);
       
-      // Verify the data was saved correctly by reading it back immediately
-      setTimeout(() => {
-        try {
-          const walletAddress = localStorage.getItem('walletAddress');
-          if (walletAddress) {
-            const key = `gigaaura_wallet_aura_points_${walletAddress.toLowerCase()}`;
-            const savedData = localStorage.getItem(key);
-            console.log('Verification - saved Aura points data:', savedData);
-            
-            if (savedData) {
-              const parsedData = JSON.parse(savedData);
-              console.log('Verification - parsed Aura points:', parsedData.totalPoints);
-            }
-          }
-        } catch (e) {
-          console.error('Error verifying saved aura points:', e);
+      try {
+        // 1. DIRECT SAVE APPROACH (most reliable)
+        // First save the transaction directly to localStorage as a backup
+        if (walletAddress) {
+          // Create a backup of the full state
+          const fullState = {
+            totalPoints: state.totalPoints,
+            transactions: state.transactions
+          };
+          
+          // Save direct backup first
+          const directBackupKey = `aura_direct_${walletAddress.toLowerCase()}`;
+          localStorage.setItem(directBackupKey, JSON.stringify(fullState));
+          
+          // Also save just the total for quick access
+          localStorage.setItem(`aura_total_${walletAddress.toLowerCase()}`, state.totalPoints.toString());
+          
+          console.log('DIRECT SAVE: Aura points saved directly to localStorage');
         }
-      }, 100);
+        
+        // 2. NORMAL CACHE SERVICE APPROACH
+        saveAuraPointsToStorage(walletAddress, state);
+        
+        // 3. VERIFY DATA WAS SAVED CORRECTLY
+        setTimeout(() => {
+          try {
+            if (walletAddress) {
+              // Check the direct backup
+              const directBackupKey = `aura_direct_${walletAddress.toLowerCase()}`;
+              const directData = localStorage.getItem(directBackupKey);
+              
+              if (directData) {
+                const parsedDirect = JSON.parse(directData);
+                console.log('VERIFIED DIRECT AURA SAVE:', parsedDirect.totalPoints, 'points');
+              }
+              
+              // Check the cache service data
+              const key = `gigaaura_wallet_aura_points_${walletAddress.toLowerCase()}`;
+              const savedData = localStorage.getItem(key);
+              
+              if (savedData) {
+                const parsedData = JSON.parse(savedData);
+                console.log('VERIFIED CACHE SERVICE AURA SAVE:', parsedData.totalPoints, 'points');
+              } else {
+                console.warn('Cache service data not found. Using direct approach as fallback.');
+              }
+            }
+          } catch (e) {
+            console.error('Error verifying saved aura points:', e);
+          }
+        }, 100);
+      } catch (e) {
+        console.error('Error in addTransaction:', e);
+        
+        // Emergency fallback: save directly if there was an error
+        if (walletAddress) {
+          try {
+            localStorage.setItem(`emergency_aura_${walletAddress}`, state.totalPoints.toString());
+            console.log('EMERGENCY SAVE: Saved aura points via emergency fallback');
+          } catch (e2) {
+            console.error('Emergency fallback also failed:', e2);
+          }
+        }
+      }
     },
     setTotalPoints: (state, action: PayloadAction<number>) => {
       state.totalPoints = action.payload;
