@@ -18,8 +18,8 @@ const CACHE_KEYS = {
   CACHE_TIMESTAMP: 'gigaaura_cache_timestamp',
 };
 
-// Cache expiration in milliseconds (24 hours)
-const CACHE_EXPIRATION = 24 * 60 * 60 * 1000;
+// Cache expiration in milliseconds (7 days instead of 24 hours for longer post persistence)
+const CACHE_EXPIRATION = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Check if we're in a browser environment
@@ -134,10 +134,10 @@ export const cacheFeed = (posts: Post[]): void => {
 };
 
 /**
- * Get cached feed posts
+ * Get cached feed posts - without expiration check for feed to ensure posts remain
  */
 export const getCachedFeed = (): Post[] | null => {
-  if (!isBrowser || isCacheExpired()) return null;
+  if (!isBrowser) return null;
   
   try {
     const cachedFeed = localStorage.getItem(CACHE_KEYS.FEED);

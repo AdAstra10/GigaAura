@@ -27,10 +27,10 @@ const AuraSidebar = () => {
   ]);
   
   const [trendingTopics, setTrendingTopics] = useState<any[]>([
-    { id: 1, title: 'SSC CGL Aspirants Demand Reforms for Fairness', category: 'Education', posts: '3.2K' },
-    { id: 2, title: 'Ohtani\'s Stolen Base Spotlight', category: 'Baseball', posts: '544' },
-    { id: 3, title: 'Adin Ross Confronts JasonTheWeen Over Racism Accusation', category: 'Streaming', posts: '93' },
-    { id: 4, title: 'ENHYPEN\'s Jake Sparks Fan Frenzy with Puppy Plea on Weverse', category: 'Music', posts: '1.9K' }
+    { id: 1, title: 'Solana Accelerate', category: 'Crypto', posts: '3.2K' },
+    { id: 2, title: 'Jupiter Acquires Drip Labs', category: 'Crypto', posts: '1.5K' },
+    { id: 3, title: 'FDUSD Depegs', category: 'Cryptocurrency', posts: '2.3K' },
+    { id: 4, title: 'Runway Gen-4', category: 'Technology', posts: '50' }
   ]);
 
   useEffect(() => {
@@ -124,11 +124,7 @@ const AuraSidebar = () => {
     return (
       <button
         onClick={handleFollow}
-        className={`${
-          isFollowing 
-            ? 'bg-transparent border border-[var(--border-color)] text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
-            : 'bg-black dark:bg-white text-white dark:text-black hover:bg-opacity-90 dark:hover:bg-opacity-90'
-        } font-bold py-1.5 px-4 rounded-full transition`}
+        className={isFollowing ? 'following-button' : 'follow-button'}
       >
         {isFollowing ? 'Following' : 'Follow'}
       </button>
@@ -136,10 +132,10 @@ const AuraSidebar = () => {
   };
 
   return (
-    <div className="hidden md:flex flex-col space-y-4 py-4 pl-4 pr-6 sticky top-0 h-screen max-h-screen right-sidebar">
+    <div className="hidden md:flex flex-col space-y-4 py-4 sticky top-0 h-screen max-h-screen right-sidebar">
       {/* Search */}
       <form onSubmit={handleSearch} className="relative mb-4">
-        <div className="flex items-center bg-gray-200 dark:bg-gray-800 rounded-full px-4 py-2">
+        <div className="twitter-searchbar">
           <MagnifyingGlassIcon className="h-5 w-5 text-gray-500" />
           <input 
             type="text" 
@@ -152,92 +148,69 @@ const AuraSidebar = () => {
         <button type="submit" className="hidden">Search</button>
       </form>
       
-      {/* Trending */}
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-4">
-        <h2 className="trending-topic-title text-xl mb-4">Trending</h2>
+      {/* Explore section */}
+      <div className="twitter-card p-4">
+        <h2 className="text-xl font-bold text-black dark:text-white mb-4">Explore</h2>
+        
+        <div className="relative">
+          <span className="absolute top-0 right-0 bg-gray-800 text-xs text-white px-2 py-0.5 rounded">Beta</span>
+        </div>
         
         {/* Trending Items */}
-        {[1, 2, 3].map((item) => (
-          <div key={item} className="mb-4 last:mb-0">
-            <div className="flex justify-between items-start">
-              <span className="trending-topic-subtitle text-sm">Web3 · Trending</span>
-              <span className="text-gray-400">...</span>
+        {trendingTopics.map((topic) => (
+          <div key={topic.id} className="mb-4 hover:bg-gray-100 dark:hover:bg-[var(--twitter-hover)] p-2 rounded-lg transition-colors">
+            <div className="flex items-start mb-0.5">
+              <span className="text-xs text-gray-500">{topic.category} · {Math.random() > 0.5 ? 'Trending' : '2 hours ago'}</span>
             </div>
-            <h3 className="trending-topic-title font-bold my-1">#{item === 1 ? 'Ethereum' : item === 2 ? 'GigaAura' : 'Web3'}</h3>
-            <span className="metadata text-sm">{`${Math.floor(Math.random() * 100)}K Tweets`}</span>
+            <h3 className="font-bold text-black dark:text-white my-0.5">{topic.title}</h3>
+            <span className="text-xs text-gray-500">{topic.posts} posts</span>
           </div>
         ))}
         
-        <a href="#" className="text-primary block mt-4 text-sm">Show more</a>
+        <a href="#" className="text-primary block mt-2 text-sm hover:underline">Show more</a>
       </div>
       
       {/* Who to follow */}
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-4">
-        <h2 className="trending-topic-title text-xl mb-4">Who to follow</h2>
+      <div className="twitter-card p-4">
+        <h2 className="text-xl font-bold text-black dark:text-white mb-4">Who to follow</h2>
         
         {/* Follow items */}
         {[
-          { name: 'Vitalik Buterin', handle: '@vitalikbuterin', verified: true },
-          { name: 'GigaAura', handle: '@gigaaura', verified: true },
-          { name: 'Web3 Daily', handle: '@web3daily', verified: false },
+          { name: 'cloakzy', handle: '@cloakzy', verified: true },
+          { name: 'Marc Andreessen', handle: '@pmarca', verified: true },
+          { name: 'Ninja', handle: '@Ninja', verified: true },
         ].map((person, idx) => (
-          <div key={idx} className="flex items-center justify-between mb-4 last:mb-0">
+          <div key={idx} className="flex items-center justify-between mb-4 hover:bg-gray-100 dark:hover:bg-[var(--twitter-hover)] p-2 rounded-lg transition-colors">
             <div className="flex items-center">
               <div className="h-10 w-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
                 <Image src={`https://i.pravatar.cc/150?u=${person.handle}`} alt={person.name} width={40} height={40} />
               </div>
               <div className="ml-3">
                 <div className="flex items-center">
-                  <span className="profile-name font-bold">{person.name}</span>
+                  <span className="font-bold text-black dark:text-white">{person.name}</span>
                   {person.verified && <CheckBadgeIcon className="h-4 w-4 text-primary ml-1" />}
                 </div>
-                <span className="user-handle block">{person.handle}</span>
+                <span className="block text-gray-500">{person.handle}</span>
               </div>
             </div>
             <FollowButton username={person.name} wallet={person.handle} />
           </div>
         ))}
         
-        <a href="#" className="text-primary block mt-4 text-sm">Show more</a>
+        <a href="#" className="text-primary block mt-2 text-sm hover:underline">Show more</a>
       </div>
       
-      {/* Recent Activity */}
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-4">
-        <h2 className="trending-topic-title text-xl mb-4">Recent Activity</h2>
-        
-        {/* Activity items */}
-        {[
-          { type: 'post', user: 'Alex', action: 'posted a new update' },
-          { type: 'like', user: 'Jordan', action: 'liked your post' },
-          { type: 'follow', user: 'Taylor', action: 'started following you' },
-        ].map((activity, idx) => (
-          <div key={idx} className="mb-4 last:mb-0">
-            <div className="flex items-start">
-              <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center overflow-hidden mr-2">
-                <Image src={`https://i.pravatar.cc/150?u=${activity.user}`} alt={activity.user} width={32} height={32} />
-              </div>
-              <div>
-                <span className="profile-name font-bold">{activity.user}</span>
-                <span className="metadata ml-1">{activity.action}</span>
-                <span className="metadata block text-sm">{`${Math.floor(Math.random() * 12)}h ago`}</span>
-              </div>
-            </div>
-          </div>
-        ))}
-        
-        <a href="#" className="text-primary block mt-4 text-sm">See all activity</a>
-      </div>
-      
-      {/* Footer */}
-      <div className="px-4 text-sm">
-        <div className="flex flex-wrap metadata mb-2">
-          <a href="#" className="mr-2 mb-1">Terms of Service</a>
-          <a href="#" className="mr-2 mb-1">Privacy Policy</a>
-          <a href="#" className="mr-2 mb-1">Cookie Policy</a>
-          <a href="#" className="mr-2 mb-1">Accessibility</a>
-          <a href="#" className="mr-2 mb-1">More</a>
+      {/* Terms section */}
+      <div className="text-xs text-gray-500 mt-4">
+        <div className="flex flex-wrap">
+          <span className="mr-2 mb-2 hover:underline cursor-pointer">Terms of Service</span>
+          <span className="mr-2 mb-2 hover:underline cursor-pointer">Privacy Policy</span>
+          <span className="mr-2 mb-2 hover:underline cursor-pointer">Cookie Policy</span>
+          <span className="mr-2 mb-2 hover:underline cursor-pointer">Accessibility</span>
+          <span className="mr-2 mb-2 hover:underline cursor-pointer">Ads info</span>
+          <span className="mr-2 mb-2 hover:underline cursor-pointer">More</span>
+          <span className="mb-2">© 2025 GigaAura Corp.</span>
         </div>
-        <p className="metadata">© 2025 GigaAura</p>
       </div>
     </div>
   );

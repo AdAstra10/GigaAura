@@ -426,133 +426,155 @@ const ProfilePage = () => {
       
       {/* Edit Profile Modal (displays over the page when editing is true) */}
       {isEditing && (
-        <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 overflow-auto">
-          <div className="bg-white dark:bg-dark w-full max-w-xl mx-auto mt-16 rounded-xl">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-[var(--border-color)]">
+        <div className="edit-profile-modal">
+          <div className="edit-profile-content">
+            <div className="edit-profile-header">
               <div className="flex items-center space-x-4">
-                <button onClick={() => setIsEditing(false)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800">
+                <button 
+                  onClick={() => setIsEditing(false)}
+                  className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800"
+                >
                   <XMarkIcon className="h-5 w-5 text-black dark:text-white" />
                 </button>
                 <h2 className="text-xl font-bold text-black dark:text-white">Edit profile</h2>
               </div>
-              <button 
+              <button
                 onClick={handleSaveProfile}
                 disabled={isSaving}
-                className="bg-black dark:bg-white text-white dark:text-black font-bold px-4 py-1.5 rounded-full hover:bg-gray-800 dark:hover:bg-gray-100"
+                className="bg-black dark:bg-white text-white dark:text-black font-bold py-1.5 px-4 rounded-full hover:bg-opacity-90 dark:hover:bg-opacity-90 transition"
+              >
+                {isSaving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+            
+            {/* Banner Image */}
+            <div className="relative h-48 bg-gray-300 dark:bg-gray-700">
+              {bannerUrl && (
+                <img src={bannerUrl} alt="Banner" className="w-full h-full object-cover" />
+              )}
+              <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                <div className="flex gap-4">
+                  <button 
+                    onClick={() => bannerInputRef.current?.click()}
+                    className="p-2 bg-black bg-opacity-50 text-white rounded-full"
+                  >
+                    <CameraIcon className="h-6 w-6" />
+                  </button>
+                  {bannerUrl && (
+                    <button 
+                      onClick={() => setBannerUrl('')}
+                      className="p-2 bg-black bg-opacity-50 text-white rounded-full"
+                    >
+                      <XMarkIcon className="h-6 w-6" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* Profile Image */}
+            <div className="mx-4 -mt-16 relative">
+              <div className="w-32 h-32 rounded-full border-4 border-white dark:border-dark bg-gray-300 dark:bg-gray-700 overflow-hidden">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-white text-4xl font-bold">
+                    {username?.charAt(0)?.toUpperCase() || walletAddress?.charAt(0)?.toUpperCase() || '?'}
+                  </div>
+                )}
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2 bg-black bg-opacity-50 text-white rounded-full"
+                >
+                  <CameraIcon className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+            
+            {/* Form fields */}
+            <div className="p-4 space-y-4 mt-12">
+              <div>
+                <label className="block text-sm text-gray-500 mb-1">Name</label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-black text-black dark:text-white focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="Add your name"
+                  maxLength={50}
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-500 mb-1">Bio</label>
+                <textarea
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-black text-black dark:text-white focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="Add your bio"
+                  maxLength={160}
+                  rows={3}
+                />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mt-4">
+                  Your blue checkmark will be hidden for a period of time after you edit your display name or profile photo until it is reviewed.
+                </p>
+                <a href="#" className="text-primary text-xs hover:underline">Learn more</a>
+              </div>
+            </div>
+            
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleImageUpload(e, false)}
+              className="hidden"
+            />
+            <input
+              ref={bannerInputRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleImageUpload(e, true)}
+              className="hidden"
+            />
+          </div>
+        </div>
+      )}
+      
+      {/* Profile picture crop/zoom modal */}
+      {showPfpModal && tempImageUrl && (
+        <div className="edit-profile-modal">
+          <div className="edit-profile-content">
+            <div className="edit-profile-header">
+              <div className="flex items-center">
+                <button 
+                  onClick={() => setShowPfpModal(false)}
+                  className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800"
+                >
+                  <XMarkIcon className="h-5 w-5 text-black dark:text-white" />
+                </button>
+                <h2 className="text-xl font-bold text-black dark:text-white ml-4">
+                  {editingBanner ? 'Edit banner' : 'Edit profile picture'}
+                </h2>
+              </div>
+              <button
+                onClick={handleConfirmProfilePicture}
+                className="bg-black dark:bg-white text-white dark:text-black font-bold py-1.5 px-4 rounded-full hover:bg-opacity-90 dark:hover:bg-opacity-90 transition"
               >
                 Save
               </button>
             </div>
             
-            {/* Banner Image */}
-            <div className="relative h-36 bg-gray-300 dark:bg-gray-700">
-              {bannerUrl && (
-                <img src={bannerUrl} alt="Profile Banner" className="w-full h-full object-cover" />
-              )}
-              <button 
-                onClick={() => bannerInputRef.current?.click()}
-                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/50 text-white p-3 rounded-full"
-              >
-                <CameraIcon className="h-6 w-6" />
-              </button>
-              <input
-                type="file"
-                ref={bannerInputRef}
-                accept="image/*"
-                onChange={(e) => handleImageUpload(e, true)}
-                className="hidden"
-              />
-            </div>
-            
-            {/* Profile Picture */}
-            <div className="relative mx-4 -mt-12">
-              <div className="w-24 h-24 rounded-full border-4 border-white dark:border-dark bg-gray-300 dark:bg-gray-700 overflow-hidden">
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-white text-2xl font-bold">
-                    {username?.charAt(0)?.toUpperCase() || walletAddress?.charAt(0)?.toUpperCase() || '?'}
-                  </div>
-                )}
-              </div>
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full"
-              >
-                <CameraIcon className="h-5 w-5" />
-              </button>
-              <input
-                type="file"
-                ref={fileInputRef}
-                accept="image/*"
-                onChange={(e) => handleImageUpload(e, false)}
-                className="hidden"
-              />
-            </div>
-            
-            {/* Edit Form */}
-            <div className="p-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">Name</label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Add your name"
-                  className="w-full p-3 bg-transparent border border-[var(--border-color)] rounded-md text-black dark:text-white focus:outline-none focus:ring-1 focus:ring-primary"
-                  maxLength={50}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">Bio</label>
-                <textarea
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  placeholder="Add your bio"
-                  className="w-full p-3 bg-transparent border border-[var(--border-color)] rounded-md text-black dark:text-white focus:outline-none focus:ring-1 focus:ring-primary"
-                  rows={3}
-                  maxLength={160}
-                ></textarea>
-              </div>
-              
-              <div>
-                <p className="text-gray-500 text-sm">
-                  Your blue checkmark will be hidden for a period of time after you edit your display
-                  name or profile photo until it is reviewed.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Profile Picture Crop/Zoom Modal */}
-      {showPfpModal && tempImageUrl && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-dark w-full max-w-md rounded-xl p-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-black dark:text-white">
-                {editingBanner ? 'Edit banner' : 'Edit profile picture'}
-              </h3>
-              <button 
-                onClick={() => {
-                  setShowPfpModal(false);
-                  setTempImageUrl(null);
-                }}
-                className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
-            </div>
-            
-            <div className="relative overflow-hidden">
-              <div 
-                className={`${
-                  editingBanner ? 'w-full h-40' : 'w-64 h-64 mx-auto rounded-full'
-                } overflow-hidden bg-gray-200 dark:bg-gray-700`}
-              >
+            <div className="p-4">
+              <div className="relative mx-auto" style={{ 
+                maxHeight: '400px',
+                overflow: 'hidden',
+                borderRadius: editingBanner ? '0px' : '50%',
+                width: editingBanner ? '100%' : '200px',
+                height: editingBanner ? '200px' : '200px'
+              }}>
                 <img 
                   src={tempImageUrl} 
                   alt="Preview" 
@@ -560,39 +582,19 @@ const ProfilePage = () => {
                   style={{ transform: `scale(${imageZoom})` }}
                 />
               </div>
-            </div>
-            
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Zoom: {Math.round(imageZoom * 100)}%
-              </label>
-              <input
-                type="range"
-                min="1"
-                max="2"
-                step="0.01"
-                value={imageZoom}
-                onChange={(e) => setImageZoom(parseFloat(e.target.value))}
-                className="w-full"
-              />
-            </div>
-            
-            <div className="flex justify-end mt-4 space-x-3">
-              <button
-                onClick={() => {
-                  setShowPfpModal(false);
-                  setTempImageUrl(null);
-                }}
-                className="px-4 py-2 border border-[var(--border-color)] rounded-full text-black dark:text-white"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmProfilePicture}
-                className="px-4 py-2 bg-primary text-white rounded-full"
-              >
-                Apply
-              </button>
+              
+              <div className="mt-4">
+                <label className="block text-sm text-gray-500 mb-1">Zoom</label>
+                <input
+                  type="range"
+                  min="1"
+                  max="2"
+                  step="0.01"
+                  value={imageZoom}
+                  onChange={(e) => setImageZoom(parseFloat(e.target.value))}
+                  className="w-full"
+                />
+              </div>
             </div>
           </div>
         </div>

@@ -406,34 +406,38 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
   const handleToggleComments = () => {
     setShowComments(!showComments);
   };
-  
+
   return (
     <div className="border-b border-[var(--border-color)] p-4 hover:bg-gray-50 dark:hover:bg-gray-900/20 transition-colors cursor-pointer">
       <div className="flex">
         <div className="flex-shrink-0 mr-3">
           <div className="w-12 h-12 rounded-full overflow-hidden">
-            <Image 
-              src={post.authorAvatar || ''} 
-              alt={post.authorUsername || 'User'} 
-              width={48} 
-              height={48} 
-              className="object-cover"
-            />
+            {post.authorAvatar ? (
+              <img 
+                src={post.authorAvatar} 
+                alt={post.authorUsername || 'User'} 
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gray-300 dark:bg-gray-700 text-white">
+                {post.authorUsername?.charAt(0)?.toUpperCase() || '?'}
+              </div>
+            )}
           </div>
         </div>
         
         <div className="flex-1">
           <div className="flex items-center">
-            <span className="profile-name font-bold">{post.authorUsername || 'Anonymous'}</span>
+            <span className="font-bold text-black dark:text-white">{post.authorUsername || 'Anonymous'}</span>
             {post.authorWallet && (
-              <span className="user-handle ml-2">@{truncateWallet(post.authorWallet)}</span>
+              <span className="text-gray-500 ml-2">@{truncateWallet(post.authorWallet)}</span>
             )}
-            <span className="metadata mx-1">·</span>
-            <span className="metadata">{formatDate(post.createdAt)}</span>
+            <span className="text-gray-500 mx-1">·</span>
+            <span className="text-gray-500">{formatDate(post.createdAt)}</span>
           </div>
           
           <div className="mt-1">
-            <p className="post-content whitespace-pre-line">{post.content}</p>
+            <p className="text-black dark:text-white whitespace-pre-line">{post.content}</p>
           </div>
           
           {post.mediaUrl && (
@@ -454,55 +458,95 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
             </div>
           )}
           
+          {/* Post Actions */}
           <div className="flex justify-between mt-3 max-w-md">
-            <button 
-              className="flex items-center group text-gray-500 hover:text-primary"
-              onClick={handleToggleComments}
-            >
-              <ChatBubbleLeftIcon className="h-5 w-5 mr-2 group-hover:text-primary" />
-              <span className="text-sm group-hover:text-primary">{post.comments}</span>
-            </button>
-            <button 
-              className={`flex items-center group ${hasShared ? 'text-green-500' : 'text-gray-500 hover:text-green-500'}`}
-              onClick={handleSharePost}
-            >
-              <ArrowPathRoundedSquareIcon className={`h-5 w-5 mr-2 ${hasShared ? 'text-green-500' : 'group-hover:text-green-500'}`} />
-              <span className={`text-sm ${hasShared ? 'text-green-500' : 'group-hover:text-green-500'}`}>{post.shares}</span>
-            </button>
-            <button 
-              className={`flex items-center group ${isLiked ? 'text-pink-500' : 'text-gray-500 hover:text-pink-500'}`}
-              onClick={handleLike}
-            >
-              {isLiked ? (
-                <HeartIcon className="h-5 w-5 mr-2 text-pink-500 fill-current" />
-              ) : (
-                <HeartIcon className="h-5 w-5 mr-2 group-hover:text-pink-500" />
-              )}
-              <span className={`text-sm ${isLiked ? 'text-pink-500' : 'group-hover:text-pink-500'}`}>
-                {post.likes + (isLiked ? 1 : 0)}
-              </span>
-            </button>
-            <div className="flex space-x-3">
+            <div className="flex items-center group">
               <button 
-                className="flex items-center text-gray-500 hover:text-primary"
-                onClick={() => {
-                  const postUrl = `${window.location.origin}/post/${post.id}`;
-                  navigator.clipboard.writeText(postUrl)
-                    .then(() => toast.success('Post link copied to clipboard!'))
-                    .catch(() => toast.error('Failed to copy link'));
-                }}
+                onClick={handleToggleComments}
+                aria-label="Reply"
+                className="p-2 rounded-full text-gray-500 group-hover:text-blue-500 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/10"
               >
-                <ShareIcon className="h-5 w-5" />
+                <ChatBubbleLeftIcon className="h-5 w-5" />
               </button>
+              {post.comments > 0 && (
+                <span className="text-sm text-gray-500 group-hover:text-blue-500">
+                  {post.comments}
+                </span>
+              )}
+            </div>
+            
+            <div className="flex items-center group">
               <button 
-                className={`flex items-center ${isBookmarked ? 'text-primary' : 'text-gray-500 hover:text-primary'}`}
+                onClick={handleSharePost}
+                aria-label="Repost"
+                className={`p-2 rounded-full ${
+                  hasShared 
+                    ? 'text-green-500' 
+                    : 'text-gray-500 group-hover:text-green-500 group-hover:bg-green-50 dark:group-hover:bg-green-900/10'
+                }`}
+              >
+                <ArrowPathRoundedSquareIcon className="h-5 w-5" />
+              </button>
+              {post.shares > 0 && (
+                <span className={`text-sm ${hasShared ? 'text-green-500' : 'text-gray-500 group-hover:text-green-500'}`}>
+                  {post.shares}
+                </span>
+              )}
+            </div>
+            
+            <div className="flex items-center group">
+              <button 
+                onClick={handleLike}
+                aria-label="Like"
+                className={`p-2 rounded-full ${
+                  isLiked 
+                    ? 'text-pink-500' 
+                    : 'text-gray-500 group-hover:text-pink-500 group-hover:bg-pink-50 dark:group-hover:bg-pink-900/10'
+                }`}
+              >
+                {isLiked ? (
+                  <HeartIcon className="h-5 w-5 fill-pink-500" />
+                ) : (
+                  <HeartIcon className="h-5 w-5" />
+                )}
+              </button>
+              {post.likes > 0 && (
+                <span className={`text-sm ${isLiked ? 'text-pink-500' : 'text-gray-500 group-hover:text-pink-500'}`}>
+                  {post.likes + (isLiked ? 1 : 0)}
+                </span>
+              )}
+            </div>
+            
+            <div className="flex items-center group">
+              <button 
                 onClick={handleBookmark}
+                aria-label="Bookmark"
+                className={`p-2 rounded-full ${
+                  isBookmarked 
+                    ? 'text-blue-500' 
+                    : 'text-gray-500 group-hover:text-blue-500 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/10'
+                }`}
               >
                 {isBookmarked ? (
                   <BookmarkSolidIcon className="h-5 w-5" />
                 ) : (
                   <BookmarkOutlineIcon className="h-5 w-5" />
                 )}
+              </button>
+            </div>
+            
+            <div className="flex items-center group">
+              <button 
+                onClick={() => {
+                  const postUrl = `${window.location.origin}/post/${post.id}`;
+                  navigator.clipboard.writeText(postUrl)
+                    .then(() => toast.success('Post link copied to clipboard!'))
+                    .catch(() => toast.error('Failed to copy link'));
+                }}
+                aria-label="Share"
+                className="p-2 rounded-full text-gray-500 group-hover:text-blue-500 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/10"
+              >
+                <ShareIcon className="h-5 w-5" />
               </button>
             </div>
           </div>
