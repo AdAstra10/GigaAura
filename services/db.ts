@@ -405,7 +405,7 @@ export const getPosts = async (): Promise<Post[]> => {
             
             // Also store individual posts
             const postIds: string[] = [];
-            posts.forEach(post => {
+            posts.forEach((post: Post) => {
               localStorage.setItem(`giga-aura-post-${post.id}`, JSON.stringify(post));
               postIds.push(post.id);
             });
