@@ -3,7 +3,7 @@
  * Uses Firebase Firestore for persistent cloud storage
  */
 
-import { initializeApp } from 'firebase/app';
+import { initializeApp, FirebaseApp } from 'firebase/app';
 import { 
   getFirestore, 
   collection, 
@@ -17,7 +17,8 @@ import {
   getDocs,
   where,
   Timestamp,
-  serverTimestamp
+  serverTimestamp,
+  Firestore
 } from 'firebase/firestore';
 import { Post } from '@lib/slices/postsSlice';
 import { AuraPointsState, AuraTransaction } from '@lib/slices/auraPointsSlice';
@@ -32,9 +33,9 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:637403180608:web:a81343a6d7af4dbe6e7cf5"
 };
 
-// Initialize Firebase
-let app;
-let db;
+// Initialize Firebase with proper type annotations
+let app: FirebaseApp | undefined;
+let db: Firestore | undefined;
 
 try {
   app = initializeApp(firebaseConfig);
@@ -89,8 +90,8 @@ export const getPosts = async (): Promise<Post[]> => {
     const querySnapshot = await getDocs(postsQuery);
     
     const posts: Post[] = [];
-    querySnapshot.forEach((doc) => {
-      const postData = doc.data() as Post;
+    querySnapshot.forEach((docSnapshot) => {
+      const postData = docSnapshot.data() as Post;
       posts.push(postData);
     });
     
@@ -117,8 +118,8 @@ export const getUserPosts = async (walletAddress: string): Promise<Post[]> => {
     const querySnapshot = await getDocs(userPostsQuery);
     
     const posts: Post[] = [];
-    querySnapshot.forEach((doc) => {
-      const postData = doc.data() as Post;
+    querySnapshot.forEach((docSnapshot) => {
+      const postData = docSnapshot.data() as Post;
       posts.push(postData);
     });
     
@@ -218,11 +219,15 @@ export const getAuraPoints = async (walletAddress: string): Promise<AuraPointsSt
     const transactionsSnapshot = await getDocs(transactionsQuery);
     const transactions: AuraTransaction[] = [];
     
-    transactionsSnapshot.forEach((doc) => {
-      const transactionData = doc.data();
+    transactionsSnapshot.forEach((docSnapshot) => {
+      const transactionData = docSnapshot.data();
+      const timestamp = transactionData.timestamp?.toDate?.() 
+        ? transactionData.timestamp.toDate().toISOString() 
+        : new Date().toISOString();
+      
       transactions.push({
         ...transactionData,
-        timestamp: transactionData.timestamp.toDate().toISOString()
+        timestamp,
       } as AuraTransaction);
     });
     
