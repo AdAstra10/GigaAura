@@ -2,9 +2,9 @@ import Pusher from 'pusher';
 
 // Initialize the Pusher server instance with your app credentials
 const pusherServer = new Pusher({
-  appId: process.env.PUSHER_APP_ID || '',
-  key: process.env.NEXT_PUBLIC_PUSHER_APP_KEY || '',
-  secret: process.env.PUSHER_APP_SECRET || '',
+  appId: process.env.PUSHER_APP_ID || '1968757',
+  key: process.env.NEXT_PUBLIC_PUSHER_APP_KEY || '477339a84785c23745a5',
+  secret: process.env.PUSHER_APP_SECRET || 'e57493127c3d8f40e1ab',
   cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'us2',
   useTLS: true, // Use TLS for secure connections
 });
