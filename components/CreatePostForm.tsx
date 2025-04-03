@@ -1,218 +1,204 @@
-import { useState, FormEvent, ChangeEvent, useRef, DragEvent } from 'react';
+import React, { useState, useRef } from 'react';
+import { FaRegSmile, FaImage, FaTimes } from 'react-icons/fa';
 import { useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
-import { Paperclip, Image, Video, XCircle, Smile } from 'lucide-react';
-import { useWallet } from '../contexts/WalletContext';
+import dynamic from 'next/dynamic';
+import Image from 'next/image';
+import toast from 'react-hot-toast';
 
+// Import the emoji picker dynamically to avoid SSR issues
+const EmojiPicker = dynamic(
+  () => import('emoji-picker-react'),
+  { ssr: false }
+);
+
+// Define prop types for better type safety
 interface CreatePostFormProps {
   onSubmit: (content: string, mediaFile?: File) => boolean;
+  placeholder?: string;
+  buttonText?: string;
+  autoFocus?: boolean;
+  className?: string;
 }
 
-const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
-  const { connectWallet, connected, walletAddress } = useWallet();
+export default function CreatePostForm({
+  onSubmit,
+  placeholder = "What's on your mind?",
+  buttonText = "Post",
+  autoFocus = false,
+  className = "",
+}: CreatePostFormProps) {
+  const { walletAddress, username, avatar } = useSelector((state: RootState) => state.user);
   const [content, setContent] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [mediaFile, setMediaFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const [image, setImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { username, avatar } = useSelector((state: RootState) => state.user as { 
-    username: string | null, 
-    avatar: string | null
-  });
+  const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
-  const handleSubmit = async (e: FormEvent) => {
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Allow posting with just media and no content
-    if (!content.trim() && !mediaFile) return;
-    
-    if (!connected) {
-      const confirm = window.confirm('Please connect your wallet to post. Would you like to connect now?');
-      if (confirm) {
-        await connectWallet();
-        if (!connected) return; // If still not connected after attempt, return
-      } else {
-        return;
-      }
+    // Don't allow empty posts
+    if (!content.trim()) {
+      toast.error('Please enter some content for your post');
+      return;
     }
     
-    setIsLoading(true);
+    // Don't allow posts if not connected
+    if (!walletAddress) {
+      toast.error('Please connect your wallet to create a post');
+      return;
+    }
     
     try {
-      const success = onSubmit(content, mediaFile || undefined);
+      setIsSubmitting(true);
+      
+      // Call the onSubmit prop function with the content and image
+      const success = onSubmit(content, image || undefined);
       
       if (success) {
-        // Clear form
+        // Reset form on success
         setContent('');
-        setMediaFile(null);
-        setPreviewUrl(null);
+        setImage(null);
+        setImagePreview(null);
+        setShowEmojiPicker(false);
+        
+        // Focus the textarea
+        textAreaRef.current?.focus();
       }
     } catch (error) {
-      console.error('Error creating post:', error);
+      console.error('Error submitting post:', error);
+      toast.error('Error creating post. Please try again.');
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      processFile(file);
-    }
+  // Handle emoji selection
+  const handleEmojiClick = (emojiObject: any) => {
+    setContent((prevContent) => prevContent + emojiObject.emoji);
+    // Focus back to textarea after selecting emoji
+    setTimeout(() => {
+      if (textAreaRef.current) {
+        textAreaRef.current.focus();
+      }
+    }, 0);
   };
-  
-  const handleDragEnter = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-  
-  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-  
-  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-  
-  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      processFile(file);
-    }
-  };
-  
-  const processFile = (file: File) => {
-    // Check if it's an image or video
-    if (file.type.match(/image\/*/) || file.type.match(/video\/*/)) {
-      setMediaFile(file);
+
+  // Handle image upload
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image size should be less than 5MB');
+        return;
+      }
       
-      // Create a preview URL
+      setImage(file);
       const reader = new FileReader();
       reader.onloadend = () => {
-        setPreviewUrl(reader.result as string);
+        setImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-    } else {
-      alert('Please upload only images or videos');
     }
   };
-  
-  const triggerFileInput = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-  
-  const removeMedia = () => {
-    setMediaFile(null);
-    setPreviewUrl(null);
+
+  // Handle removing the image
+  const handleRemoveImage = () => {
+    setImage(null);
+    setImagePreview(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
   return (
-    <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
+    <div className={`bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-4 ${className}`}>
       <form onSubmit={handleSubmit}>
-        <div className="flex space-x-4">
-          <div className="flex-shrink-0">
-            {avatar ? (
-              <div className="w-10 h-10 rounded-full overflow-hidden relative">
-                <img src={avatar} alt={username || walletAddress || 'User'} className="w-full h-full object-cover" />
-              </div>
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white">
-                {username ? username.charAt(0).toUpperCase() : walletAddress?.substring(0, 2)}
-              </div>
-            )}
+        <div className="flex items-start mb-3">
+          <div className="w-10 h-10 rounded-full overflow-hidden mr-3 flex-shrink-0">
+            <Image
+              src={avatar || '/assets/avatars/default.png'}
+              alt="User Avatar"
+              width={40}
+              height={40}
+              className="w-full h-full object-cover"
+            />
           </div>
           
-          <div className="flex-1">
-            <div className="w-full">
-              <textarea
-                className="w-full resize-none focus:outline-none dark:text-white dark:bg-transparent text-lg p-2 placeholder-gray-500"
-                placeholder="What's happening?"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                rows={2}
-                disabled={isLoading}
-              ></textarea>
+          <textarea
+            ref={textAreaRef}
+            className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:text-white resize-none"
+            placeholder={placeholder}
+            rows={3}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            autoFocus={autoFocus}
+          />
+        </div>
+        
+        {/* Image preview */}
+        {imagePreview && (
+          <div className="relative mb-3 w-full">
+            <div className="max-h-60 w-full rounded-lg overflow-hidden">
+              <img src={imagePreview} alt="Preview" className="w-full h-full object-contain" />
+            </div>
+            <button
+              type="button"
+              onClick={handleRemoveImage}
+              className="absolute top-2 right-2 bg-gray-800 bg-opacity-70 text-white rounded-full p-1"
+            >
+              <FaTimes />
+            </button>
+          </div>
+        )}
+        
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <FaImage />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageChange}
+            />
+            
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <FaRegSmile />
+              </button>
               
-              {previewUrl && (
-                <div className="mt-2 relative">
-                  {mediaFile?.type.includes('image') ? (
-                    <div className="relative rounded-lg overflow-hidden">
-                      <img src={previewUrl} alt="Media preview" className="max-h-64 w-auto rounded-lg" />
-                      <button 
-                        type="button" 
-                        className="absolute top-2 right-2 bg-black bg-opacity-50 text-white rounded-full p-1 hover:bg-opacity-70"
-                        onClick={removeMedia}
-                      >
-                        <XCircle size={20} />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="relative rounded-lg overflow-hidden">
-                      <video src={previewUrl} controls className="max-h-64 w-auto rounded-lg"></video>
-                      <button 
-                        type="button" 
-                        className="absolute top-2 right-2 bg-black bg-opacity-50 text-white rounded-full p-1 hover:bg-opacity-70"
-                        onClick={removeMedia}
-                      >
-                        <XCircle size={20} />
-                      </button>
-                    </div>
-                  )}
+              {showEmojiPicker && (
+                <div className="absolute bottom-12 left-0 z-10">
+                  <EmojiPicker onEmojiClick={handleEmojiClick} />
                 </div>
               )}
             </div>
-            
-            <div className="mt-3 flex items-center justify-between border-t dark:border-gray-700 pt-3">
-              <div className="flex items-center space-x-2">
-                <button 
-                  type="button"
-                  onClick={triggerFileInput} 
-                  className="text-primary hover:bg-primary/10 p-2 rounded-full"
-                >
-                  <Image size={18} />
-                </button>
-                <button 
-                  type="button" 
-                  className="text-primary hover:bg-primary/10 p-2 rounded-full"
-                >
-                  <Smile size={18} />
-                </button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  className="hidden"
-                  accept="image/*,video/*"
-                  onChange={handleFileInputChange}
-                />
-              </div>
-              
-              <button
-                type="submit"
-                className="px-4 py-1.5 bg-primary text-white rounded-full hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                disabled={(content.trim() === '' && !mediaFile) || isLoading}
-              >
-                {isLoading ? 'Posting...' : 'Post'}
-              </button>
-            </div>
           </div>
+          
+          <button
+            type="submit"
+            disabled={!content.trim() || isSubmitting || !walletAddress}
+            className={`px-4 py-2 bg-primary text-white rounded-full hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed ${isSubmitting ? 'opacity-70' : ''}`}
+          >
+            {isSubmitting ? 'Posting...' : buttonText}
+          </button>
         </div>
       </form>
     </div>
   );
-};
-
-export default CreatePostForm; 
+} 

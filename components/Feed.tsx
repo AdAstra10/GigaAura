@@ -396,100 +396,156 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           // Add timestamp to bust cache
           const timestamp = new Date().getTime();
           
-          const response = await axios.get(`${apiUrl}?t=${timestamp}`, {
-            timeout: 10000,
+          const response = await fetch(`${apiUrl}?t=${timestamp}`, {
+            method: 'GET',
             headers: {
               'Cache-Control': 'no-cache, no-store, must-revalidate',
               'Pragma': 'no-cache',
               'Expires': '0',
-              'X-Requested-With': 'XMLHttpRequest'
+              'Accept': 'application/json',
             },
-            withCredentials: false
+            mode: 'same-origin', // Important for security and to avoid CORS
+            credentials: 'same-origin',
           });
           
-          if (response.data && Array.isArray(response.data) && response.data.length > 0) {
-            dispatch(setFeed(response.data));
+          if (!response.ok) {
+            throw new Error(`API responded with status: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          
+          if (Array.isArray(data) && data.length > 0) {
+            console.log(`Loaded ${data.length} posts from API via Pusher refresh`);
+            dispatch(setFeed(data));
             
             // Save to localStorage
             if (typeof window !== 'undefined') {
               try {
-                localStorage.setItem('giga-aura-posts', JSON.stringify(response.data));
+                localStorage.setItem('giga-aura-posts', JSON.stringify(data));
               } catch (e) {
                 console.warn('Failed to save posts to localStorage:', e);
               }
             }
+          } else if (Array.isArray(data)) {
+            console.log('API returned empty posts array');
+            // Don't update feed with empty array to avoid clearing existing posts
+          } else {
+            console.warn('API returned invalid data format:', data);
           }
         } catch (error) {
           console.error('Error refreshing posts from Pusher event:', error);
+          // Fallback to direct DB call if API fails
+          try {
+            console.log('Attempting to fetch posts directly from database...');
+            const dbPosts = await db.getPosts();
+            if (dbPosts && Array.isArray(dbPosts) && dbPosts.length > 0) {
+              console.log(`Loaded ${dbPosts.length} posts directly from database after API failure`);
+              dispatch(setFeed(dbPosts));
+              
+              // Save to localStorage
+              if (typeof window !== 'undefined') {
+                try {
+                  localStorage.setItem('giga-aura-posts', JSON.stringify(dbPosts));
+                } catch (e) {
+                  console.warn('Failed to save posts to localStorage:', e);
+                }
+              }
+            }
+          } catch (dbError) {
+            console.error('Failed to load posts directly from database:', dbError);
+          }
         } finally {
           setIsRefreshing(false);
         }
       }
     };
     
-    // Subscribe to the posts channel
-    const channel = pusherClient.subscribe(PUSHER_CHANNELS.POSTS);
-    pusherChannelRef.current = channel;
-
-    // Listen for new post events
-    channel.bind(PUSHER_EVENTS.NEW_POST, (data: any) => {
-      console.log('Pusher: Received new post event:', data);
-      
-      // Show notification
-      setHasNewPosts(true);
-      
-      // Show toast notification
-      toast.success('New posts available!', {
-        id: 'new-posts-pusher',
-        duration: 3000,
-      });
-      
-      // Only load automatically if autoRefresh is enabled
-      if (autoRefresh && !isRefreshing) {
-        refreshPosts();
-      }
-    });
-
-    // Listen for updated posts events
-    channel.bind(PUSHER_EVENTS.UPDATED_POST, (data: any) => {
-      console.log('Pusher: Received posts updated event:', data);
-      
-      if (data) {
-        // Find and update the post in the local state if it exists
-        const posts = [...reduxPosts];
-        const postIndex = posts.findIndex(p => p.id === data.id);
+    try {
+      // Subscribe to the posts channel with error handling
+      console.log('Attempting to subscribe to Pusher channel:', PUSHER_CHANNELS.POSTS);
+      const channel = pusherClient.subscribe(PUSHER_CHANNELS.POSTS);
+      pusherChannelRef.current = channel;
+  
+      // Listen for new post events
+      channel.bind(PUSHER_EVENTS.NEW_POST, (data: any) => {
+        console.log('Pusher: Received new post event:', data);
         
-        if (postIndex !== -1) {
-          // Update the post in place
-          posts[postIndex] = { ...posts[postIndex], ...data };
-          dispatch(setFeed(posts));
+        // Show notification
+        setHasNewPosts(true);
+        
+        // Show toast notification
+        toast.success('New posts available!', {
+          id: 'new-posts-pusher',
+          duration: 3000,
+        });
+        
+        // Only load automatically if autoRefresh is enabled
+        if (autoRefresh && !isRefreshing) {
+          refreshPosts();
+        }
+      });
+  
+      // Listen for updated posts events
+      channel.bind(PUSHER_EVENTS.UPDATED_POST, (data: any) => {
+        console.log('Pusher: Received posts updated event:', data);
+        
+        if (data) {
+          // Find and update the post in the local state if it exists
+          const posts = [...reduxPosts];
+          const postIndex = posts.findIndex(p => p.id === data.id);
           
-          // Save to localStorage
-          if (typeof window !== 'undefined') {
-            try {
-              localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
-            } catch (e) {
-              console.warn('Failed to save posts to localStorage:', e);
+          if (postIndex !== -1) {
+            // Update the post in place
+            posts[postIndex] = { ...posts[postIndex], ...data };
+            dispatch(setFeed(posts));
+            
+            // Save to localStorage
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
+              } catch (e) {
+                console.warn('Failed to save posts to localStorage:', e);
+              }
             }
+          } else {
+            // If post not found, show notification to refresh
+            setHasNewPosts(true);
           }
         } else {
-          // If post not found, show notification to refresh
+          // Otherwise show notification to refresh
           setHasNewPosts(true);
         }
-      } else {
-        // Otherwise show notification to refresh
-        setHasNewPosts(true);
-      }
-    });
-
-    // Clean up Pusher subscription on component unmount
-    return () => {
-      if (pusherChannelRef.current) {
-        pusherChannelRef.current.unbind_all();
-        pusherClient.unsubscribe(PUSHER_CHANNELS.POSTS);
-        console.log('Pusher: Unsubscribed from posts channel');
-      }
-    };
+      });
+  
+      // Add connection state monitoring
+      pusherClient.connection.bind('state_change', (states: any) => {
+        console.log('Pusher connection state changed:', states.current);
+        
+        if (states.current === 'failed') {
+          console.warn('Pusher connection failed. Will try to reconnect...');
+        }
+      });
+      
+      pusherClient.connection.bind('error', (err: any) => {
+        console.error('Pusher connection error:', err);
+      });
+  
+      // Clean up Pusher subscription on component unmount
+      return () => {
+        try {
+          if (pusherChannelRef.current) {
+            pusherChannelRef.current.unbind_all();
+            pusherClient.unsubscribe(PUSHER_CHANNELS.POSTS);
+            console.log('Pusher: Unsubscribed from posts channel');
+          }
+        } catch (error) {
+          console.error('Error unsubscribing from Pusher channel:', error);
+        }
+      };
+    } catch (pusherError) {
+      console.error('Failed to set up Pusher subscription:', pusherError);
+      return () => {};
+    }
   }, [dispatch, autoRefresh, isRefreshing, reduxPosts]);
 
   const handleTabChange = (tab: string) => {
@@ -527,48 +583,54 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       };
       
       // IMPORTANT: Save post using the API (server-side PostgreSQL with Pusher integration)
-      axios.post(`${getApiBaseUrl()}/api/posts`, newPost)
-        .then(response => {
-          if (response.status === 201) {
-            console.log('POST SAVED TO POSTGRESQL DATABASE VIA API SUCCESSFULLY');
-            // Post will be received via Pusher in real-time, no need to manually update the feed
-          } else {
-            console.error('FAILED TO SAVE POST TO POSTGRESQL DATABASE VIA API');
-            
-            // Fallback to direct database call if API fails
-            db.savePost(newPost)
-              .then((success: boolean) => {
-                if (success) {
-                  console.log('POST SAVED TO POSTGRESQL DATABASE DIRECTLY');
-                  // Add the post to Redux manually since we bypassed the API
-                  dispatch(setFeed([newPost, ...reduxPosts]));
-                } else {
-                  console.error('FAILED TO SAVE POST TO POSTGRESQL DATABASE DIRECTLY');
-                }
-              })
-              .catch((error: Error) => {
-                console.error('ERROR SAVING POST TO POSTGRESQL DATABASE DIRECTLY:', error);
-              });
-          }
-        })
-        .catch(error => {
-          console.error('ERROR SAVING POST TO POSTGRESQL DATABASE VIA API:', error);
-          
-          // Fallback to direct database call if API fails
-          db.savePost(newPost)
-            .then((success: boolean) => {
-              if (success) {
-                console.log('POST SAVED TO POSTGRESQL DATABASE DIRECTLY');
-                // Add the post to Redux manually since we bypassed the API
-                dispatch(setFeed([newPost, ...reduxPosts]));
-              } else {
-                console.error('FAILED TO SAVE POST TO POSTGRESQL DATABASE DIRECTLY');
-              }
-            })
-            .catch((error: Error) => {
-              console.error('ERROR SAVING POST TO POSTGRESQL DATABASE DIRECTLY:', error);
-            });
-        });
+      fetch(`${getApiBaseUrl()}/api/posts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
+        body: JSON.stringify(newPost),
+        mode: 'same-origin',
+        credentials: 'same-origin',
+      })
+      .then(response => {
+        if (response.ok) {
+          return response.json();
+        } else {
+          throw new Error(`API responded with status: ${response.status}`);
+        }
+      })
+      .then(data => {
+        console.log('POST SAVED TO POSTGRESQL DATABASE VIA API SUCCESSFULLY', data);
+        
+        // If Pusher is not working, add the post manually
+        const savedPost = data.data || newPost;
+        
+        // Add to Redux store manually as a fallback
+        if (!data.pusherEvent) {
+          console.log('Pusher event not triggered, manually updating UI');
+          dispatch(addPost(savedPost));
+        }
+      })
+      .catch(error => {
+        console.error('ERROR SAVING POST TO POSTGRESQL DATABASE VIA API:', error);
+        
+        // Fallback to direct database call if API fails
+        db.savePost(newPost)
+          .then((success: boolean) => {
+            if (success) {
+              console.log('POST SAVED TO POSTGRESQL DATABASE DIRECTLY');
+              // Add the post to Redux manually since we bypassed the API
+              dispatch(addPost(newPost));
+            } else {
+              console.error('FAILED TO SAVE POST TO POSTGRESQL DATABASE DIRECTLY');
+            }
+          })
+          .catch((dbError: Error) => {
+            console.error('ERROR SAVING POST TO POSTGRESQL DATABASE DIRECTLY:', dbError);
+          });
+      });
       
       // Create an aura points transaction for creating a post
       const transactionId = uuidv4();
