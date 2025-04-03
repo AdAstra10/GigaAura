@@ -14,6 +14,7 @@ export interface Post {
   authorWallet: string;
   authorUsername?: string;
   authorAvatar?: string;
+  authorName?: string;
   createdAt: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'video';
