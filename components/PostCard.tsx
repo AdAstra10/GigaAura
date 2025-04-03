@@ -2,7 +2,7 @@ import React, { useState, FormEvent, useEffect } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
-import { Post, Comment, likePost, unlikePost, addComment, sharePost } from '../lib/slices/postsSlice';
+import { Post, Comment, likePost, unlikePost, addComment, sharePost, bookmarkPost, unbookmarkPost } from '../lib/slices/postsSlice';
 import { addTransaction } from '../lib/slices/auraPointsSlice';
 import { addNotification } from '../lib/slices/notificationsSlice';
 import { useWallet } from '../contexts/WalletContext';
@@ -55,22 +55,29 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
   useEffect(() => {
     if (typeof window !== 'undefined' && connected && walletAddress) {
       // Check bookmarks
-      const bookmarksKey = `bookmarks-${walletAddress}`;
-      const savedBookmarks = localStorage.getItem(bookmarksKey);
+      const isBookmarkedInArray = post.bookmarkedBy?.includes(walletAddress) || false;
       
-      if (savedBookmarks) {
-        try {
-          const bookmarkedPosts = JSON.parse(savedBookmarks);
-          setIsBookmarked(bookmarkedPosts.includes(post.id));
-        } catch (error) {
-          console.error('Error parsing bookmarks from localStorage:', error);
+      // Fall back to localStorage if not in the post's bookmarkedBy array
+      if (!isBookmarkedInArray) {
+        const bookmarksKey = `bookmarks-${walletAddress}`;
+        const savedBookmarks = localStorage.getItem(bookmarksKey);
+        
+        if (savedBookmarks) {
+          try {
+            const bookmarkedPosts = JSON.parse(savedBookmarks);
+            setIsBookmarked(bookmarkedPosts.includes(post.id));
+          } catch (error) {
+            console.error('Error parsing bookmarks from localStorage:', error);
+          }
         }
+      } else {
+        setIsBookmarked(true);
       }
       
       // Check if already shared
       setHasShared(post.sharedBy?.includes(walletAddress) || false);
     }
-  }, [post.id, post.sharedBy, connected, walletAddress]);
+  }, [post.id, post.sharedBy, post.bookmarkedBy, connected, walletAddress]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -241,46 +248,43 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
       // Follow the user
       dispatch(followUser(post.authorWallet));
       
-      // Add Aura Points for following
-      dispatch(addTransaction({
-        id: uuidv4(),
-        amount: 10,
-        timestamp: new Date().toISOString(),
-        action: 'follower_gained',
-        counterpartyName: post.authorUsername || post.authorWallet.substring(0, 6),
-        counterpartyWallet: post.authorWallet
-      }));
-      
-      // Add notification
-      dispatch(addNotification({
-        type: 'follow',
-        message: `${username || walletAddress} started following you`,
-        fromWallet: walletAddress,
-        fromUsername: username || undefined,
-        postId: undefined,
-      }));
-      
-      toast.success(`You are now following ${post.authorUsername || post.authorWallet.substring(0, 6)}`);
-      
+      // Call the onFollow prop if provided
       if (onFollow) {
         onFollow();
       }
+      
+      // Add notification for the user being followed
+      dispatch(addNotification({
+        type: 'follow',
+        message: `${username || truncateWallet(walletAddress)} started following you`,
+        fromWallet: walletAddress,
+        fromUsername: username || undefined
+      }));
+      
+      // Add Aura Points transaction
+      dispatch(addTransaction({
+        id: uuidv4(),
+        amount: 10, // Points for following someone
+        timestamp: new Date().toISOString(),
+        action: 'follow_given',
+        counterpartyName: post.authorUsername || truncateWallet(post.authorWallet),
+        counterpartyWallet: post.authorWallet
+      }));
+      
+      toast.success(`You are now following ${post.authorUsername || truncateWallet(post.authorWallet)}`);
     } else {
       // Unfollow the user
       dispatch(unfollowUser(post.authorWallet));
-      toast.success(`You have unfollowed ${post.authorUsername || post.authorWallet.substring(0, 6)}`);
+      toast.success(`You unfollowed ${post.authorUsername || truncateWallet(post.authorWallet)}`);
     }
   };
   
   const handleViewProfile = () => {
-    if (post.authorWallet) {
-      router.push(`/profile/${post.authorWallet}`);
-    }
+    router.push(`/profile/${post.authorWallet}`);
   };
   
   const truncateWallet = (address: string) => {
-    if (!address) return '';
-    return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
+    return address ? `${address.substring(0, 6)}...${address.substring(address.length - 4)}` : '';
   };
   
   const handleSharePost = async () => {
@@ -297,11 +301,18 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
     if (!walletAddress) return;
     
     try {
-      // Call the sharePost action
+      // Update share count in Redux
       dispatch(sharePost({ postId: post.id, walletAddress }));
+      
+      // Update local state
       setHasShared(true);
       
-      // Add notification for the post creator if it's not the user's own post
+      // Call the onShare prop if provided
+      if (onShare) {
+        onShare();
+      }
+      
+      // Add notification for the post creator if it's not the current user
       if (post.authorWallet !== walletAddress) {
         dispatch(addNotification({
           type: 'share',
@@ -311,10 +322,10 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
           postId: post.id
         }));
         
-        // Add Aura Points transaction for post creator
+        // Add Aura Points transaction for post owner
         dispatch(addTransaction({
           id: uuidv4(),
-          amount: 15, // Points for getting a share
+          amount: 15, // 15 points for having your post shared
           timestamp: new Date().toISOString(),
           action: 'post_shared',
           counterpartyName: username || truncateWallet(walletAddress),
@@ -322,20 +333,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
         }));
       }
       
-      // Copy post URL to clipboard
-      const postUrl = `${window.location.origin}/post/${post.id}`;
-      navigator.clipboard.writeText(postUrl)
-        .then(() => {
-          toast.success('Post link copied to clipboard!');
-        })
-        .catch(err => {
-          console.error('Could not copy text: ', err);
-          toast.error('Failed to copy link');
-        });
-      
-      if (onShare) {
-        onShare();
-      }
+      toast.success('Post shared successfully!');
     } catch (error) {
       console.error('Error sharing post:', error);
       toast.error('Failed to share post. Please try again.');
@@ -359,7 +357,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
     const newBookmarkedState = !isBookmarked;
     setIsBookmarked(newBookmarkedState);
     
-    // Save to localStorage
+    // Save to localStorage for backup
     const bookmarksKey = `bookmarks-${walletAddress}`;
     const savedBookmarks = localStorage.getItem(bookmarksKey);
     let bookmarkedPosts = [];
@@ -381,7 +379,10 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
       if (!bookmarkedPosts.includes(post.id)) {
         bookmarkedPosts.push(post.id);
         
-        // Add notification for post creator (optional - silent bookmark)
+        // Use Redux action to update post in the store and database
+        dispatch(bookmarkPost({ postId: post.id, walletAddress }));
+        
+        // Add notification for post creator
         if (post.authorWallet !== walletAddress) {
           dispatch(addNotification({
             type: 'system',
@@ -390,80 +391,130 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
             fromUsername: username || undefined,
             postId: post.id
           }));
+          
+          // Award Aura Points to the post creator for engagement
+          dispatch(addTransaction({
+            id: uuidv4(),
+            amount: 5, // 5 points for received bookmark
+            timestamp: new Date().toISOString(),
+            action: 'like_received', // Using 'like_received' as a generic engagement reward
+            counterpartyName: username || truncateWallet(walletAddress),
+            counterpartyWallet: walletAddress
+          }));
         }
       }
       toast.success('Post bookmarked successfully!');
     } else {
       // Remove from bookmarks
       bookmarkedPosts = bookmarkedPosts.filter((id: string) => id !== post.id);
+      
+      // Use Redux action to update post in the store and database
+      dispatch(unbookmarkPost({ postId: post.id, walletAddress }));
+      
       toast.success('Post removed from bookmarks');
     }
     
-    // Save updated bookmarks back to localStorage
+    // Save updated bookmarks back to localStorage as backup
     localStorage.setItem(bookmarksKey, JSON.stringify(bookmarkedPosts));
   };
   
   const handleToggleComments = () => {
     setShowComments(!showComments);
   };
-
+  
   return (
-    <div className="border-b border-[var(--border-color)] p-4 hover:bg-gray-50 dark:hover:bg-gray-900/20 transition-colors cursor-pointer">
+    <div className="border border-[var(--border-color)] rounded-lg bg-white dark:bg-gray-900 p-4 mb-4 overflow-hidden transition-shadow hover:shadow-md">
       <div className="flex">
-        <div className="flex-shrink-0 mr-3">
+        <div className="flex-shrink-0 mr-4">
           <div className="w-12 h-12 rounded-full overflow-hidden">
             {post.authorAvatar ? (
-              <img 
+              <Image 
                 src={post.authorAvatar} 
                 alt={post.authorUsername || 'User'} 
-                className="w-full h-full object-cover"
+                width={48} 
+                height={48} 
+                className="object-cover"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gray-300 dark:bg-gray-700 text-white">
-                {post.authorUsername?.charAt(0)?.toUpperCase() || '?'}
+              <div className="w-full h-full bg-gradient-to-r from-purple-400 to-purple-600 flex items-center justify-center text-white font-bold">
+                {post.authorUsername?.[0] || post.authorWallet.substring(0, 2)}
               </div>
             )}
           </div>
         </div>
         
-        <div className="flex-1">
-          <div className="flex items-center">
-            <span className="font-bold text-black dark:text-white">{post.authorUsername || 'Anonymous'}</span>
-            {post.authorWallet && (
-              <span className="text-gray-500 ml-2">@{truncateWallet(post.authorWallet)}</span>
-            )}
-            <span className="text-gray-500 mx-1">·</span>
-            <span className="text-gray-500">{formatDate(post.createdAt)}</span>
+        <div className="flex-grow">
+          {/* Author Header */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center">
+              <button 
+                onClick={handleViewProfile}
+                className="font-bold hover:underline text-black dark:text-white"
+              >
+                {post.authorUsername || truncateWallet(post.authorWallet)}
+              </button>
+              
+              {post.authorWallet !== walletAddress && (
+                <button 
+                  onClick={handleFollowToggle}
+                  className={`ml-2 text-xs py-1 px-2 rounded-full ${
+                    isFollowing 
+                      ? 'bg-[#F6B73C]/10 text-[#F6B73C] hover:bg-[#F6B73C]/20' 
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  {isFollowing ? 'Following' : 'Follow'}
+                </button>
+              )}
+              
+              <span className="mx-2 text-gray-500">•</span>
+              <span className="text-gray-500 text-sm">
+                {formatDate(post.createdAt)}
+              </span>
+            </div>
+            
+            <div className="text-gray-500">
+              <button 
+                className="hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full p-1"
+                aria-label="More options"
+              >
+                <FaEllipsisH />
+              </button>
+            </div>
           </div>
           
-          <div className="mt-1">
-            <p className="text-black dark:text-white whitespace-pre-line">{post.content}</p>
+          {/* Post Content */}
+          <div className="mb-3 text-black dark:text-white whitespace-pre-wrap break-words">
+            {post.content}
           </div>
           
+          {/* Media */}
           {post.mediaUrl && (
-            <div className="mt-3 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+            <div className="mb-3 rounded-lg overflow-hidden">
               {post.mediaType === 'image' ? (
-                <img 
+                <Image 
                   src={post.mediaUrl} 
                   alt="Post media" 
-                  className="w-full h-auto"
+                  width={500} 
+                  height={300} 
+                  className="w-full object-cover max-h-96"
                 />
               ) : post.mediaType === 'video' ? (
                 <video 
                   src={post.mediaUrl} 
                   controls 
-                  className="w-full"
-                ></video>
+                  className="w-full max-h-96"
+                />
               ) : null}
             </div>
           )}
           
-          {/* Post Actions */}
-          <div className="flex justify-between mt-3 max-w-md">
+          {/* Interaction Buttons */}
+          <div className="flex justify-between mt-4">
             <div className="flex items-center group">
               <button 
                 onClick={handleToggleComments}
-                aria-label="Reply"
+                aria-label="Comment"
                 className="p-2 rounded-full text-gray-500 group-hover:text-blue-500 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/10"
               >
                 <ChatBubbleLeftIcon className="h-5 w-5" />

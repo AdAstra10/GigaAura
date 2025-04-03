@@ -24,6 +24,7 @@ export interface Post {
   likedBy: string[];
   isLiked?: boolean;
   sharedBy?: string[];
+  bookmarkedBy?: string[];
 }
 
 export interface Comment {
@@ -219,6 +220,81 @@ export const postsSlice = createSlice({
           });
       }
     },
+    bookmarkPost: (state, action: PayloadAction<{ postId: string; walletAddress: string }>) => {
+      const { postId, walletAddress } = action.payload;
+      
+      const updatePost = (post: Post) => {
+        if (post.id === postId) {
+          // Initialize bookmarkedBy array if it doesn't exist
+          if (!post.bookmarkedBy) {
+            post.bookmarkedBy = [];
+          }
+          
+          // Add wallet to bookmarkedBy if not already there
+          if (!post.bookmarkedBy.includes(walletAddress)) {
+            post.bookmarkedBy.push(walletAddress);
+          }
+        }
+        return post;
+      };
+      
+      state.feed = state.feed.map(updatePost);
+      state.userPosts = state.userPosts.map(updatePost);
+      
+      if (state.currentPost && state.currentPost.id === postId) {
+        state.currentPost = updatePost({ ...state.currentPost });
+      }
+      
+      // Cache updated lists
+      cacheFeed(state.feed);
+      cacheUserPosts(state.userPosts);
+      
+      // Sync the updated post to Firestore
+      const updatedPost = state.feed.find(post => post.id === postId);
+      if (updatedPost) {
+        db.updatePost(updatedPost)
+          .then(success => {
+            console.log(`Bookmark ${success ? 'saved to' : 'failed to save to'} database`);
+          })
+          .catch(error => {
+            console.error('Error syncing bookmark to database:', error);
+          });
+      }
+    },
+    unbookmarkPost: (state, action: PayloadAction<{ postId: string; walletAddress: string }>) => {
+      const { postId, walletAddress } = action.payload;
+      
+      const updatePost = (post: Post) => {
+        if (post.id === postId && post.bookmarkedBy) {
+          // Remove wallet from bookmarkedBy
+          post.bookmarkedBy = post.bookmarkedBy.filter(wallet => wallet !== walletAddress);
+        }
+        return post;
+      };
+      
+      state.feed = state.feed.map(updatePost);
+      state.userPosts = state.userPosts.map(updatePost);
+      
+      if (state.currentPost && state.currentPost.id === postId) {
+        state.currentPost = updatePost({ ...state.currentPost });
+      }
+      
+      // Cache updated lists
+      cacheFeed(state.feed);
+      cacheUserPosts(state.userPosts);
+      
+      // Sync the updated post to Firestore
+      const updatedPost = state.feed.find(post => post.id === postId);
+      if (updatedPost) {
+        db.updatePost(updatedPost)
+          .then(success => {
+            console.log(`Unbookmark ${success ? 'saved to' : 'failed to save to'} database`);
+          })
+          .catch(error => {
+            console.error('Error syncing unbookmark to database:', error);
+          });
+      }
+    },
     setCurrentPost: (state, action: PayloadAction<Post>) => {
       state.currentPost = action.payload;
     },
@@ -310,6 +386,8 @@ export const {
   likePost,
   unlikePost,
   sharePost,
+  bookmarkPost,
+  unbookmarkPost,
   setCurrentPost,
   setComments,
   addComment,

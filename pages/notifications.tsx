@@ -8,12 +8,16 @@ import Sidebar from '../components/Sidebar';
 import AuraSidebar from '../components/AuraSidebar';
 import { v4 as uuidv4 } from 'uuid';
 import Link from 'next/link';
+import { useWallet } from '../contexts/WalletContext';
+import db from '../giga-aura/services/db-init';
+import toast from 'react-hot-toast';
 
 const NotificationsPage = () => {
   const dispatch = useDispatch();
   const { items, unreadCount } = useSelector((state: RootState) => state.notifications);
   const [isLoading, setIsLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread'>('all');
+  const { connected, walletAddress } = useWallet();
 
   // Load notifications on component mount
   useEffect(() => {
@@ -21,81 +25,112 @@ const NotificationsPage = () => {
       setIsLoading(true);
 
       try {
-        // Simulating API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        if (!connected || !walletAddress) {
+          setIsLoading(false);
+          return;
+        }
 
-        // Generate mock notifications
-        const now = Date.now();
-        const mockNotifications: Notification[] = [
-          {
-            id: uuidv4(),
-            type: 'like',
-            message: 'CryptoWhale liked your post',
-            fromWallet: '3xGh..p7F1',
-            fromUsername: 'CryptoWhale',
-            fromAvatar: 'https://cloudinary.com/avatar1.jpg',
-            postId: 'post-123',
-            timestamp: new Date(now - 1000 * 60 * 10).toISOString(), // 10 minutes ago
-            read: false
-          },
-          {
-            id: uuidv4(),
-            type: 'comment',
-            message: 'SolanaBuilder commented on your post: "Great insights!"',
-            fromWallet: '7kJt..r2D5',
-            fromUsername: 'SolanaBuilder',
-            postId: 'post-456',
-            commentId: 'comment-123',
-            timestamp: new Date(now - 1000 * 60 * 30).toISOString(), // 30 minutes ago
-            read: false
-          },
-          {
-            id: uuidv4(),
-            type: 'follow',
-            message: 'NFTCollector started following you',
-            fromWallet: '9pWb..z8T2',
-            fromUsername: 'NFTCollector',
-            timestamp: new Date(now - 1000 * 60 * 120).toISOString(), // 2 hours ago
-            read: true
-          },
-          {
-            id: uuidv4(),
-            type: 'system',
-            message: 'You earned 50 Aura Points this week! Keep engaging to earn more.',
-            timestamp: new Date(now - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
-            read: true
-          },
-          {
-            id: uuidv4(),
-            type: 'share',
-            message: 'Web3Visionary shared your post',
-            fromWallet: '2yFR..p8L3',
-            fromUsername: 'Web3Visionary',
-            postId: 'post-789',
-            timestamp: new Date(now - 1000 * 60 * 60 * 36).toISOString(), // 1.5 days ago
-            read: true
-          }
-        ];
+        // Get notifications from database
+        const notifications = await db.getNotifications(walletAddress);
+        
+        if (notifications && notifications.length > 0) {
+          dispatch(setNotifications(notifications));
+          console.log(`Loaded ${notifications.length} notifications from database`);
+        } else {
+          // If no notifications found, generate some mock notifications for testing
+          const now = Date.now();
+          const mockNotifications: Notification[] = [
+            {
+              id: uuidv4(),
+              type: 'like',
+              message: 'CryptoWhale liked your post',
+              fromWallet: '3xGh..p7F1',
+              fromUsername: 'CryptoWhale',
+              fromAvatar: 'https://cloudinary.com/avatar1.jpg',
+              postId: 'post-123',
+              timestamp: new Date(now - 1000 * 60 * 10).toISOString(), // 10 minutes ago
+              read: false
+            },
+            {
+              id: uuidv4(),
+              type: 'comment',
+              message: 'SolanaBuilder commented on your post: "Great insights!"',
+              fromWallet: '7kJt..r2D5',
+              fromUsername: 'SolanaBuilder',
+              postId: 'post-456',
+              commentId: 'comment-123',
+              timestamp: new Date(now - 1000 * 60 * 30).toISOString(), // 30 minutes ago
+              read: false
+            },
+            {
+              id: uuidv4(),
+              type: 'follow',
+              message: 'NFTCollector started following you',
+              fromWallet: '9pWb..z8T2',
+              fromUsername: 'NFTCollector',
+              timestamp: new Date(now - 1000 * 60 * 120).toISOString(), // 2 hours ago
+              read: true
+            },
+            {
+              id: uuidv4(),
+              type: 'system',
+              message: 'You earned 50 Aura Points this week! Keep engaging to earn more.',
+              timestamp: new Date(now - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
+              read: true
+            },
+            {
+              id: uuidv4(),
+              type: 'share',
+              message: 'Web3Visionary shared your post',
+              fromWallet: '2yFR..p8L3',
+              fromUsername: 'Web3Visionary',
+              postId: 'post-789',
+              timestamp: new Date(now - 1000 * 60 * 60 * 36).toISOString(), // 1.5 days ago
+              read: true
+            }
+          ];
 
-        dispatch(setNotifications(mockNotifications));
+          dispatch(setNotifications(mockNotifications));
+          console.log('Using mock notifications - no real notifications found');
+        }
       } catch (error) {
         console.error('Failed to load notifications:', error);
+        toast.error('Failed to load notifications');
       } finally {
         setIsLoading(false);
       }
     };
 
     loadNotifications();
-  }, [dispatch]);
+  }, [dispatch, connected, walletAddress]);
 
   // Mark notification as read when clicked
-  const handleNotificationClick = (notificationId: string) => {
+  const handleNotificationClick = async (notificationId: string) => {
     dispatch(markAsRead(notificationId));
+    
+    if (connected && walletAddress) {
+      try {
+        // Update in database
+        await db.markNotificationAsRead(notificationId, walletAddress);
+      } catch (error) {
+        console.error('Failed to mark notification as read in database:', error);
+      }
+    }
   };
 
   // Mark all notifications as read
-  const handleMarkAllAsRead = () => {
+  const handleMarkAllAsRead = async () => {
     dispatch(markAllAsRead());
+    
+    if (connected && walletAddress) {
+      try {
+        // Update in database
+        await db.markAllNotificationsAsRead(walletAddress);
+        toast.success('All notifications marked as read');
+      } catch (error) {
+        console.error('Failed to mark all notifications as read in database:', error);
+      }
+    }
   };
 
   // Filter notifications based on activeFilter
