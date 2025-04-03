@@ -15,8 +15,8 @@ import PostCard from './PostCard';
 import CreatePostForm from './CreatePostForm';
 import { store } from '../lib/store';
 import { cacheFeed, cacheUserPosts } from '../services/cache';
-import db from '../services/db';
-import { listenToPosts, getPosts, cleanupAllListeners } from '../services/db';
+import db from '../giga-aura/services/db-init';
+import axios from 'axios';
 
 // Import the emoji picker dynamically to avoid SSR issues
 // IMPORTANT: Keep this import outside of the component to prevent rendering issues
@@ -130,6 +130,20 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   // Get posts from Redux store
   const reduxPosts = useSelector((state: RootState) => state.posts.feed);
   const reduxComments = useSelector((state: RootState) => state.posts.comments);
+  
+  // Add auto-refresh functionality
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Function to get the API base URL
+  const getApiBaseUrl = () => {
+    // In production, use the deployment URL
+    if (process.env.NODE_ENV === 'production') {
+      return 'https://gigaaura.com';
+    }
+    // In development, use localhost
+    return 'http://localhost:3000';
+  };
 
   useEffect(() => {
     const loadPosts = async () => {
@@ -142,43 +156,53 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           try {
             const localPosts = JSON.parse(localPostsString);
             if (Array.isArray(localPosts) && localPosts.length > 0) {
-              dispatch(setFeed(localPosts));
-              console.log('Loaded posts from local storage:', localPosts.length);
+              // Sort posts to ensure newest are at the top
+              const sortedPosts = [...localPosts].sort(
+                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+              );
+              dispatch(setFeed(sortedPosts));
+              console.log('Loaded posts from local storage:', sortedPosts.length);
             }
           } catch (e) {
             console.warn('Failed to parse local posts:', e);
           }
         }
         
-        // Then fetch the latest posts from Firestore
-        const firebasePosts = await getPosts();
-        if (firebasePosts && firebasePosts.length > 0) {
-          dispatch(setFeed(firebasePosts));
-          console.log('Loaded posts from Firebase:', firebasePosts.length);
+        // Then fetch the latest posts from API (server-side PostgreSQL)
+        try {
+          const response = await axios.get(`${getApiBaseUrl()}/api/posts`);
+          if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+            // Posts are already sorted in the API
+            const posts = response.data;
+            dispatch(setFeed(posts));
+            console.log('Loaded posts from API (PostgreSQL):', posts.length);
+            
+            // Save to localStorage as backup
+            localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
+          }
+        } catch (apiError) {
+          console.error('Error fetching posts from API:', apiError);
           
-          // Save to localStorage as backup
-          localStorage.setItem('giga-aura-posts', JSON.stringify(firebasePosts));
+          // Fall back to direct database call if API fails
+          try {
+            const databasePosts = await db.getPosts();
+            if (databasePosts && databasePosts.length > 0) {
+              // Sort posts to ensure newest are at the top
+              const sortedPosts = [...databasePosts].sort(
+                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+              );
+              dispatch(setFeed(sortedPosts));
+              console.log('Loaded posts from direct database call:', sortedPosts.length);
+              
+              // Save to localStorage as backup
+              localStorage.setItem('giga-aura-posts', JSON.stringify(sortedPosts));
+            }
+          } catch (dbError) {
+            console.error('Error loading posts from database:', dbError);
+          }
         }
         
-        // Set up real-time listener for post updates
-        const unsubscribe = listenToPosts((updatedPosts) => {
-          if (updatedPosts && updatedPosts.length > 0) {
-            dispatch(setFeed(updatedPosts));
-            console.log('Real-time posts update:', updatedPosts.length);
-            
-            // Update localStorage backup
-            localStorage.setItem('giga-aura-posts', JSON.stringify(updatedPosts));
-          }
-        });
-        
         setLoading(false);
-        
-        // Cleanup function to remove listener when component unmounts
-        return () => {
-          console.log('Cleaning up Feed listeners');
-          unsubscribe();
-          cleanupAllListeners();
-        };
       } catch (error) {
         console.error('Error loading posts:', error);
         setLoading(false);
@@ -204,8 +228,24 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       }
     };
     
+    // Load posts initially
     loadPosts();
-  }, [dispatch, walletAddress]);
+    
+    // Set up auto-refresh interval (every 30 seconds)
+    if (autoRefresh) {
+      refreshIntervalRef.current = setInterval(() => {
+        console.log('Auto-refreshing posts...');
+        loadPosts();
+      }, 30000); // 30 seconds
+    }
+    
+    // Cleanup interval on component unmount
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
+  }, [dispatch, walletAddress, autoRefresh]);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -234,7 +274,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         mediaType = mediaFile.type.startsWith('image/') ? 'image' : 'video';
       }
       
-      // Create a complete post object (not just the data)
+      // Create a complete post object
       const newPost: Post = {
         id: uuidv4(),
         content,
@@ -262,39 +302,82 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         counterpartyWallet: 'system'
       };
       
-      // IMPORTANT: First save post to Firestore
-      db.savePost(newPost)
-        .then(success => {
-          if (success) {
-            console.log('POST SAVED TO CLOUD DATABASE SUCCESSFULLY');
+      // IMPORTANT: Save post using the API (server-side PostgreSQL)
+      axios.post(`${getApiBaseUrl()}/api/posts`, newPost)
+        .then(response => {
+          if (response.status === 201) {
+            console.log('POST SAVED TO POSTGRESQL DATABASE VIA API SUCCESSFULLY');
           } else {
-            console.error('FAILED TO SAVE POST TO CLOUD DATABASE');
+            console.error('FAILED TO SAVE POST TO POSTGRESQL DATABASE VIA API');
+            
+            // Fallback to direct database call if API fails
+            db.savePost(newPost)
+              .then((success: boolean) => {
+                if (success) {
+                  console.log('POST SAVED TO POSTGRESQL DATABASE DIRECTLY');
+                } else {
+                  console.error('FAILED TO SAVE POST TO POSTGRESQL DATABASE DIRECTLY');
+                }
+              })
+              .catch((error: Error) => {
+                console.error('ERROR SAVING POST TO POSTGRESQL DATABASE DIRECTLY:', error);
+              });
           }
         })
         .catch(error => {
-          console.error('ERROR SAVING POST TO CLOUD:', error);
+          console.error('ERROR SAVING POST TO POSTGRESQL DATABASE VIA API:', error);
+          
+          // Fallback to direct database call if API fails
+          db.savePost(newPost)
+            .then((success: boolean) => {
+              if (success) {
+                console.log('POST SAVED TO POSTGRESQL DATABASE DIRECTLY');
+              } else {
+                console.error('FAILED TO SAVE POST TO POSTGRESQL DATABASE DIRECTLY');
+              }
+            })
+            .catch((error: Error) => {
+              console.error('ERROR SAVING POST TO POSTGRESQL DATABASE DIRECTLY:', error);
+            });
         });
       
       // Add the post to Redux IMMEDIATELY so it shows up in the feed
+      // Add the new post at the top of the feed
       dispatch(setFeed([newPost, ...reduxPosts]));
       
-      // Also add transaction to Firestore
+      // Also add transaction to PostgreSQL database
       if (walletAddress) {
         db.addTransaction(walletAddress, newTransaction)
-          .then(success => {
+          .then((success: boolean) => {
             if (success) {
-              console.log('TRANSACTION SAVED TO CLOUD DATABASE SUCCESSFULLY');
+              console.log('TRANSACTION SAVED TO POSTGRESQL DATABASE SUCCESSFULLY');
             } else {
-              console.error('FAILED TO SAVE TRANSACTION TO CLOUD DATABASE');
+              console.error('FAILED TO SAVE TRANSACTION TO POSTGRESQL DATABASE');
             }
           })
-          .catch(error => {
-            console.error('ERROR SAVING TRANSACTION TO CLOUD:', error);
+          .catch((error: Error) => {
+            console.error('ERROR SAVING TRANSACTION TO POSTGRESQL DATABASE:', error);
           });
         
         // Add transaction to Redux state
         dispatch(addTransaction(newTransaction));
       }
+      
+      // Manually trigger a refresh to ensure the latest posts are displayed
+      axios.get(`${getApiBaseUrl()}/api/posts`)
+        .then(response => {
+          if (response.status === 200 && Array.isArray(response.data) && response.data.length > 0) {
+            // Posts are already sorted in the API
+            const posts = response.data;
+            dispatch(setFeed(posts));
+            
+            // Save to localStorage as backup
+            localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
+          }
+        })
+        .catch(error => {
+          console.error('Error refreshing posts after creating new post:', error);
+        });
       
       // Success message
       toast.success('Post created successfully!');
@@ -304,6 +387,47 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       toast.error('Failed to create post. Please try again.');
       return false;
     }
+  };
+
+  const handleRefresh = () => {
+    setLoading(true);
+    
+    // Fetch posts from API (server-side PostgreSQL)
+    axios.get(`${getApiBaseUrl()}/api/posts`)
+      .then(response => {
+        if (response.status === 200 && Array.isArray(response.data) && response.data.length > 0) {
+          // Posts are already sorted in the API
+          const posts = response.data;
+          dispatch(setFeed(posts));
+          
+          // Save to localStorage as backup
+          localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
+        }
+        setLoading(false);
+      })
+      .catch(error => {
+        console.error('Error refreshing posts from API:', error);
+        
+        // Fallback to direct database call if API fails
+        db.getPosts()
+          .then(posts => {
+            if (posts && posts.length > 0) {
+              // Sort posts to ensure newest are at the top
+              const sortedPosts = [...posts].sort(
+                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+              );
+              dispatch(setFeed(sortedPosts));
+              
+              // Save to localStorage as backup
+              localStorage.setItem('giga-aura-posts', JSON.stringify(sortedPosts));
+            }
+            setLoading(false);
+          })
+          .catch(dbError => {
+            console.error('Error refreshing posts from database:', dbError);
+            setLoading(false);
+          });
+      });
   };
 
   if (error) {
@@ -353,6 +477,19 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
             )}
           </button>
         </div>
+        
+        {/* Add manual refresh button */}
+        <div className="absolute right-4 top-4">
+          <button
+            onClick={handleRefresh}
+            className="text-gray-500 hover:text-black dark:hover:text-white p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+            title="Refresh posts"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
       </div>
       
       {/* Create Post Section */}
@@ -372,12 +509,10 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
             <p className="text-gray-500 mt-2">Create the first post or follow some users to see their posts here!</p>
           </div>
         ) : (
-          // Sort posts by created date, newest first
-          [...reduxPosts]
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-            .map(post => (
-              <PostCard key={post.id} post={post} />
-            ))
+          // Posts are already sorted by created date, newest first in the Redux store
+          reduxPosts.map(post => (
+            <PostCard key={post.id} post={post} />
+          ))
         )}
       </div>
     </div>

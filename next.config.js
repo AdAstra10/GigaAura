@@ -8,6 +8,25 @@ const nextConfig = {
   },
   // Optimize for production build
   productionBrowserSourceMaps: false,
+  
+  // Configure webpack to handle PostgreSQL module on the client side
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Don't resolve 'pg', 'fs', 'net', 'tls', or 'dns' modules on the client side
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        pg: false,
+        fs: false,
+        net: false,
+        tls: false,
+        dns: false,
+        path: false,
+        os: false,
+      };
+    }
+    return config;
+  },
+  
   // Handle custom domain and security headers
   async headers() {
     return [

@@ -4,7 +4,6 @@
  * with local storage fallbacks for offline functionality
  */
 
-import { Pool } from 'pg';
 import { Post, Comment } from '@lib/slices/postsSlice';
 import { AuraPointsState, AuraTransaction } from '@lib/slices/auraPointsSlice';
 
@@ -20,8 +19,24 @@ const pgConfig = {
   }
 };
 
+// Only import pg module on the server side
 // Create a connection pool to the PostgreSQL database
-const pool = new Pool(pgConfig);
+let pool: any = null;
+
+// Dynamically import pg only on the server
+if (typeof window === 'undefined') {
+  // Server-side code
+  import('pg').then(pg => {
+    const { Pool } = pg;
+    pool = new Pool(pgConfig);
+    console.log('PostgreSQL pool created on server side');
+  }).catch(err => {
+    console.error('Failed to import pg module:', err);
+  });
+} else {
+  // Client-side code - provide a mock pool
+  console.log('Running in browser, using local storage only');
+}
 
 // In-memory post cache for immediate display without waiting for DB
 let postsCache: Post[] = [];
@@ -169,9 +184,9 @@ export const savePost = async (post: Post): Promise<boolean> => {
     }
   }
   
-  // If we know there are database connection issues, don't attempt to save to the database
-  if (hasDatabaseConnectionIssue) {
-    console.log('Skipping database save due to known connection issues');
+  // If we know there are database connection issues or running in browser, don't attempt to save to the database
+  if (hasDatabaseConnectionIssue || typeof window !== 'undefined' || !pool) {
+    console.log('Skipping database save due to client-side execution or connection issues');
     return true; // Consider it a success since we saved locally
   }
 
@@ -234,9 +249,9 @@ export const savePost = async (post: Post): Promise<boolean> => {
  * Get all posts from the database
  */
 export const getPosts = async (): Promise<Post[]> => {
-  // If we know there are database connection issues, skip database calls and use local cache directly
-  if (hasDatabaseConnectionIssue) {
-    console.log('Using local cache due to database connection issues');
+  // If we know there are database connection issues, or running in browser, skip database calls and use local cache directly
+  if (hasDatabaseConnectionIssue || typeof window !== 'undefined' || !pool) {
+    console.log('Using local cache due to client-side execution or database connection issues');
     return getLocalPosts();
   }
 
@@ -867,6 +882,133 @@ export const updateUser = async (user: any): Promise<boolean> => {
   }
 };
 
+/**
+ * Clean up database connections
+ * This should be called when the app is shutting down or changing routes
+ */
+export const cleanupDatabase = async (): Promise<void> => {
+  // If running in the browser or pool is null, just return
+  if (typeof window !== 'undefined' || !pool) {
+    console.log('Skipping PostgreSQL cleanup in browser environment');
+    return;
+  }
+  
+  try {
+    console.log('Cleaning up PostgreSQL database connections');
+    
+    // Close the connection pool
+    await pool.end();
+    
+    console.log('PostgreSQL connection pool closed successfully');
+  } catch (error) {
+    console.error('Error closing PostgreSQL connection pool:', error);
+  }
+};
+
+/**
+ * Add a transaction to a user's aura points
+ */
+export const addTransaction = async (walletAddress: string, transaction: AuraTransaction): Promise<boolean> => {
+  if (!walletAddress) return false;
+  
+  // Always update localStorage first for immediate feedback
+  if (typeof window !== 'undefined') {
+    try {
+      // Get existing aura points
+      const pointsString = localStorage.getItem(`giga-aura-points-${walletAddress}`);
+      let auraPoints: AuraPointsState;
+      
+      if (pointsString) {
+        try {
+          // Try to parse existing data
+          auraPoints = JSON.parse(pointsString);
+        } catch (e) {
+          console.warn('Failed to parse aura points from localStorage, creating new record');
+          auraPoints = { totalPoints: 100, transactions: [] };
+        }
+      } else {
+        // Create new aura points record
+        auraPoints = { totalPoints: 100, transactions: [] };
+      }
+      
+      // Add transaction to the beginning of the list
+      auraPoints.transactions = [transaction, ...auraPoints.transactions];
+      
+      // Update total points
+      auraPoints.totalPoints += transaction.amount;
+      
+      // Save back to localStorage
+      localStorage.setItem(`giga-aura-points-${walletAddress}`, JSON.stringify(auraPoints));
+      console.log(`Transaction added to aura points in localStorage for ${walletAddress}:`, transaction);
+    } catch (e) {
+      console.warn('Failed to add transaction to aura points in localStorage:', e);
+    }
+  }
+  
+  // If we know there are database connection issues, skip DB operations
+  if (hasDatabaseConnectionIssue) {
+    console.log('Skipping database transaction addition due to known connection issues');
+    return true; // Consider it a success since we updated locally
+  }
+  
+  try {
+    const client = await pool.connect();
+    
+    try {
+      // First get current aura points
+      const result = await client.query(`
+        SELECT * FROM aura_points WHERE wallet_address = $1
+      `, [walletAddress]);
+      
+      let auraPoints: AuraPointsState;
+      
+      if (result.rows.length === 0) {
+        // If user doesn't have aura points yet, create new record
+        auraPoints = {
+          totalPoints: 100, // Default starting points
+          transactions: []
+        };
+      } else {
+        // Parse existing aura points
+        const row = result.rows[0];
+        auraPoints = {
+          totalPoints: row.points || 100,
+          transactions: Array.isArray(row.transactions) ? row.transactions : []
+        };
+      }
+      
+      // Add transaction to the beginning of the list
+      auraPoints.transactions = [transaction, ...auraPoints.transactions];
+      
+      // Update total points
+      auraPoints.totalPoints += transaction.amount;
+      
+      // Save updated aura points to database
+      await client.query(`
+        INSERT INTO aura_points (wallet_address, points, transactions, updated_at)
+        VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+        ON CONFLICT (wallet_address) DO UPDATE SET
+          points = $2,
+          transactions = $3,
+          updated_at = CURRENT_TIMESTAMP
+      `, [walletAddress, auraPoints.totalPoints, JSON.stringify(auraPoints.transactions)]);
+      
+      console.log(`Transaction added to aura points in database for ${walletAddress}:`, transaction);
+      return true;
+    } catch (error) {
+      handleDatabaseError(error);
+      console.error(`Error adding transaction to aura points for ${walletAddress}:`, error);
+      return true; // Consider it a success since we updated locally
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    handleDatabaseError(error);
+    console.error('Error connecting to database pool:', error);
+    return true; // Consider it a success since we updated locally
+  }
+};
+
 export default {
   savePost,
   getPosts,
@@ -876,5 +1018,7 @@ export default {
   getAuraPoints,
   updateAuraPoints,
   getUser,
-  updateUser
+  updateUser,
+  cleanupDatabase,
+  addTransaction
 }; 

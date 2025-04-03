@@ -9,7 +9,11 @@ import { loadWalletPoints } from '../lib/slices/auraPointsSlice';
 import { updateProfile } from '../lib/slices/userSlice';
 import '../styles/globals.css';
 import Router, { useRouter } from 'next/router';
-import { cleanupFirebase } from '../services/db';
+// Import the PostgreSQL database service instead of the legacy Firebase service
+import db from '../giga-aura/services/db-init';
+
+// Initialize the PostgreSQL database service
+console.log('Initializing GigaAura with PostgreSQL database');
 
 // Force dynamic rendering to ensure nonces are properly handled
 export const dynamic = 'force-dynamic';
@@ -325,19 +329,19 @@ function MyApp({ Component, pageProps }: AppProps) {
     };
   }, []);
   
-  // Handle route changes and cleanup Firebase
+  // Handle route changes and cleanup database connections
   useEffect(() => {
     const handleRouteChangeStart = () => {
-      // Clean up Firebase connections on route change
-      cleanupFirebase()
-        .then(() => console.log('Firebase cleaned up on route change'))
-        .catch(err => console.error('Error cleaning up Firebase:', err));
+      // Clean up database connections on route change
+      db.cleanupDatabase()
+        .then(() => console.log('Database connections cleaned up on route change'))
+        .catch((err: Error) => console.error('Error cleaning up database connections:', err));
     };
 
     const handleBeforeUnload = () => {
-      cleanupFirebase()
-        .then(() => console.log('Firebase cleaned up before page unload'))
-        .catch(err => console.error('Error cleaning up Firebase:', err));
+      db.cleanupDatabase()
+        .then(() => console.log('Database connections cleaned up before page unload'))
+        .catch((err: Error) => console.error('Error cleaning up database connections:', err));
     };
 
     // Add event listeners
