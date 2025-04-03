@@ -175,13 +175,41 @@ const handleDatabaseError = (error: any): void => {
 };
 
 /**
- * Helper function to safely parse JSON with error handling
+ * Helper function to check if a string is valid JSON before attempting to parse
  */
-const safeJsonParse = (jsonString: string, fallback: any = null) => {
-  if (!jsonString) return fallback;
+const isValidJSON = (str: string): boolean => {
+  if (typeof str !== 'string') return false;
   
   try {
-    return JSON.parse(jsonString);
+    JSON.parse(str);
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
+/**
+ * Helper function to safely parse JSON with error handling
+ */
+const safeJsonParse = (data: any, fallback: any = null) => {
+  // If it's already an object, return it directly
+  if (typeof data === 'object' && data !== null) {
+    return data;
+  }
+  
+  // If not a string, return fallback
+  if (typeof data !== 'string' || !data) {
+    return fallback;
+  }
+  
+  // Check if it's valid JSON first
+  if (!isValidJSON(data)) {
+    console.error('Invalid JSON string:', data);
+    return fallback;
+  }
+  
+  try {
+    return JSON.parse(data);
   } catch (error) {
     console.error('Error parsing JSON:', error);
     return fallback;
@@ -334,8 +362,8 @@ export const getPosts = async (): Promise<Post[]> => {
                 // But override with the latest DB values for critical fields
                 likes: row.likes || 0,
                 shares: row.shares || 0,
-                likedBy: Array.isArray(row.liked_by) ? row.liked_by : [],
-                comments: Array.isArray(row.comments) ? row.comments : []
+                likedBy: safeJsonParse(row.liked_by, []),
+                comments: safeJsonParse(row.comments, [])
               };
             } catch (parseError) {
               console.error('Failed to parse post data JSON:', parseError);
@@ -351,8 +379,8 @@ export const getPosts = async (): Promise<Post[]> => {
             authorName: row.author_name || '',
             createdAt: row.created_at?.toISOString() || new Date().toISOString(),
             likes: row.likes || 0,
-            likedBy: Array.isArray(row.liked_by) ? row.liked_by : [],
-            comments: Array.isArray(row.comments) ? row.comments : [],
+            likedBy: safeJsonParse(row.liked_by, []),
+            comments: safeJsonParse(row.comments, []),
             shares: row.shares || 0,
           };
         } catch (e) {
@@ -439,8 +467,8 @@ export const getUserPosts = async (walletAddress: string): Promise<Post[]> => {
                 // But override with the latest DB values for critical fields
                 likes: row.likes || 0,
                 shares: row.shares || 0,
-                likedBy: Array.isArray(row.liked_by) ? row.liked_by : [],
-                comments: Array.isArray(row.comments) ? row.comments : []
+                likedBy: safeJsonParse(row.liked_by, []),
+                comments: safeJsonParse(row.comments, [])
               };
             } catch (parseError) {
               console.error('Failed to parse post data JSON:', parseError);
@@ -456,8 +484,8 @@ export const getUserPosts = async (walletAddress: string): Promise<Post[]> => {
             authorName: row.author_name || '',
             createdAt: row.created_at?.toISOString() || new Date().toISOString(),
             likes: row.likes || 0,
-            likedBy: Array.isArray(row.liked_by) ? row.liked_by : [],
-            comments: Array.isArray(row.comments) ? row.comments : [],
+            likedBy: safeJsonParse(row.liked_by, []),
+            comments: safeJsonParse(row.comments, []),
             shares: row.shares || 0,
           };
         } catch (e) {
@@ -634,55 +662,45 @@ const getLocalPosts = (): Post[] => {
     try {
       const cached = localStorage.getItem('giga-aura-posts');
       if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            // Update our in-memory cache
-            postsCache = [...parsed];
-            return parsed;
-          }
-        } catch (e) {
-          console.warn('Failed to parse posts from localStorage:', e);
+        const parsed = safeJsonParse(cached, []);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Update our in-memory cache
+          postsCache = [...parsed];
+          return parsed;
         }
       }
       
       // If we reach here, we need to attempt reconstructing from individual posts
       const cachedPostIds = localStorage.getItem('giga-aura-post-ids');
       if (cachedPostIds) {
-        try {
-          const postIds = JSON.parse(cachedPostIds);
-          if (Array.isArray(postIds) && postIds.length > 0) {
-            const reconstructedPosts: Post[] = [];
-            
-            for (const id of postIds) {
-              const postJson = localStorage.getItem(`giga-aura-post-${id}`);
-              if (postJson) {
-                try {
-                  const post = JSON.parse(postJson);
-                  reconstructedPosts.push(post);
-                } catch (e) {
-                  console.warn(`Failed to parse post ${id} from localStorage:`, e);
-                }
+        const postIds = safeJsonParse(cachedPostIds, []);
+        if (Array.isArray(postIds) && postIds.length > 0) {
+          const reconstructedPosts: Post[] = [];
+          
+          for (const id of postIds) {
+            const postJson = localStorage.getItem(`giga-aura-post-${id}`);
+            if (postJson) {
+              const post = safeJsonParse(postJson, null);
+              if (post) {
+                reconstructedPosts.push(post);
               }
             }
-            
-            if (reconstructedPosts.length > 0) {
-              // Sort by creation date, newest first
-              reconstructedPosts.sort((a, b) => {
-                const dateA = new Date(a.createdAt || 0);
-                const dateB = new Date(b.createdAt || 0);
-                return dateB.getTime() - dateA.getTime();
-              });
-              
-              // Update our in-memory cache and localStorage
-              postsCache = [...reconstructedPosts];
-              localStorage.setItem('giga-aura-posts', JSON.stringify(reconstructedPosts));
-              
-              return reconstructedPosts;
-            }
           }
-        } catch (e) {
-          console.warn('Failed to reconstruct posts from localStorage:', e);
+          
+          if (reconstructedPosts.length > 0) {
+            // Sort by creation date, newest first
+            reconstructedPosts.sort((a, b) => {
+              const dateA = new Date(a.createdAt || 0);
+              const dateB = new Date(b.createdAt || 0);
+              return dateB.getTime() - dateA.getTime();
+            });
+            
+            // Update our in-memory cache and localStorage
+            postsCache = [...reconstructedPosts];
+            localStorage.setItem('giga-aura-posts', JSON.stringify(reconstructedPosts));
+            
+            return reconstructedPosts;
+          }
         }
       }
     } catch (e) {
@@ -1318,19 +1336,42 @@ export const getNotifications = async (walletAddress: string): Promise<Notificat
         ORDER BY timestamp DESC
       `, [walletAddress]);
       
-      const notifications: Notification[] = result.rows.map((row: any) => ({
-        id: row.id,
-        type: row.type,
-        message: row.message,
-        fromWallet: row.from_wallet,
-        fromUsername: row.from_username,
-        fromAvatar: row.from_avatar,
-        postId: row.post_id,
-        commentId: row.comment_id,
-        timestamp: row.timestamp.toISOString(),
-        read: row.read,
-        ...JSON.parse(row.data || '{}')
-      }));
+      const notifications: Notification[] = result.rows.map((row: any) => {
+        try {
+          // Handle the main notification fields safely
+          const baseNotification = {
+            id: row.id,
+            type: row.type,
+            message: row.message,
+            fromWallet: row.from_wallet,
+            fromUsername: row.from_username,
+            fromAvatar: row.from_avatar,
+            postId: row.post_id,
+            commentId: row.comment_id,
+            timestamp: row.timestamp?.toISOString() || new Date().toISOString(),
+            read: !!row.read
+          };
+          
+          // Handle additional data
+          if (row.data) {
+            try {
+              const additionalData = safeJsonParse(row.data, {});
+              return {
+                ...baseNotification,
+                ...additionalData
+              };
+            } catch (error) {
+              console.error('Error parsing notification data:', error);
+              return baseNotification;
+            }
+          }
+          
+          return baseNotification;
+        } catch (error) {
+          console.error('Error processing notification row:', error);
+          return null;
+        }
+      }).filter(Boolean) as Notification[];
       
       // Update localStorage with fresh data
       if (typeof window !== 'undefined') {
