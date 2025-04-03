@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useDispatch } from 'react-redux';
 import { setWalletAddress, logout, setUser } from '../lib/slices/userSlice';
-import { loadWalletPoints, loadFromCloud } from '../lib/slices/auraPointsSlice';
+import { loadWalletPoints, loadFromStorage } from '../lib/slices/auraPointsSlice';
 import { toast } from 'react-hot-toast';
 import { getWalletAuraPoints } from '../services/cache';
 import db from '../services/db';
@@ -98,7 +98,7 @@ const loadWalletAuraPoints = (address: string, dispatch: any) => {
       .then(cloudPoints => {
         if (cloudPoints) {
           console.log(`FOUND CLOUD AURA POINTS for ${address}:`, cloudPoints);
-          dispatch(loadFromCloud(cloudPoints));
+          dispatch(loadFromStorage(cloudPoints));
           return true;
         }
         return false;
