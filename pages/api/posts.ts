@@ -8,15 +8,23 @@ let postsCache: Post[] = [];
 const lastFetchTime = new Date();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Set CORS headers for ALL responses
+  // Enhanced CORS headers to fix cross-origin issues
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
+  
+  // Set performance and caching headers
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
   
   try {
     // GET request to fetch all posts
@@ -36,6 +44,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
         
+        // Add timestamp to response to help debug
+        const response = {
+          timestamp: new Date().toISOString(),
+          count: sortedPosts.length,
+          posts: sortedPosts
+        };
+        
         return res.status(200).json(sortedPosts);
       } catch (dbError) {
         console.error('Database error in GET /api/posts:', dbError);
@@ -46,7 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return res.status(200).json(postsCache);
         }
         
-        // If nothing else works, return empty array
+        // If nothing else works, return empty array with a timestamp
         return res.status(200).json([]);
       }
     }

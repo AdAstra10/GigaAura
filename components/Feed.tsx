@@ -152,8 +152,29 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       return 'https://gigaaura.com';
     }
     // In development, use localhost
-    return 'http://localhost:3000';
+    return window.location.origin; // Use the current origin instead of hardcoded localhost
   };
+
+  // Configure axios for better cross-browser compatibility
+  useEffect(() => {
+    // Set up axios defaults for all requests
+    axios.defaults.timeout = 10000; // 10 seconds
+    axios.defaults.headers.common['Cache-Control'] = 'no-cache';
+    axios.defaults.headers.common['Pragma'] = 'no-cache';
+    axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+    
+    // Add a request interceptor to handle CORS
+    axios.interceptors.request.use(
+      config => {
+        config.withCredentials = false; // Don't send cookies for cross-origin requests
+        return config;
+      },
+      error => {
+        console.error('Axios request interceptor error:', error);
+        return Promise.reject(error);
+      }
+    );
+  }, []);
 
   useEffect(() => {
     const loadPosts = async () => {
@@ -201,12 +222,22 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           console.log('Fetching posts from API...');
           setIsRefreshing(true);
           
-          const response = await axios.get(`${getApiBaseUrl()}/api/posts`, {
-            timeout: 8000, // 8 second timeout
+          // Use current origin to avoid CORS issues
+          const apiUrl = `${getApiBaseUrl()}/api/posts`;
+          console.log('API URL:', apiUrl);
+          
+          // Add timestamp to bust cache
+          const timestamp = new Date().getTime();
+          
+          const response = await axios.get(`${apiUrl}?t=${timestamp}`, {
+            timeout: 10000, // 10 second timeout
             headers: {
-              'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache'
-            }
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0',
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            withCredentials: false // Important for CORS
           });
           
           setIsRefreshing(false);
@@ -225,6 +256,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
             setLastPostCount(posts.length);
             setLastFetchTime(new Date());
             
+            // Dispatch to Redux
             dispatch(setFeed(posts));
             console.log('Loaded posts from API (PostgreSQL):', posts.length);
             
@@ -240,6 +272,44 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         } catch (apiError) {
           setIsRefreshing(false);
           console.error('Error fetching posts from API:', apiError);
+          
+          // Try a different approach with fetch API if axios fails
+          if (typeof window !== 'undefined') {
+            try {
+              console.log('Trying fetch API as fallback...');
+              const timestamp = new Date().getTime();
+              const fetchResponse = await fetch(`${getApiBaseUrl()}/api/posts?t=${timestamp}`, {
+                method: 'GET',
+                headers: {
+                  'Cache-Control': 'no-cache, no-store, must-revalidate',
+                  'Pragma': 'no-cache'
+                },
+                credentials: 'omit' // Don't send cookies
+              });
+              
+              if (fetchResponse.ok) {
+                const data = await fetchResponse.json();
+                if (Array.isArray(data) && data.length > 0) {
+                  dispatch(setFeed(data));
+                  console.log('Loaded posts using fetch API:', data.length);
+                  
+                  // Save to localStorage
+                  if (typeof window !== 'undefined') {
+                    try {
+                      localStorage.setItem('giga-aura-posts', JSON.stringify(data));
+                    } catch (e) {
+                      console.warn('Failed to save posts to localStorage:', e);
+                    }
+                  }
+                  
+                  setLoading(false);
+                  return; // Exit early on success
+                }
+              }
+            } catch (fetchError) {
+              console.error('Fetch API fallback also failed:', fetchError);
+            }
+          }
           
           // Fall back to direct database call if API fails
           try {
@@ -568,13 +638,17 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
     // Only refresh if we're not already refreshing
     if (!isRefreshing) {
       // Force a refresh
-      axios.get(`${getApiBaseUrl()}/api/posts`, {
-        timeout: 8000,
+      const timestamp = new Date().getTime();
+      
+      axios.get(`${getApiBaseUrl()}/api/posts?t=${timestamp}`, {
+        timeout: 10000,
         headers: {
-          'Cache-Control': 'no-cache',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
+          'Expires': '0',
           'X-Requested-With': 'XMLHttpRequest'
-        }
+        },
+        withCredentials: false
       })
         .then(response => {
           if (response.data && Array.isArray(response.data)) {
@@ -595,6 +669,39 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         .catch(error => {
           console.error('Error refreshing feed:', error);
           toast.error('Could not refresh feed. Will try again soon.');
+          
+          // Try fetch API as fallback
+          if (typeof window !== 'undefined') {
+            fetch(`${getApiBaseUrl()}/api/posts?t=${timestamp}`, {
+              method: 'GET',
+              headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache'
+              },
+              credentials: 'omit'
+            })
+              .then(response => {
+                if (response.ok) {
+                  return response.json();
+                }
+                throw new Error('Network response was not ok');
+              })
+              .then(data => {
+                if (Array.isArray(data) && data.length > 0) {
+                  dispatch(setFeed(data));
+                  if (typeof window !== 'undefined') {
+                    try {
+                      localStorage.setItem('giga-aura-posts', JSON.stringify(data));
+                    } catch (e) {
+                      console.warn('Failed to save posts to localStorage:', e);
+                    }
+                  }
+                }
+              })
+              .catch(fetchError => {
+                console.error('Fetch API fallback also failed:', fetchError);
+              });
+          }
         });
     } else {
       toast('Refresh already in progress...', {
