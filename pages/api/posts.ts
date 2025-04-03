@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import db from '../../giga-aura/services/db-init';
 import { Post } from '../../lib/slices/postsSlice';
+import { sendEventToAll } from './events';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Set CORS headers
@@ -17,6 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // GET request to fetch all posts
     if (req.method === 'GET') {
       try {
+        // Get posts without any wallet filtering - all posts are visible to everyone
         const posts = await db.getPosts();
         
         // Sort posts to ensure newest are at the top
@@ -51,6 +53,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const success = await db.savePost(post);
         
         if (success) {
+          // Notify all connected clients about the new post
+          try {
+            sendEventToAll({
+              type: 'new-post',
+              postId: post.id,
+              authorWallet: post.authorWallet,
+              timestamp: new Date().toISOString()
+            });
+            console.log('Sent new-post event to all connected clients');
+          } catch (eventError) {
+            console.error('Failed to broadcast new post event:', eventError);
+            // Continue anyway - this is not critical
+          }
+          
           return res.status(201).json({ success: true, post });
         } else {
           return res.status(500).json({ error: 'Failed to save post' });

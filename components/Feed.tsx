@@ -135,6 +135,12 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Add state for tracking new posts
+  const [hasNewPosts, setHasNewPosts] = useState(false);
+  const [lastPostCount, setLastPostCount] = useState(0);
+  const [lastFetchTime, setLastFetchTime] = useState(new Date());
+  const sseRef = useRef<EventSource | null>(null);
+
   // Function to get the API base URL
   const getApiBaseUrl = () => {
     // In production, use the deployment URL
@@ -177,6 +183,16 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           if (response.data && Array.isArray(response.data) && response.data.length > 0) {
             // Posts are already sorted in the API
             const posts = response.data;
+            
+            // Check if we have new posts and update state for notification
+            if (reduxPosts.length > 0 && posts.length > reduxPosts.length) {
+              setHasNewPosts(true);
+            }
+            
+            // Store the current post count for future comparison
+            setLastPostCount(posts.length);
+            setLastFetchTime(new Date());
+            
             dispatch(setFeed(posts));
             console.log('Loaded posts from API (PostgreSQL):', posts.length);
             
@@ -238,12 +254,63 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
     // Load posts initially
     loadPosts();
     
-    // Set up auto-refresh interval (every 30 seconds)
+    // Set up auto-refresh interval (every 5 seconds instead of 30 for more real-time updates)
     if (autoRefresh) {
       refreshIntervalRef.current = setInterval(() => {
         console.log('Auto-refreshing posts...');
         loadPosts();
-      }, 30000); // 30 seconds
+      }, 5000); // 5 seconds for real-time effect
+    }
+    
+    // Set up Server-Sent Events for real-time updates
+    if (typeof window !== 'undefined' && autoRefresh) {
+      try {
+        // Close any existing connection
+        if (sseRef.current) {
+          sseRef.current.close();
+        }
+        
+        // Create a new EventSource connection for real-time updates
+        const eventSource = new EventSource(`${getApiBaseUrl()}/api/events`);
+        
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === 'new-post') {
+              // Show notification of new posts
+              setHasNewPosts(true);
+              // Refresh posts immediately
+              loadPosts();
+              
+              // Show toast notification
+              toast.success('New posts available!', {
+                id: 'new-posts',
+                duration: 3000,
+              });
+            }
+          } catch (error) {
+            console.error('Error processing SSE event:', error);
+          }
+        };
+        
+        eventSource.onerror = (error) => {
+          console.error('SSE connection error:', error);
+          // Close and try to reconnect after a delay
+          eventSource.close();
+          setTimeout(() => {
+            if (autoRefresh) {
+              // Try to reconnect
+              const newEventSource = new EventSource(`${getApiBaseUrl()}/api/events`);
+              sseRef.current = newEventSource;
+            }
+          }, 5000);
+        };
+        
+        sseRef.current = eventSource;
+      } catch (error) {
+        console.error('Error setting up SSE:', error);
+      }
     }
     
     // Cleanup interval on component unmount
@@ -251,8 +318,14 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       if (refreshIntervalRef.current) {
         clearInterval(refreshIntervalRef.current);
       }
+      
+      // Close SSE connection
+      if (sseRef.current) {
+        sseRef.current.close();
+        sseRef.current = null;
+      }
     };
-  }, [dispatch, walletAddress, autoRefresh]);
+  }, [dispatch, autoRefresh, walletAddress]);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -399,48 +472,22 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
     }
   };
 
-  const handleRefresh = () => {
-    setLoading(true);
-    
-    // Fetch posts from API (server-side PostgreSQL)
+  const handleRefreshFeed = () => {
+    setHasNewPosts(false);
+    if (feedRef.current) {
+      feedRef.current.scrollTop = 0;
+    }
+    // Force a refresh
     axios.get(`${getApiBaseUrl()}/api/posts`)
       .then(response => {
-        if (response.status === 200 && Array.isArray(response.data) && response.data.length > 0) {
-          // Posts are already sorted in the API
-          const posts = response.data;
-          dispatch(setFeed(posts));
-          
-          // Save to localStorage as backup if in browser
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
-          }
+        if (response.data && Array.isArray(response.data)) {
+          dispatch(setFeed(response.data));
+          setLastPostCount(response.data.length);
+          setLastFetchTime(new Date());
         }
-        setLoading(false);
       })
       .catch(error => {
-        console.error('Error refreshing posts from API:', error);
-        
-        // Fallback to direct database call if API fails
-        db.getPosts()
-          .then(posts => {
-            if (posts && posts.length > 0) {
-              // Sort posts to ensure newest are at the top
-              const sortedPosts = [...posts].sort(
-                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-              );
-              dispatch(setFeed(sortedPosts));
-              
-              // Save to localStorage as backup if in browser
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('giga-aura-posts', JSON.stringify(sortedPosts));
-              }
-            }
-            setLoading(false);
-          })
-          .catch(dbError => {
-            console.error('Error refreshing posts from database:', dbError);
-            setLoading(false);
-          });
+        console.error('Error refreshing feed:', error);
       });
   };
 
@@ -495,7 +542,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         {/* Add manual refresh button */}
         <div className="absolute right-4 top-4">
           <button
-            onClick={handleRefresh}
+            onClick={handleRefreshFeed}
             className="text-gray-500 hover:text-black dark:hover:text-white p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
             title="Refresh posts"
           >
