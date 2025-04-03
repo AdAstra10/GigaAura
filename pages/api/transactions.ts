@@ -22,12 +22,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Wallet address is required' });
       }
       
-      const auraPoints = await db.getAuraPoints(walletAddress);
-      if (!auraPoints) {
-        return res.status(404).json({ error: 'Aura points not found' });
+      try {
+        const auraPoints = await db.getAuraPoints(walletAddress);
+        if (!auraPoints) {
+          // Return default values if no aura points found
+          return res.status(200).json({ totalPoints: 100, transactions: [] });
+        }
+        
+        return res.status(200).json(auraPoints);
+      } catch (dbError) {
+        console.error('Database error in GET /api/transactions:', dbError);
+        // API endpoints run server-side, so we can't access localStorage
+        // Return default values
+        return res.status(200).json({ totalPoints: 100, transactions: [] });
       }
-      
-      return res.status(200).json(auraPoints);
     }
     
     // POST request to add a transaction
@@ -38,13 +46,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Wallet address and transaction are required' });
       }
       
-      // Add the transaction
-      const success = await db.addTransaction(walletAddress, transaction);
-      
-      if (success) {
-        return res.status(201).json({ success: true });
-      } else {
-        return res.status(500).json({ error: 'Failed to add transaction' });
+      try {
+        // Add the transaction
+        const success = await db.addTransaction(walletAddress, transaction);
+        
+        if (success) {
+          return res.status(201).json({ success: true });
+        } else {
+          return res.status(500).json({ error: 'Failed to add transaction' });
+        }
+      } catch (transactionError) {
+        console.error('Transaction error in POST /api/transactions:', transactionError);
+        // API endpoints run server-side, so we can't access localStorage
+        return res.status(500).json({ 
+          error: 'Database error',
+          success: false,
+          transaction: transaction,
+          message: 'Transaction will be saved to local storage in the browser'
+        });
       }
     }
     

@@ -11,38 +11,54 @@ export const initializeDatabase = () => {
   // Check if running in browser or server
   const isServer = typeof window === 'undefined';
   
-  if (isServer) {
-    console.log('🔌 Initializing PostgreSQL database connection (server-side)');
+  try {
+    if (isServer) {
+      console.log('🔌 Initializing PostgreSQL database connection (server-side)');
+      
+      // Set PostgreSQL as the default database backend (server-side)
+      setDatabaseBackend(DatabaseBackend.POSTGRESQL);
+      
+      return {
+        // Return the database instance for convenience
+        db: postgresqlDb,
+        
+        // Return the list of environment variables being used (without sensitive values)
+        config: {
+          host: process.env.PG_HOST || 'dpg-cvmv93k9c44c73blmoag-a.oregon-postgres.render.com',
+          database: process.env.PG_DATABASE || 'gigaaura_storage',
+          user: process.env.PG_USER || 'gigaaura_storage_user',
+          port: parseInt(process.env.PG_PORT || '5432', 10),
+        }
+      };
+    } else {
+      console.log('🔌 Initializing browser-based storage (local storage)');
+      
+      // In browser, we'll use PostgreSQL implementation which already has localStorage fallbacks
+      setDatabaseBackend(DatabaseBackend.POSTGRESQL);
+      
+      return {
+        // Return the database instance for convenience (browser version)
+        db: postgresqlDb,
+        
+        // Return a placeholder config
+        config: {
+          storageType: 'localStorage',
+          status: 'active'
+        }
+      };
+    }
+  } catch (error) {
+    console.error('Error initializing database:', error);
     
-    // Set PostgreSQL as the default database backend (server-side)
-    setDatabaseBackend(DatabaseBackend.POSTGRESQL);
+    // In case of error, still return the database instance which will use local storage fallbacks
+    setDatabaseBackend(DatabaseBackend.POSTGRESQL); // Still using PostgreSQL implementation with fallbacks
     
     return {
-      // Return the database instance for convenience
       db: postgresqlDb,
-      
-      // Return the list of environment variables being used (without sensitive values)
-      config: {
-        host: process.env.PG_HOST || 'dpg-cvmv93k9c44c73blmoag-a.oregon-postgres.render.com',
-        database: process.env.PG_DATABASE || 'gigaaura_storage',
-        user: process.env.PG_USER || 'gigaaura_storage_user',
-        port: parseInt(process.env.PG_PORT || '5432', 10),
-      }
-    };
-  } else {
-    console.log('🔌 Initializing browser-based storage (local storage)');
-    
-    // In browser, we'll use PostgreSQL implementation which already has localStorage fallbacks
-    setDatabaseBackend(DatabaseBackend.POSTGRESQL);
-    
-    return {
-      // Return the database instance for convenience (browser version)
-      db: postgresqlDb,
-      
-      // Return a placeholder config
       config: {
         storageType: 'localStorage',
-        status: 'active'
+        status: 'fallback',
+        error: error instanceof Error ? error.message : String(error)
       }
     };
   }

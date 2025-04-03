@@ -16,14 +16,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // GET request to fetch all posts
     if (req.method === 'GET') {
-      const posts = await db.getPosts();
-      
-      // Sort posts to ensure newest are at the top
-      const sortedPosts = [...posts].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      
-      return res.status(200).json(sortedPosts);
+      try {
+        const posts = await db.getPosts();
+        
+        // Sort posts to ensure newest are at the top
+        const sortedPosts = [...posts].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        
+        return res.status(200).json(sortedPosts);
+      } catch (dbError) {
+        console.error('Database error in GET /api/posts:', dbError);
+        // API endpoints run server-side, so we can't access localStorage
+        // Return empty array as fallback
+        return res.status(200).json([]);
+      }
     }
     
     // POST request to create a new post
@@ -39,13 +46,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         post.createdAt = new Date().toISOString();
       }
       
-      // Save the post to the database
-      const success = await db.savePost(post);
-      
-      if (success) {
-        return res.status(201).json({ success: true, post });
-      } else {
-        return res.status(500).json({ error: 'Failed to save post' });
+      try {
+        // Save the post to the database
+        const success = await db.savePost(post);
+        
+        if (success) {
+          return res.status(201).json({ success: true, post });
+        } else {
+          return res.status(500).json({ error: 'Failed to save post' });
+        }
+      } catch (saveError) {
+        console.error('Error saving post:', saveError);
+        // API endpoints run server-side, so we can't access localStorage
+        return res.status(500).json({ 
+          error: 'Database error',
+          success: false,
+          post: post,
+          message: 'Post will be saved to local storage in the browser'
+        });
       }
     }
     

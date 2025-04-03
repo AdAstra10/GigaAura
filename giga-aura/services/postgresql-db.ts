@@ -19,6 +19,9 @@ const pgConfig = {
   }
 };
 
+// Flag to track if we've detected database connection issues
+let hasDatabaseConnectionIssue = false;
+
 // Only import pg module on the server side
 // Create a connection pool to the PostgreSQL database
 let pool: any = null;
@@ -26,28 +29,37 @@ let pool: any = null;
 // Dynamically import pg only on the server
 if (typeof window === 'undefined') {
   // Server-side code
-  import('pg').then(pg => {
-    const { Pool } = pg;
+  try {
+    // Use a more robust import method
+    const pgModule = require('pg');
+    const { Pool } = pgModule;
     pool = new Pool(pgConfig);
     console.log('PostgreSQL pool created on server side');
-  }).catch(err => {
-    console.error('Failed to import pg module:', err);
-  });
+  } catch (err) {
+    console.error('Failed to import pg module or create pool:', err);
+    // Set flag to fall back to local storage
+    hasDatabaseConnectionIssue = true;
+  }
 } else {
   // Client-side code - provide a mock pool
   console.log('Running in browser, using local storage only');
+  hasDatabaseConnectionIssue = true;
 }
 
 // In-memory post cache for immediate display without waiting for DB
 let postsCache: Post[] = [];
 let activeListeners: (() => void)[] = [];
 
-// Flag to track if we've detected database connection issues
-let hasDatabaseConnectionIssue = false;
-
 // Initialize tables and caches on startup
 const initDatabase = async () => {
   try {
+    // If we're in the browser or have known connection issues, skip DB initialization
+    if (typeof window !== 'undefined' || !pool) {
+      console.log('Skipping database initialization - using local storage');
+      hasDatabaseConnectionIssue = true;
+      return;
+    }
+    
     // Connect to the database
     const client = await pool.connect();
     

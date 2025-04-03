@@ -150,21 +150,24 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       setLoading(true);
       
       try {
-        // First try to load posts from localStorage for immediate display
-        const localPostsString = localStorage.getItem('giga-aura-posts');
-        if (localPostsString) {
-          try {
-            const localPosts = JSON.parse(localPostsString);
-            if (Array.isArray(localPosts) && localPosts.length > 0) {
-              // Sort posts to ensure newest are at the top
-              const sortedPosts = [...localPosts].sort(
-                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-              );
-              dispatch(setFeed(sortedPosts));
-              console.log('Loaded posts from local storage:', sortedPosts.length);
+        // Check if we're running in the browser
+        if (typeof window !== 'undefined') {
+          // First try to load posts from localStorage for immediate display
+          const localPostsString = localStorage.getItem('giga-aura-posts');
+          if (localPostsString) {
+            try {
+              const localPosts = JSON.parse(localPostsString);
+              if (Array.isArray(localPosts) && localPosts.length > 0) {
+                // Sort posts to ensure newest are at the top
+                const sortedPosts = [...localPosts].sort(
+                  (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                );
+                dispatch(setFeed(sortedPosts));
+                console.log('Loaded posts from local storage:', sortedPosts.length);
+              }
+            } catch (e) {
+              console.warn('Failed to parse local posts:', e);
             }
-          } catch (e) {
-            console.warn('Failed to parse local posts:', e);
           }
         }
         
@@ -177,8 +180,10 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
             dispatch(setFeed(posts));
             console.log('Loaded posts from API (PostgreSQL):', posts.length);
             
-            // Save to localStorage as backup
-            localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
+            // Save to localStorage as backup if we're in the browser
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
+            }
           }
         } catch (apiError) {
           console.error('Error fetching posts from API:', apiError);
@@ -194,8 +199,10 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
               dispatch(setFeed(sortedPosts));
               console.log('Loaded posts from direct database call:', sortedPosts.length);
               
-              // Save to localStorage as backup
-              localStorage.setItem('giga-aura-posts', JSON.stringify(sortedPosts));
+              // Save to localStorage as backup if we're in the browser
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('giga-aura-posts', JSON.stringify(sortedPosts));
+              }
             }
           } catch (dbError) {
             console.error('Error loading posts from database:', dbError);
@@ -268,10 +275,13 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       let mediaType;
       
       if (mediaFile) {
-        // For demo purposes, we're just creating an object URL
-        // In a real app, you'd upload this to a server and get a permanent URL
-        mediaUrl = URL.createObjectURL(mediaFile);
-        mediaType = mediaFile.type.startsWith('image/') ? 'image' : 'video';
+        // Client-side only code for handling media files
+        if (typeof window !== 'undefined') {
+          // For demo purposes, we're just creating an object URL
+          // In a real app, you'd upload this to a server and get a permanent URL
+          mediaUrl = URL.createObjectURL(mediaFile);
+          mediaType = mediaFile.type.startsWith('image/') ? 'image' : 'video';
+        }
       }
       
       // Create a complete post object
@@ -400,8 +410,10 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           const posts = response.data;
           dispatch(setFeed(posts));
           
-          // Save to localStorage as backup
-          localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
+          // Save to localStorage as backup if in browser
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
+          }
         }
         setLoading(false);
       })
@@ -418,8 +430,10 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
               );
               dispatch(setFeed(sortedPosts));
               
-              // Save to localStorage as backup
-              localStorage.setItem('giga-aura-posts', JSON.stringify(sortedPosts));
+              // Save to localStorage as backup if in browser
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('giga-aura-posts', JSON.stringify(sortedPosts));
+              }
             }
             setLoading(false);
           })
