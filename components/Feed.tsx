@@ -17,6 +17,7 @@ import { store } from '../lib/store';
 import { cacheFeed, cacheUserPosts } from '../services/cache';
 import db from '../giga-aura/services/db-init';
 import axios from 'axios';
+import pusherClient, { PUSHER_CHANNELS, PUSHER_EVENTS } from '../lib/pusher';
 
 // Import the emoji picker dynamically to avoid SSR issues
 // IMPORTANT: Keep this import outside of the component to prevent rendering issues
@@ -29,6 +30,14 @@ const EmojiPicker = dynamic(
 interface EmojiClickData {
   emoji: string;
 }
+
+// Utility function to get the API base URL
+const getApiBaseUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return '';
+};
 
 // Simple LoadingSpinner component
 const LoadingSpinner = () => (
@@ -144,267 +153,105 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   const [retryCount, setRetryCount] = useState(0);
   const MAX_RETRIES = 5;
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const pusherChannelRef = useRef<any>(null);
 
-  // Function to get the API base URL
-  const getApiBaseUrl = () => {
-    // In production, use the deployment URL
-    if (process.env.NODE_ENV === 'production') {
-      return 'https://gigaaura.com';
-    }
-    // In development, use localhost
-    return window.location.origin; // Use the current origin instead of hardcoded localhost
-  };
-
-  // Configure axios for better cross-browser compatibility
-  useEffect(() => {
-    // Set up axios defaults for all requests
-    axios.defaults.timeout = 10000; // 10 seconds
-    axios.defaults.headers.common['Cache-Control'] = 'no-cache';
-    axios.defaults.headers.common['Pragma'] = 'no-cache';
-    axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
-    
-    // Add a request interceptor to handle CORS
-    axios.interceptors.request.use(
-      config => {
-        config.withCredentials = false; // Don't send cookies for cross-origin requests
-        return config;
-      },
-      error => {
-        console.error('Axios request interceptor error:', error);
-        return Promise.reject(error);
-      }
-    );
-  }, []);
-
+  // Load posts on component mount
   useEffect(() => {
     const loadPosts = async () => {
-      // Don't show loading indicator for refreshes, only for initial load
-      if (reduxPosts.length === 0) {
-        setLoading(true);
-      }
-      
-      // If we're refreshing and already have posts, don't show loading spinner
-      if (isRefreshing && reduxPosts.length > 0) {
-        // Don't change loading state
-      } else {
-        setLoading(reduxPosts.length === 0);
-      }
+      // Only fetch if we're not already refreshing
+      if (isRefreshing) return;
       
       try {
-        console.log('Loading posts...');
+        setIsRefreshing(true);
+        setLoading(true);
         
-        // Check if we're running in the browser
-        if (typeof window !== 'undefined') {
-          // First try to load posts from localStorage for immediate display
-          const localPostsString = localStorage.getItem('giga-aura-posts');
-          if (localPostsString) {
-            try {
-              const localPosts = JSON.parse(localPostsString);
-              if (Array.isArray(localPosts) && localPosts.length > 0) {
-                // Only update if we don't already have posts in the store
-                if (reduxPosts.length === 0) {
-                  // Sort posts to ensure newest are at the top
-                  const sortedPosts = [...localPosts].sort(
-                    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-                  );
-                  dispatch(setFeed(sortedPosts));
-                  console.log('Loaded posts from local storage:', sortedPosts.length);
-                }
-              }
-            } catch (e) {
-              console.warn('Failed to parse local posts:', e);
-            }
-          }
+        // First, try to load from Redux store
+        if (reduxPosts.length > 0) {
+          setLoading(false);
+          setLastPostCount(reduxPosts.length);
+          setLastFetchTime(new Date());
+          setIsRefreshing(false);
+          return;
         }
         
-        // Then fetch the latest posts from API (server-side PostgreSQL)
-        try {
-          console.log('Fetching posts from API...');
-          setIsRefreshing(true);
-          
-          // Use current origin to avoid CORS issues
-          const apiUrl = `${getApiBaseUrl()}/api/posts`;
-          console.log('API URL:', apiUrl);
-          
-          // Add timestamp to bust cache
-          const timestamp = new Date().getTime();
-          
-          const response = await axios.get(`${apiUrl}?t=${timestamp}`, {
-            timeout: 10000, // 10 second timeout
-            headers: {
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache',
-              'Expires': '0',
-              'X-Requested-With': 'XMLHttpRequest'
-            },
-            withCredentials: false // Important for CORS
-          });
-          
+        // Second, try to load from localStorage via loadFromCache
+        dispatch(loadFromCache());
+        
+        // If we have posts in the Redux store after loading from cache, no need to fetch
+        if (reduxPosts.length > 0) {
+          setLoading(false);
+          setLastPostCount(reduxPosts.length);
+          setLastFetchTime(new Date());
           setIsRefreshing(false);
-          setRetryCount(0); // Reset retry count on success
+          return;
+        }
+        
+        // Finally, fetch from API
+        console.log('Fetching posts from API...');
+        const apiUrl = `${getApiBaseUrl()}/api/posts`;
+        
+        // Add timestamp to bust cache
+        const timestamp = new Date().getTime();
+        
+        const response = await axios.get(`${apiUrl}?t=${timestamp}`, {
+          timeout: 10000,
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          withCredentials: false
+        });
+        
+        if (response.data && Array.isArray(response.data)) {
+          dispatch(setFeed(response.data));
           
-          if (response.data && Array.isArray(response.data) && response.data.length > 0) {
-            // Posts are already sorted in the API
-            const posts = response.data;
-            
-            // Check if we have new posts and update state for notification
-            if (reduxPosts.length > 0 && posts.length > reduxPosts.length) {
-              setHasNewPosts(true);
-            }
-            
-            // Store the current post count for future comparison
-            setLastPostCount(posts.length);
-            setLastFetchTime(new Date());
-            
-            // Dispatch to Redux
-            dispatch(setFeed(posts));
-            console.log('Loaded posts from API (PostgreSQL):', posts.length);
-            
-            // Save to localStorage as backup if we're in the browser
-            if (typeof window !== 'undefined') {
-              try {
-                localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
-              } catch (storageError) {
-                console.warn('Failed to save posts to localStorage:', storageError);
-              }
-            }
-          }
-        } catch (apiError) {
-          setIsRefreshing(false);
-          console.error('Error fetching posts from API:', apiError);
-          
-          // Try a different approach with fetch API if axios fails
+          // Save to localStorage
           if (typeof window !== 'undefined') {
             try {
-              console.log('Trying fetch API as fallback...');
-              const timestamp = new Date().getTime();
-              const fetchResponse = await fetch(`${getApiBaseUrl()}/api/posts?t=${timestamp}`, {
-                method: 'GET',
-                headers: {
-                  'Cache-Control': 'no-cache, no-store, must-revalidate',
-                  'Pragma': 'no-cache'
-                },
-                credentials: 'omit' // Don't send cookies
-              });
-              
-              if (fetchResponse.ok) {
-                const data = await fetchResponse.json();
-                if (Array.isArray(data) && data.length > 0) {
-                  dispatch(setFeed(data));
-                  console.log('Loaded posts using fetch API:', data.length);
-                  
-                  // Save to localStorage
-                  if (typeof window !== 'undefined') {
-                    try {
-                      localStorage.setItem('giga-aura-posts', JSON.stringify(data));
-                    } catch (e) {
-                      console.warn('Failed to save posts to localStorage:', e);
-                    }
-                  }
-                  
-                  setLoading(false);
-                  return; // Exit early on success
-                }
-              }
-            } catch (fetchError) {
-              console.error('Fetch API fallback also failed:', fetchError);
+              localStorage.setItem('giga-aura-posts', JSON.stringify(response.data));
+            } catch (e) {
+              console.warn('Failed to save posts to localStorage:', e);
             }
           }
           
-          // Fall back to direct database call if API fails
-          try {
-            console.log('Trying direct database access as fallback...');
-            const databasePosts = await db.getPosts();
-            if (databasePosts && databasePosts.length > 0) {
-              // Sort posts to ensure newest are at the top
-              const sortedPosts = [...databasePosts].sort(
-                (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-              );
-              dispatch(setFeed(sortedPosts));
-              console.log('Loaded posts from direct database call:', sortedPosts.length);
-              
-              // Save to localStorage as backup if we're in the browser
-              if (typeof window !== 'undefined') {
-                try {
-                  localStorage.setItem('giga-aura-posts', JSON.stringify(sortedPosts));
-                } catch (storageError) {
-                  console.warn('Failed to save posts to localStorage:', storageError);
-                }
-              }
-            } else if (reduxPosts.length === 0) {
-              // Only retry if we don't have any posts
-              scheduleRetry();
-            }
-          } catch (dbError) {
-            console.error('Error loading posts from database:', dbError);
-            // Only retry if we don't have any posts and haven't exceeded retries
-            if (reduxPosts.length === 0) {
-              scheduleRetry();
-            }
-          }
+          setLastPostCount(response.data.length);
+        } else {
+          // If API returns empty or invalid data, show error
+          console.error('API returned invalid data:', response.data);
         }
-        
-        setLoading(false);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error loading posts:', error);
+        setError(`Failed to load posts. ${error.message || 'Please try again later.'}`);
+        
+        // If we've tried less than MAX_RETRIES times, try again after a delay
+        if (retryCount < MAX_RETRIES) {
+          console.log(`Retrying fetch (attempt ${retryCount + 1} of ${MAX_RETRIES})...`);
+          setRetryCount(retryCount + 1);
+          
+          retryTimeoutRef.current = setTimeout(() => {
+            loadPosts();
+          }, 3000);
+        }
+      } finally {
         setLoading(false);
         setIsRefreshing(false);
-        
-        // Fallback to mock posts if everything fails and we have no posts
-        if (!reduxPosts || reduxPosts.length === 0) {
-          const mockPosts = [
-            {
-              id: 'mock1',
-              authorWallet: walletAddress || '0x123',
-              authorUsername: 'gigaaura',
-              authorAvatar: '/images/avatar.png',
-              content: 'Welcome to GigaAura! This is a demo post.',
-              createdAt: new Date().toISOString(),
-              likes: 0,
-              comments: 0,
-              shares: 0,
-              likedBy: []
-            }
-          ];
-          dispatch(setFeed(mockPosts));
-        }
+        setLastFetchTime(new Date());
       }
     };
     
-    // Schedule retry logic for API failures
-    const scheduleRetry = () => {
-      if (retryCount < MAX_RETRIES) {
-        console.log(`Scheduling retry ${retryCount + 1}/${MAX_RETRIES} in ${(retryCount + 1) * 3} seconds...`);
-        
-        // Clear any existing timeout
-        if (retryTimeoutRef.current) {
-          clearTimeout(retryTimeoutRef.current);
-        }
-        
-        // Set new timeout with exponential backoff
-        retryTimeoutRef.current = setTimeout(() => {
-          setRetryCount(prev => prev + 1);
-          loadPosts();
-        }, (retryCount + 1) * 3000);
-      } else {
-        console.log('Maximum retry attempts reached');
-      }
-    };
-    
-    // Load posts initially
+    // Load posts on component mount
     loadPosts();
     
-    // Set up auto-refresh interval (every 5 seconds instead of 30 for more real-time updates)
+    // If autoRefresh is enabled, set up interval to periodically reload posts
     if (autoRefresh) {
       refreshIntervalRef.current = setInterval(() => {
-        // Only refresh if we're not already refreshing
         if (!isRefreshing) {
-          console.log('Auto-refreshing posts...');
+          console.log('Auto-refreshing feed...');
           loadPosts();
-        } else {
-          console.log('Skipping refresh as previous request is still in progress');
         }
-      }, 5000); // 5 seconds for real-time effect
+      }, 60000); // Refresh every 60 seconds
     }
     
     // Set up Server-Sent Events for real-time updates
@@ -484,45 +331,145 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
     };
   }, [dispatch, autoRefresh, walletAddress, isRefreshing, retryCount, reduxPosts.length]);
 
+  // Set up Pusher for real-time updates (after loadPosts is defined)
+  useEffect(() => {
+    // Get reference to the loadPosts function for Pusher updates
+    const refreshPosts = async () => {
+      // Only fetch if we're not already refreshing
+      if (!isRefreshing) {
+        console.log('Pusher triggered post refresh');
+        
+        try {
+          setIsRefreshing(true);
+          // Use current origin to avoid CORS issues
+          const apiUrl = `${getApiBaseUrl()}/api/posts`;
+          
+          // Add timestamp to bust cache
+          const timestamp = new Date().getTime();
+          
+          const response = await axios.get(`${apiUrl}?t=${timestamp}`, {
+            timeout: 10000,
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0',
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            withCredentials: false
+          });
+          
+          if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+            dispatch(setFeed(response.data));
+            
+            // Save to localStorage
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.setItem('giga-aura-posts', JSON.stringify(response.data));
+              } catch (e) {
+                console.warn('Failed to save posts to localStorage:', e);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error refreshing posts from Pusher event:', error);
+        } finally {
+          setIsRefreshing(false);
+        }
+      }
+    };
+    
+    // Subscribe to the posts channel
+    const channel = pusherClient.subscribe(PUSHER_CHANNELS.POSTS);
+    pusherChannelRef.current = channel;
+
+    // Listen for new post events
+    channel.bind(PUSHER_EVENTS.NEW_POST, (data: any) => {
+      console.log('Pusher: Received new post event:', data);
+      
+      // Show notification
+      setHasNewPosts(true);
+      
+      // Show toast notification
+      toast.success('New posts available!', {
+        id: 'new-posts-pusher',
+        duration: 3000,
+      });
+      
+      // Only load automatically if autoRefresh is enabled
+      if (autoRefresh && !isRefreshing) {
+        refreshPosts();
+      }
+    });
+
+    // Listen for updated posts events
+    channel.bind(PUSHER_EVENTS.UPDATED_POST, (data: any) => {
+      console.log('Pusher: Received posts updated event:', data);
+      
+      if (data) {
+        // Find and update the post in the local state if it exists
+        const posts = [...reduxPosts];
+        const postIndex = posts.findIndex(p => p.id === data.id);
+        
+        if (postIndex !== -1) {
+          // Update the post in place
+          posts[postIndex] = { ...posts[postIndex], ...data };
+          dispatch(setFeed(posts));
+          
+          // Save to localStorage
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
+            } catch (e) {
+              console.warn('Failed to save posts to localStorage:', e);
+            }
+          }
+        } else {
+          // If post not found, show notification to refresh
+          setHasNewPosts(true);
+        }
+      } else {
+        // Otherwise show notification to refresh
+        setHasNewPosts(true);
+      }
+    });
+
+    // Clean up Pusher subscription on component unmount
+    return () => {
+      if (pusherChannelRef.current) {
+        pusherChannelRef.current.unbind_all();
+        pusherClient.unsubscribe(PUSHER_CHANNELS.POSTS);
+        console.log('Pusher: Unsubscribed from posts channel');
+      }
+    };
+  }, [dispatch, autoRefresh, isRefreshing, reduxPosts]);
+
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
   };
-  
+
+  // Function to handle creating a new post
   const handleCreatePost = (content: string, mediaFile?: File): boolean => {
+    if (!content.trim()) {
+      toast.error('Post content cannot be empty');
+      return false;
+    }
+    
+    if (!walletAddress) {
+      toast.error('Please connect your wallet to create a post');
+      return false;
+    }
+
     try {
-      if (!walletAddress) {
-        toast.error('Please connect your wallet to post');
-        return false;
-      }
+      // Generate a new unique ID for the post
+      const postId = uuidv4();
       
-      if (!content.trim() && !mediaFile) {
-        toast.error('Please add some content to your post');
-        return false;
-      }
-      
-      // Add media URL if there's a file (in a real app, this would be uploaded to a server)
-      let mediaUrl;
-      let mediaType;
-      
-      if (mediaFile) {
-        // Client-side only code for handling media files
-        if (typeof window !== 'undefined') {
-          // For demo purposes, we're just creating an object URL
-          // In a real app, you'd upload this to a server and get a permanent URL
-          mediaUrl = URL.createObjectURL(mediaFile);
-          mediaType = mediaFile.type.startsWith('image/') ? 'image' : 'video';
-        }
-      }
-      
-      // Create a complete post object
+      // Create post to save to PostgreSQL via API
       const newPost: Post = {
-        id: uuidv4(),
-        content,
-        authorUsername: username || undefined,
+        id: postId,
+        content: content,
         authorWallet: walletAddress,
+        authorUsername: username || undefined,
         authorAvatar: avatar || undefined,
-        mediaUrl,
-        mediaType: mediaType as 'image' | 'video' | undefined,
         createdAt: new Date().toISOString(),
         likes: 0,
         comments: 0,
@@ -530,23 +477,12 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         likedBy: [],
       };
       
-      console.log("CREATING NEW POST:", newPost);
-      
-      // Create the transaction for Aura Points
-      const newTransaction = {
-        id: uuidv4(),
-        amount: 20, // 20 points for creating a post
-        timestamp: new Date().toISOString(),
-        action: 'post_created' as const,
-        counterpartyName: 'GigaAura',
-        counterpartyWallet: 'system'
-      };
-      
-      // IMPORTANT: Save post using the API (server-side PostgreSQL)
+      // IMPORTANT: Save post using the API (server-side PostgreSQL with Pusher integration)
       axios.post(`${getApiBaseUrl()}/api/posts`, newPost)
         .then(response => {
           if (response.status === 201) {
             console.log('POST SAVED TO POSTGRESQL DATABASE VIA API SUCCESSFULLY');
+            // Post will be received via Pusher in real-time, no need to manually update the feed
           } else {
             console.error('FAILED TO SAVE POST TO POSTGRESQL DATABASE VIA API');
             
@@ -555,6 +491,8 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
               .then((success: boolean) => {
                 if (success) {
                   console.log('POST SAVED TO POSTGRESQL DATABASE DIRECTLY');
+                  // Add the post to Redux manually since we bypassed the API
+                  dispatch(setFeed([newPost, ...reduxPosts]));
                 } else {
                   console.error('FAILED TO SAVE POST TO POSTGRESQL DATABASE DIRECTLY');
                 }
@@ -572,6 +510,8 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
             .then((success: boolean) => {
               if (success) {
                 console.log('POST SAVED TO POSTGRESQL DATABASE DIRECTLY');
+                // Add the post to Redux manually since we bypassed the API
+                dispatch(setFeed([newPost, ...reduxPosts]));
               } else {
                 console.error('FAILED TO SAVE POST TO POSTGRESQL DATABASE DIRECTLY');
               }
@@ -581,263 +521,195 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
             });
         });
       
-      // Add the post to Redux IMMEDIATELY so it shows up in the feed
-      // Add the new post at the top of the feed
-      dispatch(setFeed([newPost, ...reduxPosts]));
+      // Create an aura points transaction for creating a post
+      const transactionId = uuidv4();
+      const transaction = {
+        id: transactionId,
+        walletAddress: walletAddress,
+        amount: 1, // +1 for creating a post
+        action: 'post_created' as const,
+        timestamp: new Date().toISOString(),
+        counterpartyName: 'GigaAura',
+        counterpartyWallet: 'system'
+      };
       
-      // Also add transaction to PostgreSQL database
-      if (walletAddress) {
-        db.addTransaction(walletAddress, newTransaction)
-          .then((success: boolean) => {
-            if (success) {
-              console.log('TRANSACTION SAVED TO POSTGRESQL DATABASE SUCCESSFULLY');
-            } else {
-              console.error('FAILED TO SAVE TRANSACTION TO POSTGRESQL DATABASE');
-            }
-          })
-          .catch((error: Error) => {
-            console.error('ERROR SAVING TRANSACTION TO POSTGRESQL DATABASE:', error);
-          });
-        
-        // Add transaction to Redux state
-        dispatch(addTransaction(newTransaction));
-      }
+      // Dispatch transaction to Redux
+      dispatch(addTransaction(transaction));
       
-      // Manually trigger a refresh to ensure the latest posts are displayed
-      axios.get(`${getApiBaseUrl()}/api/posts`)
-        .then(response => {
-          if (response.status === 200 && Array.isArray(response.data) && response.data.length > 0) {
-            // Posts are already sorted in the API
-            const posts = response.data;
-            dispatch(setFeed(posts));
-            
-            // Save to localStorage as backup
-            localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
-          }
-        })
-        .catch(error => {
-          console.error('Error refreshing posts after creating new post:', error);
-        });
+      // Create a notification for the post
+      const notificationId = uuidv4();
+      const notification = {
+        id: notificationId,
+        walletAddress: walletAddress,
+        type: 'system' as const,
+        message: 'You earned 1 Aura Point for creating a post',
+        read: false,
+        timestamp: new Date().toISOString(),
+        postId: postId,
+      };
       
-      // Success message
+      // Dispatch notification to Redux
+      dispatch(addNotification(notification));
+      
+      // Success! Clear the form input
+      setNewPostContent('');
+      
+      // Show success notification
       toast.success('Post created successfully!');
+      
       return true;
     } catch (error) {
       console.error('Error creating post:', error);
-      toast.error('Failed to create post. Please try again.');
+      
+      // Show error notification
+      toast.error('Error creating post. Please try again.');
+      
       return false;
     }
   };
 
-  const handleRefreshFeed = () => {
-    setHasNewPosts(false);
-    if (feedRef.current) {
-      feedRef.current.scrollTop = 0;
+  // Render filtered posts based on active tab
+  const renderPosts = () => {
+    if (loading) {
+      return (
+        <div className="w-full flex justify-center items-center py-8">
+          <div className="animate-pulse flex flex-col w-full space-y-4">
+            <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+            <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+            <div className="h-20 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+          </div>
+        </div>
+      );
     }
-    
-    // Only refresh if we're not already refreshing
-    if (!isRefreshing) {
-      // Force a refresh
-      const timestamp = new Date().getTime();
-      
-      axios.get(`${getApiBaseUrl()}/api/posts?t=${timestamp}`, {
-        timeout: 10000,
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        withCredentials: false
-      })
-        .then(response => {
-          if (response.data && Array.isArray(response.data)) {
-            dispatch(setFeed(response.data));
-            setLastPostCount(response.data.length);
-            setLastFetchTime(new Date());
-            
-            // Save to localStorage
-            if (typeof window !== 'undefined') {
-              try {
-                localStorage.setItem('giga-aura-posts', JSON.stringify(response.data));
-              } catch (e) {
-                console.warn('Failed to save posts to localStorage:', e);
-              }
-            }
-          }
-        })
-        .catch(error => {
-          console.error('Error refreshing feed:', error);
-          toast.error('Could not refresh feed. Will try again soon.');
-          
-          // Try fetch API as fallback
-          if (typeof window !== 'undefined') {
-            fetch(`${getApiBaseUrl()}/api/posts?t=${timestamp}`, {
-              method: 'GET',
-              headers: {
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache'
-              },
-              credentials: 'omit'
-            })
-              .then(response => {
-                if (response.ok) {
-                  return response.json();
-                }
-                throw new Error('Network response was not ok');
-              })
-              .then(data => {
-                if (Array.isArray(data) && data.length > 0) {
-                  dispatch(setFeed(data));
-                  if (typeof window !== 'undefined') {
-                    try {
-                      localStorage.setItem('giga-aura-posts', JSON.stringify(data));
-                    } catch (e) {
-                      console.warn('Failed to save posts to localStorage:', e);
-                    }
-                  }
-                }
-              })
-              .catch(fetchError => {
-                console.error('Fetch API fallback also failed:', fetchError);
-              });
-          }
-        });
-    } else {
-      toast('Refresh already in progress...', {
-        duration: 2000,
-        style: {
-          background: '#3498db',
-          color: '#fff',
-        },
-        icon: '🔄'
-      });
-    }
-  };
 
-  if (error) {
-    return (
-      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4 my-4">
-        <h3 className="text-red-800 dark:text-red-400 font-medium">Error loading feed</h3>
-        <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
-        <button 
-          onClick={() => window.location.reload()}
-          className="mt-2 text-white bg-red-600 hover:bg-red-700 px-4 py-1 rounded-full text-sm"
-        >
-          Refresh
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative" ref={feedRef}>
-      {/* Feed Header with Tabs */}
-      <div className="sticky top-0 z-10 bg-white dark:bg-black border-b border-[var(--border-color)]">
-        <div className="flex">
-          <button
-            className={`flex-1 py-4 text-center font-medium relative ${
-              activeTab === 'for-you' 
-                ? 'text-black dark:text-white' 
-                : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
-            }`}
-            onClick={() => handleTabChange('for-you')}
-          >
-            For you
-            {activeTab === 'for-you' && (
-              <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-12 h-1 bg-primary rounded-full"></div>
-            )}
-          </button>
-          <button
-            className={`flex-1 py-4 text-center font-medium relative ${
-              activeTab === 'following' 
-                ? 'text-black dark:text-white' 
-                : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
-            }`}
-            onClick={() => handleTabChange('following')}
-          >
-            Following
-            {activeTab === 'following' && (
-              <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-12 h-1 bg-primary rounded-full"></div>
-            )}
-          </button>
-        </div>
-        
-        {/* Add manual refresh button */}
-        <div className="absolute right-4 top-4">
-          <button
-            onClick={handleRefreshFeed}
-            className={`text-gray-500 hover:text-black dark:hover:text-white p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 ${isRefreshing ? 'animate-spin text-primary' : ''}`}
-            title="Refresh posts"
-            disabled={isRefreshing}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-            </svg>
-          </button>
-        </div>
-      </div>
-      
-      {/* New Posts Notification */}
-      {hasNewPosts && (
-        <div 
-          className="bg-[#F6B73C] text-white py-2 px-4 text-center cursor-pointer shadow-md hover:bg-[#e5a835] transition-colors border-b border-[var(--border-color)]"
-          onClick={handleRefreshFeed}
-        >
-          New posts available! Click to refresh
-        </div>
-      )}
-      
-      {/* Create Post Section */}
-      <div className="border-b border-[var(--border-color)] p-4">
-        <CreatePostForm onSubmit={handleCreatePost} />
-      </div>
-      
-      {/* Feed Content */}
-      <div className="divide-y divide-[var(--border-color)]">
-        {loading ? (
-          <LoadingSpinner />
-        ) : error ? (
-          <div className="p-4 text-center text-red-500">{error}</div>
-        ) : reduxPosts.length === 0 ? (
-          <div className="p-8 text-center">
-            <p className="text-xl text-black dark:text-white">No posts yet</p>
-            <p className="text-gray-500 mt-2">Create the first post or follow some users to see their posts here!</p>
-            <button 
-              onClick={handleRefreshFeed}
-              className="mt-4 px-4 py-2 bg-primary text-white rounded-full hover:bg-primary-hover transition-colors"
-              disabled={isRefreshing}
+    if (error) {
+      return (
+        <div className="w-full flex justify-center items-center py-8">
+          <div className="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
+            <p className="text-red-500 dark:text-red-400 mb-2">{error}</p>
+            <button
+              className="px-4 py-2 bg-primary text-white rounded-full hover:bg-primary-hover"
+              onClick={() => {
+                setError(null);
+                setRetryCount(0);
+              }}
             >
-              {isRefreshing ? 'Refreshing...' : 'Refresh Feed'}
+              Try Again
             </button>
           </div>
-        ) : (
-          // Posts are already sorted by created date, newest first in the Redux store
-          reduxPosts.map(post => (
-            <PostCard key={post.id} post={post} />
-          ))
-        )}
-        
-        {/* Loading more indicator at the bottom */}
-        {isRefreshing && reduxPosts.length > 0 && (
-          <div className="p-4 flex justify-center">
-            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      );
+    }
+
+    // Filter posts based on active tab
+    let filteredPosts = [...reduxPosts];
+    
+    if (activeTab === 'for-you') {
+      // For You tab: Show all posts, sorted by recency
+      filteredPosts = filteredPosts.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    } else if (activeTab === 'following') {
+      // Following tab: Filter to only show posts from accounts the user is following
+      // TODO: Implement following logic; for now, just show the user's own posts
+      filteredPosts = filteredPosts.filter(post => post.authorWallet === walletAddress);
+    }
+
+    if (filteredPosts.length === 0) {
+      return (
+        <div className="w-full flex justify-center items-center py-8">
+          <div className="text-center">
+            <p className="mb-4 text-[var(--text-primary)]">No posts to display.</p>
+            {activeTab === 'following' && (
+              <p className="text-sm text-[var(--text-secondary)]">
+                Follow other users to see their posts here.
+              </p>
+            )}
           </div>
-        )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {filteredPosts.map((post) => (
+          <PostCard key={post.id} post={post} />
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div className="w-full max-w-xl mx-auto">
+      {/* New Post Banner */}
+      {hasNewPosts && (
+        <div 
+          className="sticky top-16 z-10 w-full bg-primary text-white py-2 px-4 rounded-lg mb-4 cursor-pointer flex items-center justify-center"
+          onClick={() => {
+            setHasNewPosts(false);
+            // Force a refresh
+            axios.get(`${getApiBaseUrl()}/api/posts`)
+              .then(response => {
+                if (response.data && Array.isArray(response.data)) {
+                  dispatch(setFeed(response.data));
+                }
+              })
+              .catch(error => {
+                console.error('Error refreshing feed:', error);
+              });
+          }}
+        >
+          <div className="flex items-center">
+            <FaRegListAlt className="mr-2" />
+            <span>New posts available! Click to refresh</span>
+          </div>
+        </div>
+      )}
+
+      {/* Tab selector */}
+      <div className="flex border-b dark:border-gray-700 mb-4">
+        <button
+          className={`flex-1 py-2 font-semibold text-center ${
+            activeTab === 'for-you'
+              ? 'text-primary border-b-2 border-primary'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+          }`}
+          onClick={() => handleTabChange('for-you')}
+        >
+          For You
+        </button>
+        <button
+          className={`flex-1 py-2 font-semibold text-center ${
+            activeTab === 'following'
+              ? 'text-primary border-b-2 border-primary'
+              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+          }`}
+          onClick={() => handleTabChange('following')}
+        >
+          Following
+        </button>
+      </div>
+
+      {/* Create post form */}
+      <div className="mb-6">
+        <CreatePostForm onSubmit={handleCreatePost} />
+      </div>
+
+      {/* Posts feed */}
+      <div ref={feedRef}>
+        {renderPosts()}
       </div>
     </div>
   );
 }
 
-// Main export with error boundary
-function Feed(props: Record<string, any>) {
+// Main feed component (add error boundary)
+export default function Feed({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   return (
     <FeedErrorBoundary
       fallback={<FeedErrorFallback error={new Error('Failed to load feed')} resetErrorBoundary={() => window.location.reload()} />}
     >
-      <FeedSafetyWrapper {...props} />
+      <FeedSafetyWrapper isMetaMaskDetected={isMetaMaskDetected} />
     </FeedErrorBoundary>
   );
-}
-
-export default Feed; 
+} 

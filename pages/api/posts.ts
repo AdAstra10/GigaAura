@@ -1,148 +1,92 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import db from '../../giga-aura/services/db-init';
+import type { NextApiRequest, NextApiResponse } from 'next';
+import db from '../../giga-aura/services/postgresql-db';
+import { triggerNewPost, triggerUpdatedPost } from '../../lib/pusher-server';
 import { Post } from '../../lib/slices/postsSlice';
-import { sendEventToAll } from './events';
 
-// In-memory cache for when database is unavailable
-let postsCache: Post[] = [];
-const lastFetchTime = new Date();
+// Enhanced CORS middleware
+const cors = async (req: NextApiRequest, res: NextApiResponse) => {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
+
+  // Handle preflight request
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return true;
+  }
+  return false;
+};
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Enhanced CORS headers to fix cross-origin issues
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
-  // Set performance and caching headers
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  res.setHeader('Surrogate-Control', 'no-store');
-  
   try {
-    // GET request to fetch all posts
+    // Handle CORS preflight
+    const isPreflightHandled = await cors(req, res);
+    if (isPreflightHandled) return;
+    
     if (req.method === 'GET') {
-      try {
-        console.log('API: Fetching posts from database');
-        // Get posts without any wallet filtering - all posts are visible to everyone
-        const posts = await db.getPosts();
-        
-        // Update cache
-        if (posts && posts.length > 0) {
-          postsCache = [...posts];
-        }
-        
-        // Sort posts to ensure newest are at the top
-        const sortedPosts = [...(posts || [])].sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-        
-        // Add timestamp to response to help debug
-        const response = {
-          timestamp: new Date().toISOString(),
-          count: sortedPosts.length,
-          posts: sortedPosts
-        };
-        
-        return res.status(200).json(sortedPosts);
-      } catch (dbError) {
-        console.error('Database error in GET /api/posts:', dbError);
-        
-        // Return cache if available even when database fails
-        if (postsCache.length > 0) {
-          console.log('API: Returning cached posts due to database error:', postsCache.length);
-          return res.status(200).json(postsCache);
-        }
-        
-        // If nothing else works, return empty array with a timestamp
-        return res.status(200).json([]);
+      // Fetch posts from PostgreSQL database
+      const posts = await db.getPosts();
+      res.status(200).json(posts);
+    } else if (req.method === 'POST') {
+      // Create a new post in PostgreSQL database
+      const { content, walletAddress, username, timestamp } = req.body;
+      
+      if (!content || !walletAddress) {
+        return res.status(400).json({ error: 'Content and wallet address are required' });
       }
+      
+      // Create post object compatible with the database service
+      const newPost: Post = {
+        id: Date.now().toString(), // Generate a unique ID
+        content,
+        authorWallet: walletAddress,
+        authorName: username || 'Anonymous',
+        createdAt: timestamp || new Date().toISOString(),
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        likedBy: []
+      };
+      
+      // Save the post to the database
+      const success = await db.savePost(newPost);
+      
+      if (success) {
+        // Trigger Pusher event for real-time update
+        await triggerNewPost(newPost);
+        res.status(201).json(newPost);
+      } else {
+        res.status(500).json({ error: 'Failed to save post' });
+      }
+    } else if (req.method === 'PUT') {
+      // Update an existing post (like, comment, bookmark)
+      const postUpdate = req.body;
+      
+      if (!postUpdate || !postUpdate.id) {
+        return res.status(400).json({ error: 'Post ID is required' });
+      }
+      
+      // Update the post in the database
+      const success = await db.updatePost(postUpdate);
+      
+      if (success) {
+        // Trigger Pusher event for real-time update of the modified post
+        await triggerUpdatedPost(postUpdate);
+        res.status(200).json({ success: true, message: 'Post updated successfully' });
+      } else {
+        res.status(500).json({ error: 'Failed to update post' });
+      }
+    } else {
+      res.setHeader('Allow', ['GET', 'POST', 'PUT']);
+      res.status(405).end(`Method ${req.method} Not Allowed`);
     }
-    
-    // POST request to create a new post
-    if (req.method === 'POST') {
-      const post: Post = req.body;
-      
-      if (!post || !post.id || !post.content || !post.authorWallet) {
-        return res.status(400).json({ error: 'Invalid post data' });
-      }
-      
-      // Make sure createdAt is set
-      if (!post.createdAt) {
-        post.createdAt = new Date().toISOString();
-      }
-      
-      try {
-        // Save the post to the database
-        const success = await db.savePost(post);
-        
-        if (success) {
-          // Also add to cache immediately
-          postsCache = [post, ...postsCache.filter(p => p.id !== post.id)];
-          
-          // Notify all connected clients about the new post
-          try {
-            sendEventToAll({
-              type: 'new-post',
-              postId: post.id,
-              authorWallet: post.authorWallet,
-              timestamp: new Date().toISOString()
-            });
-            console.log('Sent new-post event to all connected clients');
-          } catch (eventError) {
-            console.error('Failed to broadcast new post event:', eventError);
-            // Continue anyway - this is not critical
-          }
-          
-          return res.status(201).json({ success: true, post });
-        } else {
-          // Even if database save "failed", it might have actually succeeded but returned
-          // false due to error handling. Add to cache just in case.
-          postsCache = [post, ...postsCache.filter(p => p.id !== post.id)];
-          
-          return res.status(500).json({ 
-            error: 'Failed to save post to database',
-            fallback: 'Post will be saved locally in browser',
-            success: true,
-            post
-          });
-        }
-      } catch (saveError) {
-        console.error('Error saving post:', saveError);
-        
-        // Add to cache even on error
-        postsCache = [post, ...postsCache.filter(p => p.id !== post.id)];
-        
-        return res.status(500).json({ 
-          error: 'Database error',
-          errorDetails: saveError instanceof Error ? saveError.message : String(saveError),
-          success: true, // Still considering a success for client
-          post: post,
-          message: 'Post will be saved to local storage in the browser'
-        });
-      }
-    }
-    
-    // If the method is not supported
-    return res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
     console.error('API Error:', error);
-    
-    // For GET requests, return cache even in case of errors
-    if (req.method === 'GET' && postsCache.length > 0) {
-      return res.status(200).json(postsCache);
-    }
-    
-    return res.status(500).json({ 
-      error: 'Internal server error',
-      errorDetails: error instanceof Error ? error.message : String(error)
-    });
+    res.status(500).json({ error: 'Internal Server Error', details: (error as Error).message });
   }
 } 
