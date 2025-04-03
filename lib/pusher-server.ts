@@ -12,45 +12,53 @@ const pusherServer = new Pusher({
 // Import channel and event names for consistency
 import { PUSHER_CHANNELS, PUSHER_EVENTS } from './pusher';
 
+// Helper function to safely trigger a Pusher event with error handling
+const safelyTriggerEvent = async (channel: string, event: string, data: any): Promise<boolean> => {
+  try {
+    await pusherServer.trigger(channel, event, data);
+    console.log(`Successfully triggered ${event} on ${channel}`);
+    return true;
+  } catch (error) {
+    console.error(`Error triggering ${event} on ${channel}:`, error);
+    return false;
+  }
+};
+
 // Helper function to trigger a new post event
 export const triggerNewPost = async (post: any) => {
-  try {
-    await pusherServer.trigger(
-      PUSHER_CHANNELS.POSTS,
-      PUSHER_EVENTS.NEW_POST,
-      post
-    );
-    console.log('Triggered new post event via Pusher');
-  } catch (error) {
-    console.error('Error triggering Pusher event:', error);
-  }
+  return safelyTriggerEvent(PUSHER_CHANNELS.POSTS, PUSHER_EVENTS.NEW_POST, post);
 };
 
 // Helper function to trigger an updated post event
 export const triggerUpdatedPost = async (post: any) => {
-  try {
-    await pusherServer.trigger(
-      PUSHER_CHANNELS.POSTS,
-      PUSHER_EVENTS.UPDATED_POST,
-      post
-    );
-    console.log('Triggered updated post event via Pusher');
-  } catch (error) {
-    console.error('Error triggering Pusher event:', error);
-  }
+  return safelyTriggerEvent(PUSHER_CHANNELS.POSTS, PUSHER_EVENTS.UPDATED_POST, post);
 };
 
 // Helper function to trigger a new notification event
 export const triggerNewNotification = async (notification: any) => {
+  return safelyTriggerEvent(PUSHER_CHANNELS.NOTIFICATIONS, PUSHER_EVENTS.NEW_NOTIFICATION, notification);
+};
+
+// Helper function to test Pusher connectivity
+export const testPusherConnection = async (): Promise<{success: boolean, message: string}> => {
   try {
-    await pusherServer.trigger(
-      PUSHER_CHANNELS.NOTIFICATIONS,
-      PUSHER_EVENTS.NEW_NOTIFICATION,
-      notification
-    );
-    console.log('Triggered new notification event via Pusher');
+    // Trigger a test event on a test channel
+    await pusherServer.trigger('test-channel', 'test-event', {
+      message: 'Test message',
+      timestamp: new Date().toISOString()
+    });
+    
+    return {
+      success: true,
+      message: 'Successfully connected to Pusher and triggered test event'
+    };
   } catch (error) {
-    console.error('Error triggering Pusher event:', error);
+    console.error('Pusher connection test failed:', error);
+    
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
   }
 };
 

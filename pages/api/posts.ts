@@ -59,20 +59,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const savedPost = await db.savePost(newPost);
         
         // Trigger Pusher event after successfully saving post
+        let pusherSuccess = false;
         if (savedPost) {
           try {
-            await triggerNewPost(savedPost);
-            console.log('Pusher event triggered for new post');
+            pusherSuccess = await triggerNewPost(savedPost);
+            if (pusherSuccess) {
+              console.log('Pusher event triggered for new post');
+            } else {
+              console.warn('Failed to trigger Pusher event, but post was saved');
+            }
           } catch (pusherError) {
-            console.error('Failed to trigger Pusher event:', pusherError);
-            // Continue anyway - Pusher is not critical for saving posts
+            console.error('Error with Pusher:', pusherError);
           }
         }
         
-        // Return success response with the saved post
+        // Return success response with the saved post and Pusher status
         res.status(201).json({ 
           success: true, 
           data: savedPost,
+          pusherEvent: pusherSuccess,
           timestamp: new Date().toISOString()
         });
       } catch (error) {
@@ -103,13 +108,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const updatedPost = await db.updatePost(post);
         
         // Trigger Pusher event for post update
+        let pusherSuccess = false;
         if (updatedPost) {
           try {
-            await triggerUpdatedPost(updatedPost);
-            console.log('Pusher event triggered for updated post');
+            pusherSuccess = await triggerUpdatedPost(updatedPost);
+            if (pusherSuccess) {
+              console.log('Pusher event triggered for updated post');
+            } else {
+              console.warn('Failed to trigger Pusher event, but post was updated');
+            }
           } catch (pusherError) {
-            console.error('Failed to trigger Pusher event for update:', pusherError);
-            // Continue anyway - Pusher is not critical
+            console.error('Error with Pusher:', pusherError);
           }
         }
         
@@ -117,6 +126,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         res.status(200).json({
           success: true,
           data: updatedPost,
+          pusherEvent: pusherSuccess,
           timestamp: new Date().toISOString()
         });
       } catch (error) {
