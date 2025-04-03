@@ -140,6 +140,10 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   const [lastPostCount, setLastPostCount] = useState(0);
   const [lastFetchTime, setLastFetchTime] = useState(new Date());
   const sseRef = useRef<EventSource | null>(null);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const MAX_RETRIES = 5;
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Function to get the API base URL
   const getApiBaseUrl = () => {
@@ -153,9 +157,21 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
 
   useEffect(() => {
     const loadPosts = async () => {
-      setLoading(true);
+      // Don't show loading indicator for refreshes, only for initial load
+      if (reduxPosts.length === 0) {
+        setLoading(true);
+      }
+      
+      // If we're refreshing and already have posts, don't show loading spinner
+      if (isRefreshing && reduxPosts.length > 0) {
+        // Don't change loading state
+      } else {
+        setLoading(reduxPosts.length === 0);
+      }
       
       try {
+        console.log('Loading posts...');
+        
         // Check if we're running in the browser
         if (typeof window !== 'undefined') {
           // First try to load posts from localStorage for immediate display
@@ -164,12 +180,15 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
             try {
               const localPosts = JSON.parse(localPostsString);
               if (Array.isArray(localPosts) && localPosts.length > 0) {
-                // Sort posts to ensure newest are at the top
-                const sortedPosts = [...localPosts].sort(
-                  (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-                );
-                dispatch(setFeed(sortedPosts));
-                console.log('Loaded posts from local storage:', sortedPosts.length);
+                // Only update if we don't already have posts in the store
+                if (reduxPosts.length === 0) {
+                  // Sort posts to ensure newest are at the top
+                  const sortedPosts = [...localPosts].sort(
+                    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                  );
+                  dispatch(setFeed(sortedPosts));
+                  console.log('Loaded posts from local storage:', sortedPosts.length);
+                }
               }
             } catch (e) {
               console.warn('Failed to parse local posts:', e);
@@ -179,7 +198,20 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         
         // Then fetch the latest posts from API (server-side PostgreSQL)
         try {
-          const response = await axios.get(`${getApiBaseUrl()}/api/posts`);
+          console.log('Fetching posts from API...');
+          setIsRefreshing(true);
+          
+          const response = await axios.get(`${getApiBaseUrl()}/api/posts`, {
+            timeout: 8000, // 8 second timeout
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            }
+          });
+          
+          setIsRefreshing(false);
+          setRetryCount(0); // Reset retry count on success
+          
           if (response.data && Array.isArray(response.data) && response.data.length > 0) {
             // Posts are already sorted in the API
             const posts = response.data;
@@ -198,14 +230,20 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
             
             // Save to localStorage as backup if we're in the browser
             if (typeof window !== 'undefined') {
-              localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
+              try {
+                localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
+              } catch (storageError) {
+                console.warn('Failed to save posts to localStorage:', storageError);
+              }
             }
           }
         } catch (apiError) {
+          setIsRefreshing(false);
           console.error('Error fetching posts from API:', apiError);
           
           // Fall back to direct database call if API fails
           try {
+            console.log('Trying direct database access as fallback...');
             const databasePosts = await db.getPosts();
             if (databasePosts && databasePosts.length > 0) {
               // Sort posts to ensure newest are at the top
@@ -217,11 +255,22 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
               
               // Save to localStorage as backup if we're in the browser
               if (typeof window !== 'undefined') {
-                localStorage.setItem('giga-aura-posts', JSON.stringify(sortedPosts));
+                try {
+                  localStorage.setItem('giga-aura-posts', JSON.stringify(sortedPosts));
+                } catch (storageError) {
+                  console.warn('Failed to save posts to localStorage:', storageError);
+                }
               }
+            } else if (reduxPosts.length === 0) {
+              // Only retry if we don't have any posts
+              scheduleRetry();
             }
           } catch (dbError) {
             console.error('Error loading posts from database:', dbError);
+            // Only retry if we don't have any posts and haven't exceeded retries
+            if (reduxPosts.length === 0) {
+              scheduleRetry();
+            }
           }
         }
         
@@ -229,6 +278,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       } catch (error) {
         console.error('Error loading posts:', error);
         setLoading(false);
+        setIsRefreshing(false);
         
         // Fallback to mock posts if everything fails and we have no posts
         if (!reduxPosts || reduxPosts.length === 0) {
@@ -251,14 +301,39 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       }
     };
     
+    // Schedule retry logic for API failures
+    const scheduleRetry = () => {
+      if (retryCount < MAX_RETRIES) {
+        console.log(`Scheduling retry ${retryCount + 1}/${MAX_RETRIES} in ${(retryCount + 1) * 3} seconds...`);
+        
+        // Clear any existing timeout
+        if (retryTimeoutRef.current) {
+          clearTimeout(retryTimeoutRef.current);
+        }
+        
+        // Set new timeout with exponential backoff
+        retryTimeoutRef.current = setTimeout(() => {
+          setRetryCount(prev => prev + 1);
+          loadPosts();
+        }, (retryCount + 1) * 3000);
+      } else {
+        console.log('Maximum retry attempts reached');
+      }
+    };
+    
     // Load posts initially
     loadPosts();
     
     // Set up auto-refresh interval (every 5 seconds instead of 30 for more real-time updates)
     if (autoRefresh) {
       refreshIntervalRef.current = setInterval(() => {
-        console.log('Auto-refreshing posts...');
-        loadPosts();
+        // Only refresh if we're not already refreshing
+        if (!isRefreshing) {
+          console.log('Auto-refreshing posts...');
+          loadPosts();
+        } else {
+          console.log('Skipping refresh as previous request is still in progress');
+        }
       }, 5000); // 5 seconds for real-time effect
     }
     
@@ -281,7 +356,9 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
               // Show notification of new posts
               setHasNewPosts(true);
               // Refresh posts immediately
-              loadPosts();
+              if (!isRefreshing) {
+                loadPosts();
+              }
               
               // Show toast notification
               toast.success('New posts available!', {
@@ -294,12 +371,17 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           }
         };
         
+        eventSource.onopen = () => {
+          console.log('SSE connection established');
+        };
+        
         eventSource.onerror = (error) => {
           console.error('SSE connection error:', error);
           // Close and try to reconnect after a delay
           eventSource.close();
           setTimeout(() => {
             if (autoRefresh) {
+              console.log('Attempting to reconnect to SSE...');
               // Try to reconnect
               const newEventSource = new EventSource(`${getApiBaseUrl()}/api/events`);
               sseRef.current = newEventSource;
@@ -319,13 +401,18 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         clearInterval(refreshIntervalRef.current);
       }
       
+      // Clean up retry timeout if it exists
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+      
       // Close SSE connection
       if (sseRef.current) {
         sseRef.current.close();
         sseRef.current = null;
       }
     };
-  }, [dispatch, autoRefresh, walletAddress]);
+  }, [dispatch, autoRefresh, walletAddress, isRefreshing, retryCount, reduxPosts.length]);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -477,18 +564,48 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
     if (feedRef.current) {
       feedRef.current.scrollTop = 0;
     }
-    // Force a refresh
-    axios.get(`${getApiBaseUrl()}/api/posts`)
-      .then(response => {
-        if (response.data && Array.isArray(response.data)) {
-          dispatch(setFeed(response.data));
-          setLastPostCount(response.data.length);
-          setLastFetchTime(new Date());
+    
+    // Only refresh if we're not already refreshing
+    if (!isRefreshing) {
+      // Force a refresh
+      axios.get(`${getApiBaseUrl()}/api/posts`, {
+        timeout: 8000,
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'X-Requested-With': 'XMLHttpRequest'
         }
       })
-      .catch(error => {
-        console.error('Error refreshing feed:', error);
+        .then(response => {
+          if (response.data && Array.isArray(response.data)) {
+            dispatch(setFeed(response.data));
+            setLastPostCount(response.data.length);
+            setLastFetchTime(new Date());
+            
+            // Save to localStorage
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.setItem('giga-aura-posts', JSON.stringify(response.data));
+              } catch (e) {
+                console.warn('Failed to save posts to localStorage:', e);
+              }
+            }
+          }
+        })
+        .catch(error => {
+          console.error('Error refreshing feed:', error);
+          toast.error('Could not refresh feed. Will try again soon.');
+        });
+    } else {
+      toast('Refresh already in progress...', {
+        duration: 2000,
+        style: {
+          background: '#3498db',
+          color: '#fff',
+        },
+        icon: '🔄'
       });
+    }
   };
 
   if (error) {
@@ -543,8 +660,9 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         <div className="absolute right-4 top-4">
           <button
             onClick={handleRefreshFeed}
-            className="text-gray-500 hover:text-black dark:hover:text-white p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+            className={`text-gray-500 hover:text-black dark:hover:text-white p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 ${isRefreshing ? 'animate-spin text-primary' : ''}`}
             title="Refresh posts"
+            disabled={isRefreshing}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
@@ -552,6 +670,16 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           </button>
         </div>
       </div>
+      
+      {/* New Posts Notification */}
+      {hasNewPosts && (
+        <div 
+          className="bg-[#F6B73C] text-white py-2 px-4 text-center cursor-pointer shadow-md hover:bg-[#e5a835] transition-colors border-b border-[var(--border-color)]"
+          onClick={handleRefreshFeed}
+        >
+          New posts available! Click to refresh
+        </div>
+      )}
       
       {/* Create Post Section */}
       <div className="border-b border-[var(--border-color)] p-4">
@@ -568,12 +696,26 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           <div className="p-8 text-center">
             <p className="text-xl text-black dark:text-white">No posts yet</p>
             <p className="text-gray-500 mt-2">Create the first post or follow some users to see their posts here!</p>
+            <button 
+              onClick={handleRefreshFeed}
+              className="mt-4 px-4 py-2 bg-primary text-white rounded-full hover:bg-primary-hover transition-colors"
+              disabled={isRefreshing}
+            >
+              {isRefreshing ? 'Refreshing...' : 'Refresh Feed'}
+            </button>
           </div>
         ) : (
           // Posts are already sorted by created date, newest first in the Redux store
           reduxPosts.map(post => (
             <PostCard key={post.id} post={post} />
           ))
+        )}
+        
+        {/* Loading more indicator at the bottom */}
+        {isRefreshing && reduxPosts.length > 0 && (
+          <div className="p-4 flex justify-center">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+          </div>
         )}
       </div>
     </div>
