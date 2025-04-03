@@ -4,68 +4,115 @@
  */
 
 import { setDatabaseBackend, DatabaseBackend } from './db-switch';
-import postgresqlDb from './postgresql-db';
+import * as postgresDb from './postgresql-db';
 
 // Initialize database by setting PostgreSQL as the default backend
-export const initializeDatabase = () => {
-  // Check if running in browser or server
-  const isServer = typeof window === 'undefined';
+const initDatabase = (): { db: any, config: { storageType: string, databaseUrl?: string } } => {
+  console.log('Initializing database connection...');
+  
+  // First set up the backend
+  try {
+    setDatabaseBackend(DatabaseBackend.POSTGRESQL);
+    console.log('Database backend set to PostgreSQL');
+  } catch (e) {
+    console.error('Failed to set database backend to PostgreSQL:', e);
+  }
+  
+  // If running on the server side, use real PostgreSQL
+  if (typeof window === 'undefined') {
+    try {
+      const databaseUrl = process.env.DATABASE_URL || process.env.PG_DATABASE_URL;
+      
+      if (databaseUrl) {
+        console.log('Server-side database initialized with connection string');
+        
+        return {
+          // Return the database instance for convenience
+          db: postgresDb,
+          
+          // Return the list of environment variables being used (without sensitive values)
+          config: {
+            storageType: 'PostgreSQL (server)',
+            databaseUrl: databaseUrl.replace(/\/\/(.+)@/, '//*****@') // Hide credentials
+          }
+        };
+      } else {
+        console.log('No database connection string found, using fallback configuration');
+        
+        return {
+          // Return the database instance for convenience (browser version)
+          db: postgresDb,
+          
+          // Return a placeholder config
+          config: {
+            storageType: 'PostgreSQL (server, fallback config)',
+          }
+        };
+      }
+    } catch (e) {
+      console.error('Failed to initialize server-side database:', e);
+    }
+  }
+  
+  // If we reach here, we're either in the browser or server init failed - use local storage
+  console.log('Client-side database initialized with localStorage fallback');
   
   try {
-    if (isServer) {
-      console.log('🔌 Initializing PostgreSQL database connection (server-side)');
+    // Set localStorage-friendly backend
+    setDatabaseBackend(DatabaseBackend.LOCAL_STORAGE);
+  } catch (e) {
+    console.warn('Failed to set database backend to localStorage:', e);
+  }
+  
+  return {
+    db: postgresDb,
+    config: {
+      storageType: 'localStorage',
+    }
+  };
+};
+
+// Initialize the database on module load
+const dbInstance = initDatabase();
+
+// Create the enhanced database object
+const db = {
+  ...dbInstance.db,
+  
+  // Add a test connection method to verify database connectivity
+  testConnection: async () => {
+    try {
+      // Try to get posts as a connectivity test
+      const posts = await postgresDb.getPosts();
       
-      // Set PostgreSQL as the default database backend (server-side)
-      setDatabaseBackend(DatabaseBackend.POSTGRESQL);
-      
+      if (Array.isArray(posts)) {
+        console.log(`Database connection test successful - retrieved ${posts.length} posts`);
+        return {
+          success: true,
+          message: `Database connection successful, found ${posts.length} posts`,
+          data: { postCount: posts.length }
+        };
+      } else {
+        console.warn('Database connection test: received non-array response');
+        return {
+          success: false,
+          message: 'Database returned unexpected data format',
+          data: null
+        };
+      }
+    } catch (error) {
+      console.error('Database connection test failed:', error);
       return {
-        // Return the database instance for convenience
-        db: postgresqlDb,
-        
-        // Return the list of environment variables being used (without sensitive values)
-        config: {
-          host: process.env.PG_HOST || 'dpg-cvmv93k9c44c73blmoag-a.oregon-postgres.render.com',
-          database: process.env.PG_DATABASE || 'gigaaura_storage',
-          user: process.env.PG_USER || 'gigaaura_storage_user',
-          port: parseInt(process.env.PG_PORT || '5432', 10),
-        }
-      };
-    } else {
-      console.log('🔌 Initializing browser-based storage (local storage)');
-      
-      // In browser, we'll use PostgreSQL implementation which already has localStorage fallbacks
-      setDatabaseBackend(DatabaseBackend.POSTGRESQL);
-      
-      return {
-        // Return the database instance for convenience (browser version)
-        db: postgresqlDb,
-        
-        // Return a placeholder config
-        config: {
-          storageType: 'localStorage',
-          status: 'active'
-        }
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown database error',
+        data: null
       };
     }
-  } catch (error) {
-    console.error('Error initializing database:', error);
-    
-    // In case of error, still return the database instance which will use local storage fallbacks
-    setDatabaseBackend(DatabaseBackend.POSTGRESQL); // Still using PostgreSQL implementation with fallbacks
-    
-    return {
-      db: postgresqlDb,
-      config: {
-        storageType: 'localStorage',
-        status: 'fallback',
-        error: error instanceof Error ? error.message : String(error)
-      }
-    };
   }
 };
 
-// Initialize immediately
-export const dbInstance = initializeDatabase();
+// Log when the database module is loaded
+console.log('Database module initialized');
 
-// Export the database instance for direct use
-export default dbInstance.db; 
+// Export the enhanced database instance
+export default db; 

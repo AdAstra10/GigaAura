@@ -567,6 +567,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
     try {
       // Generate a new unique ID for the post
       const postId = uuidv4();
+      console.log('Creating new post with ID:', postId);
       
       // Create post to save to PostgreSQL via API
       const newPost: Post = {
@@ -581,6 +582,9 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         shares: 0,
         likedBy: [],
       };
+      
+      // Show toast notification that post is being created
+      toast.loading('Creating post...', { id: postId });
       
       // IMPORTANT: Save post using the API (server-side PostgreSQL with Pusher integration)
       fetch(`${getApiBaseUrl()}/api/posts`, {
@@ -603,32 +607,79 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       })
       .then(data => {
         console.log('POST SAVED TO POSTGRESQL DATABASE VIA API SUCCESSFULLY', data);
+        toast.dismiss(postId);
+        toast.success('Post created successfully!');
         
-        // If Pusher is not working, add the post manually
+        // If Pusher event was not triggered, add the post manually
         const savedPost = data.data || newPost;
         
-        // Add to Redux store manually as a fallback
+        // Add to Redux store immediately to ensure the post is visible
+        dispatch(addPost(savedPost));
+        
         if (!data.pusherEvent) {
           console.log('Pusher event not triggered, manually updating UI');
-          dispatch(addPost(savedPost));
         }
+        
+        // Force a refresh of the posts list after a short delay
+        setTimeout(() => {
+          if (autoRefresh && !isRefreshing) {
+            console.log('Forcing refresh to ensure post is visible');
+            setHasNewPosts(false); // Hide the notification banner if shown
+            
+            // Trigger a refresh of the posts
+            fetch(`${getApiBaseUrl()}/api/posts?t=${new Date().getTime()}`, {
+              method: 'GET',
+              headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Accept': 'application/json',
+              },
+              mode: 'same-origin',
+              credentials: 'same-origin',
+            })
+            .then(response => response.json())
+            .then(posts => {
+              if (Array.isArray(posts)) {
+                console.log(`Loaded ${posts.length} posts after creating new post`);
+                dispatch(setFeed(posts));
+                
+                // Check if our new post is in the list
+                const newPostFound = posts.some(p => p.id === postId);
+                if (!newPostFound) {
+                  console.warn('New post not found in refreshed posts list, may need to add manually');
+                } else {
+                  console.log('New post confirmed in refreshed posts list');
+                }
+              }
+            })
+            .catch(error => {
+              console.error('Error refreshing posts:', error);
+            });
+          }
+        }, 1000);
       })
       .catch(error => {
         console.error('ERROR SAVING POST TO POSTGRESQL DATABASE VIA API:', error);
+        toast.dismiss(postId);
+        toast.error('Error saving post to database');
         
         // Fallback to direct database call if API fails
         db.savePost(newPost)
           .then((success: boolean) => {
             if (success) {
               console.log('POST SAVED TO POSTGRESQL DATABASE DIRECTLY');
+              toast.success('Post created successfully (fallback)');
+              
               // Add the post to Redux manually since we bypassed the API
               dispatch(addPost(newPost));
             } else {
               console.error('FAILED TO SAVE POST TO POSTGRESQL DATABASE DIRECTLY');
+              toast.error('Failed to save post to database');
             }
           })
           .catch((dbError: Error) => {
             console.error('ERROR SAVING POST TO POSTGRESQL DATABASE DIRECTLY:', dbError);
+            toast.error('Error creating post. Please try again.');
           });
       });
       
@@ -664,9 +715,6 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       
       // Success! Clear the form input
       setNewPostContent('');
-      
-      // Show success notification
-      toast.success('Post created successfully!');
       
       return true;
     } catch (error) {

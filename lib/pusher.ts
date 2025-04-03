@@ -6,49 +6,83 @@ if (process.env.NODE_ENV !== 'production') {
   Pusher.logToConsole = true;
 }
 
-// Initialize Pusher client with your app credentials
-const pusherClient = new Pusher(process.env.NEXT_PUBLIC_PUSHER_APP_KEY || '477339a84785c23745a5', {
-  cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'us2',
-  forceTLS: true, // Use TLS for secure connections
-  enabledTransports: ['ws', 'wss', 'xhr_streaming', 'xhr_polling'], // Explicitly enable all transports
-  disabledTransports: [], // Don't disable any transports
-  authEndpoint: '/api/pusher/auth', // Will add this endpoint if needed later
-  auth: {
-    headers: {
-      // Add any necessary auth headers (if needed)
-    }
-  },
-  activityTimeout: 60000, // Increase activity timeout (default 120000)
-  pongTimeout: 30000, // Increase pong timeout (default 30000)
-});
+// Create a robust Pusher client initialization with fallbacks
+const createPusherClient = () => {
+  try {
+    const client = new Pusher(process.env.NEXT_PUBLIC_PUSHER_APP_KEY || '477339a84785c23745a5', {
+      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'us2',
+      forceTLS: true, // Use TLS for secure connections
+      enabledTransports: ['ws', 'wss', 'xhr_streaming', 'xhr_polling'], // Explicitly enable all transports
+      disabledTransports: [], // Don't disable any transports
+      authEndpoint: '/api/pusher/auth', // Authentication endpoint for private channels
+      auth: {
+        headers: {
+          // Add any necessary auth headers (if needed)
+        }
+      },
+      // Transport fallback settings
+      activityTimeout: 60000, // Increase activity timeout (default 120000)
+      pongTimeout: 30000, // Increase pong timeout (default 30000)
+    });
 
-// Add connection event listeners for debugging
-if (process.env.NODE_ENV !== 'production') {
-  pusherClient.connection.bind('connecting', () => {
-    console.log('🔄 Pusher attempting to connect...');
-  });
-  
-  pusherClient.connection.bind('connected', () => {
-    console.log('✅ Pusher connected successfully');
-  });
-  
-  pusherClient.connection.bind('disconnected', () => {
-    console.log('⚠️ Pusher disconnected');
-  });
-  
-  pusherClient.connection.bind('failed', () => {
-    console.error('❌ Pusher connection failed');
-  });
-  
-  pusherClient.connection.bind('error', (err: any) => {
-    console.error('❌ Pusher connection error:', err);
-  });
-}
+    // Setup additional default event handlers
+    if (process.env.NODE_ENV !== 'production') {
+      client.connection.bind('connecting', () => {
+        console.log('🔄 Pusher attempting to connect...');
+      });
+      
+      client.connection.bind('connected', () => {
+        console.log('✅ Pusher connected successfully');
+      });
+      
+      client.connection.bind('disconnected', () => {
+        console.log('⚠️ Pusher disconnected');
+      });
+      
+      client.connection.bind('failed', () => {
+        console.error('❌ Pusher connection failed');
+        
+        // When connection fails, try to reconnect
+        setTimeout(() => {
+          console.log('🔄 Attempting to reconnect to Pusher...');
+          client.connect();
+        }, 3000);
+      });
+      
+      client.connection.bind('error', (err: any) => {
+        console.error('❌ Pusher connection error:', err);
+      });
+    }
+
+    return client;
+  } catch (error) {
+    console.error('Failed to initialize Pusher client:', error);
+    
+    // Create a mock client that doesn't throw errors when methods are called
+    return {
+      connection: {
+        bind: () => {},
+        state: 'failed',
+      },
+      subscribe: () => ({
+        bind: () => {},
+        unbind_all: () => {},
+      }),
+      unsubscribe: () => {},
+      disconnect: () => {},
+      connect: () => {},
+    } as unknown as Pusher;
+  }
+};
+
+// Initialize the Pusher client
+const pusherClient = createPusherClient();
 
 // Export Pusher event channel names for consistency
 export const PUSHER_CHANNELS = {
   POSTS: 'posts-channel',
   NOTIFICATIONS: 'notifications-channel',
+  TEST: 'test-channel',
 };
 
 // Export Pusher event names for consistency
@@ -56,6 +90,24 @@ export const PUSHER_EVENTS = {
   NEW_POST: 'new-post-event',
   UPDATED_POST: 'updated-post-event',
   NEW_NOTIFICATION: 'new-notification-event',
+  TEST: 'test-event',
+};
+
+// Export information about the Pusher connection status
+export const getPusherStatus = () => {
+  try {
+    return {
+      connected: pusherClient.connection.state === 'connected',
+      state: pusherClient.connection.state,
+      socketId: pusherClient.connection.socket_id,
+    };
+  } catch (error) {
+    return {
+      connected: false,
+      state: 'error',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
 };
 
 export default pusherClient; 
