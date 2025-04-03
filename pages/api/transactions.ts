@@ -3,10 +3,16 @@ import db from '../../giga-aura/services/db-init';
 import { AuraTransaction } from '../../lib/slices/auraPointsSlice';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Set CORS headers
+  // Set enhanced CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  
+  // Add cache control headers to prevent caching issues
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
@@ -32,9 +38,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(200).json(auraPoints);
       } catch (dbError) {
         console.error('Database error in GET /api/transactions:', dbError);
-        // API endpoints run server-side, so we can't access localStorage
         // Return default values
-        return res.status(200).json({ totalPoints: 100, transactions: [] });
+        return res.status(200).json({ 
+          totalPoints: 100, 
+          transactions: [],
+          source: 'default'
+        });
       }
     }
     
@@ -53,24 +62,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (success) {
           return res.status(201).json({ success: true });
         } else {
-          return res.status(500).json({ error: 'Failed to add transaction' });
+          // Still return 200 with a warning to allow client to continue
+          return res.status(200).json({ 
+            success: false, 
+            warning: 'Failed to add transaction to database, but client can proceed',
+            transaction: transaction 
+          });
         }
       } catch (transactionError) {
         console.error('Transaction error in POST /api/transactions:', transactionError);
-        // API endpoints run server-side, so we can't access localStorage
-        return res.status(500).json({ 
-          error: 'Database error',
+        // Return 200 with the transaction to allow client to handle it
+        return res.status(200).json({ 
           success: false,
-          transaction: transaction,
-          message: 'Transaction will be saved to local storage in the browser'
+          warning: 'Error occurred while saving transaction, but client can proceed',
+          transaction: transaction 
         });
       }
     }
     
     // If the method is not supported
+    res.setHeader('Allow', ['GET', 'POST', 'OPTIONS']);
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
     console.error('API Error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(200).json({ 
+      success: false, 
+      warning: 'Internal server error, but client can proceed',
+      error: error instanceof Error ? error.message : String(error)
+    });
   }
 } 

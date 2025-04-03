@@ -52,7 +52,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com https://www.gigaaura.com https://*.pusher.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com https://*.googleapis.com https://*.gstatic.com; connect-src 'self' https://*.gigaaura.com wss://*.pusher.com https://*.pusher.com https://*.pusherapp.com https://*.onrender.com https://cloudflareinsights.com https://*.googleapis.com https://firestore.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://*.firebase.googleapis.com https://*.gstatic.com ws://localhost:* http://localhost:* blob: data:; worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';",
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com https://www.gigaaura.com https://*.pusher.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com https://*.googleapis.com https://*.gstatic.com; connect-src 'self' https://*.gigaaura.com https://*.pusher.com wss://*.pusher.com sockjs-*.pusher.com https://sockjs-*.pusher.com wss://sockjs-*.pusher.com https://*.pusherapp.com wss://*.pusherapp.com https://*.onrender.com https://cloudflareinsights.com ws://localhost:* wss://localhost:* http://localhost:* https://localhost:* blob: data:; worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';",
           },
           {
             key: 'Access-Control-Allow-Origin',
@@ -64,7 +64,7 @@ const nextConfig = {
           },
           {
             key: 'Access-Control-Allow-Headers',
-            value: 'X-Requested-With, Content-Type, Authorization'
+            value: 'X-Requested-With, Content-Type, Authorization, Origin, Accept'
           }
         ],
       },

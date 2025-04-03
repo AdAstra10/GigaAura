@@ -24,26 +24,17 @@ const initialState: AuraPointsState = {
   transactions: [],
 };
 
-// Helper to save auraPoints to cloud and localStorage as backup
+// Helper to save auraPoints to localStorage
 const saveAuraPointsToStorage = (walletAddress: string | null, state: AuraPointsState) => {
   if (!walletAddress || typeof window === 'undefined') return;
   
   try {
     console.log(`Saving aura points for ${walletAddress}:`, state);
     
-    // 1. FIRST, SAVE TO CLOUD DATABASE (primary source)
-    db.saveAuraPoints(walletAddress, state)
-      .then(success => {
-        console.log(`Aura points ${success ? 'saved to' : 'failed to save to'} cloud database`);
-      })
-      .catch(error => {
-        console.error('Error saving aura points to cloud:', error);
-      });
-    
-    // 2. SAVE TO LOCAL STORAGE AS BACKUP
+    // Save to localStorage as primary source
     cacheWalletAuraPoints(walletAddress, state);
     
-    // 3. SAVE DIRECT BACKUP WITH TIMESTAMP
+    // Save direct backup with timestamp
     localStorage.setItem(`aura_debug_${walletAddress}`, JSON.stringify({
       totalPoints: state.totalPoints,
       transactionCount: state.transactions.length,
@@ -51,12 +42,21 @@ const saveAuraPointsToStorage = (walletAddress: string | null, state: AuraPoints
     }));
     
     console.log(`Aura points saved for ${walletAddress}:`, state.totalPoints);
+    
+    // Use the database service as fallback (which now uses localStorage)
+    db.saveAuraPoints(walletAddress, state)
+      .then(success => {
+        console.log(`Aura points ${success ? 'saved to' : 'failed to save to'} storage`);
+      })
+      .catch(error => {
+        console.error('Error saving aura points to storage:', error);
+      });
   } catch (e) {
     console.error('Failed to save aura points:', e);
   }
 };
 
-// Load initial state with cloud-first approach
+// Load initial state from localStorage
 const loadInitialState = (): AuraPointsState => {
   if (typeof window === 'undefined') return initialState;
   
@@ -64,8 +64,6 @@ const loadInitialState = (): AuraPointsState => {
   const walletAddress = localStorage.getItem('walletAddress');
   if (!walletAddress) return initialState;
   
-  // We'll use the stored localStorage value initially, but we'll also
-  // dispatch an async action to load from the cloud later in the component
   try {
     // Use our improved cache retrieval function for now
     const auraPoints = getWalletAuraPoints(walletAddress);
@@ -99,29 +97,28 @@ const auraPointsSlice = createSlice({
       console.log('ADDING TRANSACTION, current Aura points:', state.totalPoints);
       
       try {
-        // CLOUD FIRST: Save to cloud database and localStorage
         if (walletAddress) {
-          // 1. SAVE TO CLOUD DIRECTLY
-          db.addTransaction(walletAddress, action.payload)
-            .then(success => {
-              console.log(`Transaction ${success ? 'saved to' : 'failed to save to'} cloud database`);
-            })
-            .catch(error => {
-              console.error('Error saving transaction to cloud:', error);
-            });
-          
-          // 2. SAVE CURRENT STATE TO CLOUD AND LOCAL
+          // Save current state to localStorage
           saveAuraPointsToStorage(walletAddress, state);
           
-          // 3. DIRECT BACKUP (just in case)
+          // Save direct backup (just in case)
           const directBackupKey = `aura_direct_${walletAddress.toLowerCase()}`;
           localStorage.setItem(directBackupKey, JSON.stringify({
             totalPoints: state.totalPoints,
             transactions: state.transactions
           }));
           
-          // 4. SAVE SIMPLE TOTAL FOR QUICK ACCESS
+          // Save simple total for quick access
           localStorage.setItem(`aura_total_${walletAddress.toLowerCase()}`, state.totalPoints.toString());
+          
+          // Save to database (which now uses localStorage)
+          db.addTransaction(walletAddress, action.payload)
+            .then(success => {
+              console.log(`Transaction ${success ? 'saved to' : 'failed to save to'} storage`);
+            })
+            .catch(error => {
+              console.error('Error saving transaction to storage:', error);
+            });
         }
       } catch (e) {
         console.error('Error in addTransaction:', e);
@@ -140,7 +137,7 @@ const auraPointsSlice = createSlice({
     setTotalPoints: (state, action: PayloadAction<number>) => {
       state.totalPoints = action.payload;
       
-      // Save to cloud and localStorage
+      // Save to localStorage
       const walletAddress = localStorage.getItem('walletAddress');
       saveAuraPointsToStorage(walletAddress, state);
     },
@@ -148,7 +145,7 @@ const auraPointsSlice = createSlice({
       state.totalPoints = initialState.totalPoints;
       state.transactions = [];
       
-      // Save to cloud and localStorage
+      // Save to localStorage
       const walletAddress = localStorage.getItem('walletAddress');
       saveAuraPointsToStorage(walletAddress, state);
     },
@@ -162,16 +159,16 @@ const auraPointsSlice = createSlice({
         state.transactions = action.payload.transactions;
       }
       
-      // Save to cloud and localStorage
+      // Save to localStorage
       const walletAddress = localStorage.getItem('walletAddress');
       saveAuraPointsToStorage(walletAddress, state);
     },
-    loadFromCloud: (state, action: PayloadAction<AuraPointsState>) => {
-      // Update state with cloud data
+    loadFromStorage: (state, action: PayloadAction<AuraPointsState>) => {
+      // Update state with localStorage data
       state.totalPoints = action.payload.totalPoints;
       state.transactions = action.payload.transactions;
       
-      console.log('Updated state with data from cloud database');
+      console.log('Updated state with data from localStorage');
     }
   },
 });
@@ -181,7 +178,7 @@ export const {
   setTotalPoints, 
   resetPoints, 
   loadWalletPoints,
-  loadFromCloud 
+  loadFromStorage 
 } = auraPointsSlice.actions;
 
 export default auraPointsSlice.reducer; 
