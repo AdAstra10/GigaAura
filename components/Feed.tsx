@@ -155,7 +155,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const pusherChannelRef = useRef<any>(null);
 
-  // Load posts on component mount
+  // Main useEffect for loading posts
   useEffect(() => {
     const loadPosts = async () => {
       // Only fetch if we're not already refreshing
@@ -186,40 +186,89 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           return;
         }
         
-        // Finally, fetch from API
-        console.log('Fetching posts from API...');
-        const apiUrl = `${getApiBaseUrl()}/api/posts`;
-        
-        // Add timestamp to bust cache
-        const timestamp = new Date().getTime();
-        
-        const response = await axios.get(`${apiUrl}?t=${timestamp}`, {
-          timeout: 10000,
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-            'X-Requested-With': 'XMLHttpRequest'
-          },
-          withCredentials: false
-        });
-        
-        if (response.data && Array.isArray(response.data)) {
-          dispatch(setFeed(response.data));
+        // Finally, fetch from API using fetch API with proper CORS
+        console.log('Fetching posts from API using fetch...');
+        try {
+          const timestamp = new Date().getTime();
+          const apiUrl = `${window.location.origin}/api/posts?t=${timestamp}`;
+          console.log('API URL:', apiUrl);
           
-          // Save to localStorage
-          if (typeof window !== 'undefined') {
-            try {
-              localStorage.setItem('giga-aura-posts', JSON.stringify(response.data));
-            } catch (e) {
-              console.warn('Failed to save posts to localStorage:', e);
-            }
+          const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Accept': 'application/json',
+            },
+            mode: 'same-origin', // Important for security and to avoid CORS
+            credentials: 'same-origin',
+          });
+          
+          if (!response.ok) {
+            throw new Error(`API responded with status: ${response.status}`);
           }
           
-          setLastPostCount(response.data.length);
-        } else {
-          // If API returns empty or invalid data, show error
-          console.error('API returned invalid data:', response.data);
+          const data = await response.json();
+          if (Array.isArray(data) && data.length > 0) {
+            dispatch(setFeed(data));
+            
+            // Save to localStorage
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.setItem('giga-aura-posts', JSON.stringify(data));
+              } catch (e) {
+                console.warn('Failed to save posts to localStorage:', e);
+              }
+            }
+            
+            setLastPostCount(data.length);
+            console.log(`Loaded ${data.length} posts from API`);
+          } else {
+            console.log('API returned no posts or invalid format', data);
+            
+            // Check if we need to use direct DB access as fallback
+            if (reduxPosts.length === 0 && typeof window !== 'undefined') {
+              console.log('Trying direct database access...');
+              try {
+                const dbPosts = await db.getPosts();
+                if (dbPosts && Array.isArray(dbPosts) && dbPosts.length > 0) {
+                  dispatch(setFeed(dbPosts));
+                  setLastPostCount(dbPosts.length);
+                  console.log(`Loaded ${dbPosts.length} posts directly from database`);
+                  
+                  // Also try to save to localStorage
+                  localStorage.setItem('giga-aura-posts', JSON.stringify(dbPosts));
+                }
+              } catch (dbError) {
+                console.error('Direct database access also failed:', dbError);
+              }
+            }
+          }
+        } catch (fetchError) {
+          console.error('Fetch API error:', fetchError);
+          
+          // Fallback to direct database access
+          if (reduxPosts.length === 0 && typeof window !== 'undefined') {
+            console.log('Trying direct database access after fetch failure...');
+            try {
+              const dbPosts = await db.getPosts();
+              if (dbPosts && Array.isArray(dbPosts) && dbPosts.length > 0) {
+                dispatch(setFeed(dbPosts));
+                setLastPostCount(dbPosts.length);
+                console.log(`Loaded ${dbPosts.length} posts directly from database`);
+                
+                // Also try to save to localStorage
+                localStorage.setItem('giga-aura-posts', JSON.stringify(dbPosts));
+              }
+            } catch (dbError) {
+              console.error('Direct database access also failed:', dbError);
+              
+              // If still no posts, show a friendly error
+              if (reduxPosts.length === 0) {
+                setError('Unable to load posts at this time. Please try again later.');
+              }
+            }
+          }
         }
       } catch (error: any) {
         console.error('Error loading posts:', error);
