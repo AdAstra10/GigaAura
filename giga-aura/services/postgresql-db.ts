@@ -175,6 +175,20 @@ const handleDatabaseError = (error: any): void => {
 };
 
 /**
+ * Helper function to safely parse JSON with error handling
+ */
+const safeJsonParse = (jsonString: string, fallback: any = null) => {
+  if (!jsonString) return fallback;
+  
+  try {
+    return JSON.parse(jsonString);
+  } catch (error) {
+    console.error('Error parsing JSON:', error);
+    return fallback;
+  }
+};
+
+/**
  * Save a post to the database
  */
 export const savePost = async (post: Post): Promise<boolean> => {
@@ -313,14 +327,20 @@ export const getPosts = async (): Promise<Post[]> => {
         try {
           // If we stored the full post as JSON, use that
           if (row.data) {
-            return {
-              ...JSON.parse(row.data),
-              // But override with the latest DB values for critical fields
-              likes: row.likes || 0,
-              shares: row.shares || 0,
-              likedBy: Array.isArray(row.liked_by) ? row.liked_by : [],
-              comments: Array.isArray(row.comments) ? row.comments : []
-            };
+            try {
+              const parsedData = safeJsonParse(row.data, {});
+              return {
+                ...parsedData,
+                // But override with the latest DB values for critical fields
+                likes: row.likes || 0,
+                shares: row.shares || 0,
+                likedBy: Array.isArray(row.liked_by) ? row.liked_by : [],
+                comments: Array.isArray(row.comments) ? row.comments : []
+              };
+            } catch (parseError) {
+              console.error('Failed to parse post data JSON:', parseError);
+              // Fall back to constructing from individual fields
+            }
           }
           
           // Otherwise, construct from individual fields
@@ -412,14 +432,20 @@ export const getUserPosts = async (walletAddress: string): Promise<Post[]> => {
         try {
           // If we stored the full post as JSON, use that
           if (row.data) {
-            return {
-              ...JSON.parse(row.data),
-              // But override with the latest DB values for critical fields
-              likes: row.likes || 0,
-              shares: row.shares || 0,
-              likedBy: Array.isArray(row.liked_by) ? row.liked_by : [],
-              comments: Array.isArray(row.comments) ? row.comments : []
-            };
+            try {
+              const parsedData = safeJsonParse(row.data, {});
+              return {
+                ...parsedData,
+                // But override with the latest DB values for critical fields
+                likes: row.likes || 0,
+                shares: row.shares || 0,
+                likedBy: Array.isArray(row.liked_by) ? row.liked_by : [],
+                comments: Array.isArray(row.comments) ? row.comments : []
+              };
+            } catch (parseError) {
+              console.error('Failed to parse post data JSON:', parseError);
+              // Fall back to constructing from individual fields
+            }
           }
           
           // Otherwise, construct from individual fields
@@ -520,6 +546,9 @@ export const updatePost = async (post: Post): Promise<boolean> => {
           const existingBookmarkedBy = existingResult.rows[0].bookmarked_by;
           if (Array.isArray(existingBookmarkedBy)) {
             bookmarkedBy = existingBookmarkedBy;
+          } else if (typeof existingBookmarkedBy === 'string') {
+            // Try to parse string as JSON
+            bookmarkedBy = safeJsonParse(existingBookmarkedBy, []);
           }
         } catch (error) {
           console.error('Error parsing existing bookmarked_by:', error);
@@ -535,6 +564,9 @@ export const updatePost = async (post: Post): Promise<boolean> => {
           const existingSharedBy = existingResult.rows[0].shared_by;
           if (Array.isArray(existingSharedBy)) {
             sharedBy = existingSharedBy;
+          } else if (typeof existingSharedBy === 'string') {
+            // Try to parse string as JSON
+            sharedBy = safeJsonParse(existingSharedBy, []);
           }
         } catch (error) {
           console.error('Error parsing existing shared_by:', error);
@@ -1172,13 +1204,9 @@ export const saveNotification = async (notification: Notification): Promise<bool
       let notifications = [];
       
       if (existingNotifications) {
-        try {
-          notifications = JSON.parse(existingNotifications);
-          if (!Array.isArray(notifications)) {
-            notifications = [];
-          }
-        } catch (e) {
-          console.warn('Failed to parse notifications from localStorage:', e);
+        notifications = safeJsonParse(existingNotifications, []);
+        if (!Array.isArray(notifications)) {
+          console.warn('Parsed notifications is not an array, resetting to empty array');
           notifications = [];
         }
       }

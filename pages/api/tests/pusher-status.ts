@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pusherServer from '../../../lib/pusher-server';
+import { PUSHER_CHANNELS, PUSHER_EVENTS, getPusherStatus } from '../../../lib/pusher';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Set CORS headers
@@ -40,7 +41,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let error = null;
     
     try {
-      await pusherServer.trigger('test-channel', 'test-event', testData);
+      await pusherServer.trigger(PUSHER_CHANNELS.TEST, PUSHER_EVENTS.TEST, testData);
       pusherSuccess = true;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Unknown error triggering Pusher event';
@@ -49,9 +50,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Get Next.js CSP settings if available
     let cspInfo = '';
     try {
-      // This might not be available in the API context
-      if (process.env.CSP_CONNECT_SRC) {
-        cspInfo = process.env.CSP_CONNECT_SRC;
+      // Get CSP from headers config in next.config.js
+      if (process.env.NEXT_PUBLIC_CSP_CONNECT_SRC) {
+        cspInfo = process.env.NEXT_PUBLIC_CSP_CONNECT_SRC;
+      } else {
+        cspInfo = "CSP information not available in environment. Check next.config.js for Content-Security-Policy headers.";
       }
     } catch (err) {
       cspInfo = 'Unable to fetch CSP configuration';
@@ -64,8 +67,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         config: pusherConfig,
         testEvent: {
           success: pusherSuccess,
-          channelName: 'test-channel',
-          eventName: 'test-event',
+          channelName: PUSHER_CHANNELS.TEST,
+          eventName: PUSHER_EVENTS.TEST,
           testId,
           error,
         },
@@ -79,44 +82,82 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         info: "To check Pusher client connectivity, open browser dev tools and run: window.pusherDiagnostics()",
         script: `
 function pusherDiagnostics() {
-  const pusher = window.pusherClient || window.Pusher;
-  if (!pusher) return { error: "Pusher not found on window object" };
+  // Access the global pusher client
+  if (!window.pusherClient) {
+    console.error("Pusher client not found on window object");
+    return { error: "Pusher client not found on window" };
+  }
   
   try {
-    // If using our app's exported client
-    if (window.pusherClient) {
-      return {
-        connected: pusherClient.connection.state === 'connected',
-        state: pusherClient.connection.state,
-        socketId: pusherClient.connection.socket_id,
-        transport: pusherClient.connection.transport?.name || 'none'
-      };
+    const status = {
+      connected: window.pusherClient.connection.state === 'connected',
+      state: window.pusherClient.connection.state,
+      socketId: window.pusherClient.connection.socket_id || 'none',
+      transport: 'unknown'
+    };
+    
+    // Try to get transport info
+    if (window.pusherClient.connection.socket) {
+      status.transport = window.pusherClient.connection.socket.transport?.name || 'unknown';
     }
     
-    // Otherwise check for global Pusher instances
-    return { 
-      message: "Pusher found but couldn't access connection details. Check console logs for errors." 
+    // Check for CSP issues
+    const cspViolations = [];
+    const getCspViolations = () => {
+      const reports = performance.getEntriesByType('resource')
+        .filter(entry => entry.name.includes('pusher.com') && entry.duration === 0);
+      
+      return reports.map(entry => entry.name);
     };
+    
+    try {
+      const violations = getCspViolations();
+      if (violations.length > 0) {
+        status.cspIssues = violations;
+      }
+    } catch (e) {
+      console.error("Error checking for CSP violations:", e);
+    }
+    
+    console.log("Pusher diagnostics:", status);
+    return status;
   } catch (err) {
-    return { error: err.message };
+    console.error("Error getting Pusher status:", err);
+    return { error: err.message || "Unknown error" };
   }
 }
+
+// Make the function globally available
+window.pusherDiagnostics = pusherDiagnostics;
         `
       },
       troubleshooting: {
         tips: [
-          "Ensure all Pusher domains are allowed in CSP connect-src directive",
+          "Ensure all Pusher domains are allowed in CSP connect-src directive (wss://*.pusher.com, etc.)",
           "Check that Pusher credentials are correctly set in environment variables",
-          "Verify that the client is subscribing to 'test-channel' to receive the test event",
+          "Verify that the client is subscribing to the correct channel to receive events",
           "Look for blocked requests in the browser's Network tab",
+          "Check Chrome DevTools Console for CSP violation messages",
+          "Try a different browser to see if the issue persists",
+          "If using private channels, ensure the authentication endpoint is working",
           "Try different transport methods if WebSockets are blocked (xhr_streaming, xhr_polling)"
-        ]
+        ],
+        commonIssues: {
+          cspViolations: "Your Content Security Policy is blocking Pusher connections. Add the necessary domains to your connect-src CSP directive.",
+          authErrors: "Authentication errors may occur with private channels. Check your auth endpoint.",
+          networkBlocks: "Corporate firewalls may block WebSocket connections. Try enabling alternative transports."
+        },
+        debugging: {
+          checkNetworkTab: "Look for failed requests to *.pusher.com domains in the Network tab",
+          inspectConsoleErrors: "Check for errors containing 'Pusher', 'WebSocket', or 'CSP' in the Console",
+          testClientStatus: "Run window.pusherDiagnostics() in the Console to see connection status"
+        }
       }
     });
-  } catch (error) {
+  } catch (err) {
     return res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: 'Error running Pusher diagnostics',
+      message: err instanceof Error ? err.message : 'Unknown error',
       timestamp: new Date().toISOString()
     });
   }

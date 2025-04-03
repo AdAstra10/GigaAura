@@ -414,6 +414,10 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           
           const data = await response.json();
           
+          if (!data) {
+            throw new Error('API returned empty response');
+          }
+          
           if (Array.isArray(data) && data.length > 0) {
             console.log(`Loaded ${data.length} posts from API via Pusher refresh`);
             dispatch(setFeed(data));
@@ -431,9 +435,13 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
             // Don't update feed with empty array to avoid clearing existing posts
           } else {
             console.warn('API returned invalid data format:', data);
+            throw new Error('Invalid data format received from API');
           }
         } catch (error) {
           console.error('Error refreshing posts from Pusher event:', error);
+          // Show toast notification for better user feedback
+          toast.error('Something went wrong loading the feed. Trying alternate sources...');
+          
           // Fallback to direct DB call if API fails
           try {
             console.log('Attempting to fetch posts directly from database...');
@@ -450,6 +458,22 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
                   console.warn('Failed to save posts to localStorage:', e);
                 }
               }
+            } else {
+              // Try loading from localStorage as last resort
+              if (typeof window !== 'undefined') {
+                try {
+                  const cachedPosts = localStorage.getItem('giga-aura-posts');
+                  if (cachedPosts) {
+                    const parsedPosts = JSON.parse(cachedPosts);
+                    if (Array.isArray(parsedPosts) && parsedPosts.length > 0) {
+                      console.log(`Loaded ${parsedPosts.length} posts from localStorage cache`);
+                      dispatch(setFeed(parsedPosts));
+                    }
+                  }
+                } catch (e) {
+                  console.warn('Failed to load posts from localStorage:', e);
+                }
+              }
             }
           } catch (dbError) {
             console.error('Failed to load posts directly from database:', dbError);
@@ -460,93 +484,68 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       }
     };
     
+    // Subscribe to Pusher channel for real-time updates
     try {
-      // Subscribe to the posts channel with error handling
-      console.log('Attempting to subscribe to Pusher channel:', PUSHER_CHANNELS.POSTS);
-      const channel = pusherClient.subscribe(PUSHER_CHANNELS.POSTS);
-      pusherChannelRef.current = channel;
-  
-      // Listen for new post events
-      channel.bind(PUSHER_EVENTS.NEW_POST, (data: any) => {
-        console.log('Pusher: Received new post event:', data);
+      if (typeof window !== 'undefined') {
+        console.log('Setting up Pusher subscription for posts channel');
         
-        // Show notification
-        setHasNewPosts(true);
+        const channel = pusherClient.subscribe(PUSHER_CHANNELS.POSTS);
+        pusherChannelRef.current = channel;
         
-        // Show toast notification
-        toast.success('New posts available!', {
-          id: 'new-posts-pusher',
-          duration: 3000,
+        // Listen for new posts
+        channel.bind(PUSHER_EVENTS.NEW_POST, (data: any) => {
+          console.log('Received new post via Pusher:', data);
+          if (data && data.id) {
+            // Add the new post to the Redux store
+            dispatch(addPost(data));
+            // Show notification about new posts
+            setHasNewPosts(true);
+            // Refresh the list to ensure consistency with database
+            refreshPosts();
+          }
         });
         
-        // Only load automatically if autoRefresh is enabled
-        if (autoRefresh && !isRefreshing) {
-          refreshPosts();
-        }
-      });
-  
-      // Listen for updated posts events
-      channel.bind(PUSHER_EVENTS.UPDATED_POST, (data: any) => {
-        console.log('Pusher: Received posts updated event:', data);
-        
-        if (data) {
-          // Find and update the post in the local state if it exists
-          const posts = [...reduxPosts];
-          const postIndex = posts.findIndex(p => p.id === data.id);
-          
-          if (postIndex !== -1) {
-            // Update the post in place
-            posts[postIndex] = { ...posts[postIndex], ...data };
-            dispatch(setFeed(posts));
-            
-            // Save to localStorage
-            if (typeof window !== 'undefined') {
-              try {
-                localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
-              } catch (e) {
-                console.warn('Failed to save posts to localStorage:', e);
-              }
-            }
-          } else {
-            // If post not found, show notification to refresh
-            setHasNewPosts(true);
+        // Listen for post updates
+        channel.bind(PUSHER_EVENTS.UPDATED_POST, (data: any) => {
+          console.log('Received updated post via Pusher:', data);
+          if (data && data.id) {
+            // Add the updated post to the Redux store
+            dispatch(addPost(data));
+            // Refresh the list to ensure consistency with database
+            refreshPosts();
           }
-        } else {
-          // Otherwise show notification to refresh
-          setHasNewPosts(true);
-        }
-      });
-  
-      // Add connection state monitoring
-      pusherClient.connection.bind('state_change', (states: any) => {
-        console.log('Pusher connection state changed:', states.current);
+        });
         
-        if (states.current === 'failed') {
-          console.warn('Pusher connection failed. Will try to reconnect...');
-        }
-      });
-      
-      pusherClient.connection.bind('error', (err: any) => {
-        console.error('Pusher connection error:', err);
-      });
-  
-      // Clean up Pusher subscription on component unmount
-      return () => {
-        try {
-          if (pusherChannelRef.current) {
-            pusherChannelRef.current.unbind_all();
-            pusherClient.unsubscribe(PUSHER_CHANNELS.POSTS);
-            console.log('Pusher: Unsubscribed from posts channel');
+        // Setup diagnostics listener
+        channel.bind(PUSHER_EVENTS.TEST, (data: any) => {
+          console.log('Received test event via Pusher:', data);
+        });
+        
+        // Setup error handling
+        channel.bind('pusher:subscription_error', (status: any) => {
+          console.error('Pusher subscription error:', status);
+          if (status === 403) {
+            console.error('Authentication required for this channel');
           }
-        } catch (error) {
-          console.error('Error unsubscribing from Pusher channel:', error);
-        }
-      };
-    } catch (pusherError) {
-      console.error('Failed to set up Pusher subscription:', pusherError);
-      return () => {};
+        });
+      }
+    } catch (error) {
+      console.error('Error setting up Pusher subscription:', error);
     }
-  }, [dispatch, autoRefresh, isRefreshing, reduxPosts]);
+    
+    // Cleanup function to unsubscribe when component unmounts
+    return () => {
+      try {
+        if (pusherChannelRef.current) {
+          console.log('Cleaning up Pusher subscription');
+          pusherClient.unsubscribe(PUSHER_CHANNELS.POSTS);
+          pusherChannelRef.current = null;
+        }
+      } catch (error) {
+        console.error('Error cleaning up Pusher subscription:', error);
+      }
+    };
+  }, [dispatch, isRefreshing]);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);

@@ -9,8 +9,20 @@ if (process.env.NODE_ENV !== 'production') {
 // Create a robust Pusher client initialization with fallbacks
 const createPusherClient = () => {
   try {
-    const client = new Pusher(process.env.NEXT_PUBLIC_PUSHER_APP_KEY || '477339a84785c23745a5', {
-      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'us2',
+    // Check if we're on client-side before creating Pusher client
+    if (typeof window === 'undefined') {
+      console.log('Pusher client not initialized on server side');
+      return createMockPusherClient();
+    }
+    
+    // Make sure the APP_KEY is available
+    const appKey = process.env.NEXT_PUBLIC_PUSHER_APP_KEY || '477339a84785c23745a5';
+    const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'us2';
+    
+    console.log(`Initializing Pusher client with cluster: ${cluster}`);
+    
+    const client = new Pusher(appKey, {
+      cluster: cluster,
       forceTLS: true, // Use TLS for secure connections
       enabledTransports: ['ws', 'wss', 'xhr_streaming', 'xhr_polling'], // Explicitly enable all transports
       disabledTransports: [], // Don't disable any transports
@@ -33,6 +45,11 @@ const createPusherClient = () => {
       
       client.connection.bind('connected', () => {
         console.log('✅ Pusher connected successfully');
+        console.log('Socket ID:', client.connection.socket_id);
+        // Log transport method
+        if ((client.connection as any).transport) {
+          console.log('Transport method:', (client.connection as any).transport.name);
+        }
       });
       
       client.connection.bind('disconnected', () => {
@@ -51,28 +68,39 @@ const createPusherClient = () => {
       
       client.connection.bind('error', (err: any) => {
         console.error('❌ Pusher connection error:', err);
+        // Check for CSP violations
+        if (err && err.type === 'WebSocketError') {
+          console.error('Possible CSP violation. Check that your Content-Security-Policy allows connections to Pusher domains.');
+        }
       });
     }
 
     return client;
   } catch (error) {
     console.error('Failed to initialize Pusher client:', error);
-    
-    // Create a mock client that doesn't throw errors when methods are called
-    return {
-      connection: {
-        bind: () => {},
-        state: 'failed',
-      },
-      subscribe: () => ({
-        bind: () => {},
-        unbind_all: () => {},
-      }),
-      unsubscribe: () => {},
-      disconnect: () => {},
-      connect: () => {},
-    } as unknown as Pusher;
+    return createMockPusherClient();
   }
+};
+
+// Create a mock client that doesn't throw errors when methods are called
+const createMockPusherClient = () => {
+  console.warn('Using mock Pusher client');
+  return {
+    connection: {
+      bind: () => {},
+      state: 'unavailable',
+      socket_id: 'mock-socket-id',
+      transport: { name: 'mock' },
+    },
+    subscribe: () => ({
+      bind: () => {},
+      unbind: () => {},
+      unbind_all: () => {},
+    }),
+    unsubscribe: () => {},
+    disconnect: () => {},
+    connect: () => {},
+  } as unknown as Pusher;
 };
 
 // Initialize the Pusher client
@@ -100,13 +128,24 @@ export const getPusherStatus = () => {
       connected: pusherClient.connection.state === 'connected',
       state: pusherClient.connection.state,
       socketId: pusherClient.connection.socket_id,
+      transport: (pusherClient.connection as any).transport?.name || 'unknown',
     };
   } catch (error) {
     return {
       connected: false,
       state: 'error',
       error: error instanceof Error ? error.message : 'Unknown error',
+      transport: 'none',
     };
+  }
+};
+
+// Helper function to check if Pusher is working
+export const isPusherWorking = () => {
+  try {
+    return pusherClient.connection.state === 'connected';
+  } catch (error) {
+    return false;
   }
 };
 
