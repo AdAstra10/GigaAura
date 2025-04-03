@@ -8,7 +8,8 @@ import postgresqlDb from './postgresql-db';
 
 // Database backend options
 export enum DatabaseBackend {
-  POSTGRESQL = 'postgresql'
+  POSTGRESQL = 'postgresql',
+  LOCAL_STORAGE = 'local_storage'
 }
 
 // Default to PostgreSQL
@@ -18,15 +19,21 @@ let currentBackend: DatabaseBackend = DatabaseBackend.POSTGRESQL;
  * Set the database backend to use
  */
 export const setDatabaseBackend = (backend: DatabaseBackend): void => {
-  console.log(`Setting database backend to PostgreSQL`);
-  currentBackend = DatabaseBackend.POSTGRESQL;
+  if (backend === DatabaseBackend.LOCAL_STORAGE) {
+    console.log(`Setting database backend to local storage (client-side fallback)`);
+    currentBackend = DatabaseBackend.LOCAL_STORAGE;
+  } else {
+    // Always default to PostgreSQL for any other value
+    console.log(`Setting database backend to PostgreSQL`);
+    currentBackend = DatabaseBackend.POSTGRESQL;
+  }
 };
 
 /**
  * Get the current database backend
  */
 export const getCurrentBackend = (): DatabaseBackend => {
-  return DatabaseBackend.POSTGRESQL;
+  return currentBackend;
 };
 
 /**
