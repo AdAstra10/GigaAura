@@ -27,6 +27,8 @@ const createPusherClient = () => {
       enabledTransports: ['ws', 'wss', 'xhr_streaming', 'xhr_polling'], // Explicitly enable all transports
       disabledTransports: [], // Don't disable any transports
       authEndpoint: '/api/pusher/auth', // Authentication endpoint for private channels
+      wsHost: 'ws-us2.pusher.com', // Explicitly set WebSocket host to match CSP
+      httpHost: 'sockjs-us2.pusher.com', // Explicitly set HTTP host
       auth: {
         headers: {
           // Add any necessary auth headers (if needed)
@@ -71,6 +73,16 @@ const createPusherClient = () => {
         // Check for CSP violations
         if (err && err.type === 'WebSocketError') {
           console.error('Possible CSP violation. Check that your Content-Security-Policy allows connections to Pusher domains.');
+          console.error(`Make sure wss://ws-us2.pusher.com is allowed in your CSP connect-src directive.`);
+          
+          // Log connection information for debugging
+          console.debug('Connection Details:', {
+            wsHost: 'ws-us2.pusher.com',
+            httpHost: 'sockjs-us2.pusher.com',
+            cluster: cluster,
+            forceTLS: true,
+            state: client.connection.state
+          });
         }
       });
     }

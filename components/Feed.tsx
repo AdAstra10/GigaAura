@@ -790,9 +790,27 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
 
     return (
       <div className="space-y-4">
-        {filteredPosts.map((post) => (
-          <PostCard key={post.id} post={post} />
-        ))}
+        {filteredPosts.map((post) => {
+          // Add safety checks for post data
+          if (!post) return null;
+          
+          // Make sure post has all required properties
+          const safePost = {
+            ...post,
+            authorUsername: post.authorUsername || 'Anonymous',
+            authorName: post.authorName || 'Anonymous',
+            authorAvatar: post.authorAvatar || '/assets/avatars/default-avatar.png', // Use a local default avatar
+            authorWallet: post.authorWallet || '',
+            content: post.content || '',
+            createdAt: post.createdAt || new Date().toISOString(),
+            likes: post.likes || 0,
+            comments: typeof post.comments === 'number' ? post.comments : 0,
+            shares: post.shares || 0,
+            likedBy: post.likedBy || [],
+          };
+          
+          return <PostCard key={post.id} post={safePost} />;
+        })}
       </div>
     );
   };

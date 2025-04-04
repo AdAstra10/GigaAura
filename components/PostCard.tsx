@@ -422,6 +422,24 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
     setShowComments(!showComments);
   };
   
+  // Add null/undefined checks for any string operations in the PostCard component
+  // Example fix for the substring operation issue:
+
+  // When rendering author information
+  const displayName = post.authorUsername 
+    ? (post.authorUsername.length > 20 ? post.authorUsername.substring(0, 17) + '...' : post.authorUsername)
+    : 'Anonymous';
+
+  // And for wallet address
+  const displayWallet = post.authorWallet
+    ? `${post.authorWallet.substring(0, 4)}...${post.authorWallet.substring(post.authorWallet.length - 4)}`
+    : '';
+
+  // Safe accessor for any string attribute that might be accessed with string methods
+  const safeString = (value: string | null | undefined): string => {
+    return value || '';
+  };
+
   return (
     <div className="border border-[var(--border-color)] rounded-lg bg-white dark:bg-gray-900 p-4 mb-4 overflow-hidden transition-shadow hover:shadow-md">
       <div className="flex">
@@ -451,7 +469,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
                 onClick={handleViewProfile}
                 className="font-bold hover:underline text-black dark:text-white"
               >
-                {post.authorUsername || truncateWallet(post.authorWallet)}
+                {displayName}
               </button>
               
               {post.authorWallet !== walletAddress && (
