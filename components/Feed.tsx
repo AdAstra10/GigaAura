@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../lib/store';
-import { setFeed, addPost, Post, addComment, setComments, loadFromCache, appendToFeed, setErrorMessage } from '../lib/slices/postsSlice';
+import { setFeed, addPost, Post, addComment, setComments, loadFromCache, setError, setLoading } from '../lib/slices/postsSlice';
 import { useWallet } from '../contexts/WalletContext';
 import { addTransaction } from '../lib/slices/auraPointsSlice';
 import { addNotification } from '../lib/slices/notificationsSlice';
@@ -21,7 +21,6 @@ import pusherClient, { PUSHER_CHANNELS, PUSHER_EVENTS } from '../lib/pusher';
 import { ArrowPathIcon, PencilIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { ArrowDownIcon } from '@heroicons/react/24/outline';
-import PostCardSkeleton from './PostCardSkeleton';
 
 // Import the emoji picker dynamically to avoid SSR issues
 // IMPORTANT: Keep this import outside of the component to prevent rendering issues
@@ -42,6 +41,46 @@ const getApiBaseUrl = (): string => {
   }
   return '';
 };
+
+// Fix the PostCardSkeleton import by creating a simple implementation
+const PostCardSkeleton: React.FC = () => {
+  return (
+    <div className="border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-black p-4 animate-pulse">
+      <div className="flex">
+        <div className="flex-shrink-0 mr-3">
+          <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700"></div>
+        </div>
+        
+        <div className="flex-grow">
+          {/* Author Header */}
+          <div className="flex items-center mb-2">
+            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
+            <div className="mx-2 h-4 bg-gray-200 dark:bg-gray-700 rounded w-2"></div>
+            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-16"></div>
+          </div>
+          
+          {/* Post Content */}
+          <div className="space-y-2 mb-3">
+            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
+            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-4/6"></div>
+          </div>
+          
+          {/* Interaction Buttons */}
+          <div className="flex justify-between mt-3">
+            <div className="h-5 w-5 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+            <div className="h-5 w-5 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+            <div className="h-5 w-5 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+            <div className="h-5 w-5 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Fix the function signature and define MAX_RETRIES
+const MAX_RETRIES = 5;
 
 // Simple LoadingSpinner component
 const LoadingSpinner = () => (
@@ -130,7 +169,7 @@ function FeedSafetyWrapper(props: Record<string, any>) {
 // Inner feed component with main logic
 function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   const dispatch = useDispatch();
-  const { posts: reduxPosts, loading, error } = useSelector((state: RootState) => state.posts);
+  const { feed: reduxPosts, loading, error } = useSelector((state: RootState) => state.posts);
   const [activeTab, setActiveTab] = useState<'for-you' | 'following'>('for-you');
   const [hasNewPosts, setHasNewPosts] = useState(false);
   const [endReached, setEndReached] = useState(false);
@@ -791,7 +830,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
             <button
               className="px-4 py-2 bg-primary text-white rounded-full hover:bg-primary-hover"
               onClick={() => {
-                dispatch(setErrorMessage(null));
+                dispatch(setError(null));
                 setRetryCount(0);
               }}
             >
@@ -833,7 +872,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
 
     return (
       <div className="space-y-4">
-        {filteredPosts.map((post) => {
+        {filteredPosts.map((post: Post) => {
           // Add safety checks for post data
           if (!post) return null;
           
@@ -873,7 +912,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           if (response.data.length === 0) {
             setEndReached(true);
           } else {
-            dispatch(appendToFeed(response.data));
+            dispatch(setFeed(response.data));
           }
         }
       })
@@ -958,7 +997,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           <p className="text-red-600 dark:text-red-400">{error}</p>
           <button
             onClick={() => {
-              dispatch(setErrorMessage(null));
+              dispatch(setError(null));
               setRetryCount(0);
             }}
             className="mt-2 bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 px-4 py-2 rounded-lg"
@@ -989,11 +1028,11 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         </div>
       ) : (
         <div className="space-y-0 border-x border-gray-100 dark:border-gray-800 -mx-4">
-          {reduxPosts.map((post) => (
+          {reduxPosts.map((post: Post) => (
             <PostCard
               key={post.id}
               post={post}
-              comments={post.comments ? post.comments : []}
+              comments={Array.isArray(post.comments) ? post.comments : []}
               onShare={handleRefreshFeed}
               onFollow={handleRefreshFeed}
             />
