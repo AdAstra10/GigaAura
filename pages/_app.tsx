@@ -11,7 +11,6 @@ import db from '../giga-aura/services/db-init';
 // Import Pusher for real-time updates
 import pusherClient from '../lib/pusher';
 import { ErrorBoundary } from 'react-error-boundary';
-import { SessionProvider } from 'next-auth/react';
 import Head from 'next/head';
 import Sidebar from '../components/Sidebar';
 import RightSidebar from '../components/RightSidebar';
@@ -111,54 +110,52 @@ function MyApp({ Component, pageProps }: AppProps) {
       }
     >
       <Provider store={store}>
-        <SessionProvider session={pageProps.session}>
-          <DarkModeProvider>
-            <WalletProvider>
-              <Head>
-                <title>GigaAura - Social Network</title>
-                <meta name="description" content="GigaAura - Decentralized Social Network" />
-                <link rel="icon" href="/favicon.ico" />
-              </Head>
-              
-              <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
-                <div className="mx-auto flex">
-                  {/* Left Sidebar */}
-                  <div className="w-64 fixed h-screen border-r border-gray-100 dark:border-gray-800">
-                    <Sidebar />
-                  </div>
-                  
-                  {/* Main Content */}
-                  <div className="ml-64 flex-1 min-h-screen">
-                    <main className="max-w-2xl mx-auto p-4">
-                      <Component {...pageProps} />
-                    </main>
-                  </div>
-                  
-                  {/* Right Sidebar */}
-                  <div className="w-80 fixed right-0 top-0 h-screen overflow-y-auto border-l border-gray-100 dark:border-gray-800">
-                    <RightSidebar />
-                  </div>
+        <DarkModeProvider>
+          <WalletProvider>
+            <Head>
+              <title>GigaAura - Social Network</title>
+              <meta name="description" content="GigaAura - Decentralized Social Network" />
+              <link rel="icon" href="/favicon.ico" />
+            </Head>
+            
+            <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
+              <div className="mx-auto flex">
+                {/* Left Sidebar */}
+                <div className="w-64 fixed h-screen border-r border-gray-100 dark:border-gray-800">
+                  <Sidebar />
+                </div>
+                
+                {/* Main Content */}
+                <div className="ml-64 flex-1 min-h-screen">
+                  <main className="max-w-2xl mx-auto p-4">
+                    <Component {...pageProps} />
+                  </main>
+                </div>
+                
+                {/* Right Sidebar */}
+                <div className="w-80 fixed right-0 top-0 h-screen overflow-y-auto border-l border-gray-100 dark:border-gray-800">
+                  <RightSidebar />
                 </div>
               </div>
-              
-              <Toaster 
-                position="bottom-center"
-                toastOptions={{
-                  style: {
-                    background: '#333',
-                    color: '#fff',
-                  },
-                  success: {
-                    duration: 3000,
-                  },
-                  error: {
-                    duration: 4000,
-                  }
-                }}
-              />
-            </WalletProvider>
-          </DarkModeProvider>
-        </SessionProvider>
+            </div>
+            
+            <Toaster 
+              position="bottom-center"
+              toastOptions={{
+                style: {
+                  background: '#333',
+                  color: '#fff',
+                },
+                success: {
+                  duration: 3000,
+                },
+                error: {
+                  duration: 4000,
+                }
+              }}
+            />
+          </WalletProvider>
+        </DarkModeProvider>
       </Provider>
     </ErrorBoundary>
   );
