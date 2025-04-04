@@ -43,4 +43,18 @@ GigaAura stands at the vanguard of the coming paradigm shift in how humans inter
 
 ---
 
+## 🚀 Deployment Information
+
+GigaAura is deployed on Render.com with the following configuration:
+- **Type**: Web Service
+- **Environment**: Node.js
+- **Domain**: gigaaura.com
+- **CDN**: Cloudflare for DNS management and caching
+- **Database**: PostgreSQL hosted on Render.com
+- **Real-time Updates**: Pusher
+
+The application is configured for continuous deployment, with automatic builds triggered from the main branch of the GitHub repository.
+
+---
+
 *GigaAura - Transcending the boundaries of conventional social interaction through advanced cryptographic principles and distributed systems architecture.* 
