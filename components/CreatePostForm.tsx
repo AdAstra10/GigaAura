@@ -1,414 +1,232 @@
-import React, { useState, useRef, ChangeEvent, FormEvent, useEffect } from 'react';
-import { useWallet } from '../contexts/WalletContext';
+import React, { useState, useRef, FormEvent } from 'react';
 import { useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
-import toast from 'react-hot-toast';
-import { v4 as uuidv4 } from 'uuid';
-import axios from 'axios';
-import { FaCamera, FaVideo, FaRegSmile, FaPoll, FaCalendarAlt, FaMapMarkerAlt } from 'react-icons/fa';
-import { IoMdImages } from 'react-icons/io';
+import { useWallet } from '../contexts/WalletContext';
 import Image from 'next/image';
-import { XMarkIcon } from '@heroicons/react/24/solid';
-import { PhotoIcon, VideoCameraIcon, FaceSmileIcon, MapPinIcon, GifIcon, ChartBarIcon } from '@heroicons/react/24/outline';
-
-// Import the emoji picker dynamically to avoid SSR issues
-import dynamic from 'next/dynamic';
-const Picker = dynamic(() => import('emoji-picker-react'), { ssr: false });
-
-const MAX_CONTENT_LENGTH = 280;
+import { FaImage, FaRegSmile, FaMapMarkerAlt, FaCalendarAlt, FaTimes } from 'react-icons/fa';
+import { CheckBadgeIcon } from '@heroicons/react/24/solid';
+import toast from 'react-hot-toast';
 
 interface CreatePostFormProps {
-  onSubmit: (post: any) => void;
-  placeholder?: string;
+  onSubmit: (content: string, mediaFile?: File) => boolean;
 }
 
-const getApiBaseUrl = () => {
-  return process.env.NEXT_PUBLIC_API_BASE_URL || '';
-};
-
-const CreatePostForm: React.FC<CreatePostFormProps> = ({
-  onSubmit,
-  placeholder = "What's happening?",
-}) => {
+const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
   const [content, setContent] = useState('');
-  const [mediaFile, setMediaFile] = useState<File | null>(null);
-  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
-  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const contentRef = useRef<HTMLTextAreaElement>(null);
-  const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const { connected, connectWallet, walletAddress } = useWallet();
+  const { username, avatar } = useSelector((state: RootState) => state.user);
+  
+  // Twitter Blue styling
+  const twitterBlue = "text-[#1D9BF0] dark:text-[#1D9BF0]";
+  const twitterBlueBg = "bg-[#1D9BF0] hover:bg-[#1A8CD8]";
 
-  // Get wallet info
-  const { connectWallet, connected } = useWallet();
-  const { walletAddress, username, avatar } = useSelector((state: RootState) => state.user);
-
-  const handleTextAreaChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
-    if (value.length <= MAX_CONTENT_LENGTH) {
-      setContent(value);
-      // Auto-resize textarea
-      e.target.style.height = 'auto';
-      e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      // Check if file is an image
+      if (!file.type.match('image.*')) {
+        toast.error('Please select an image file');
+        return;
+      }
+      
+      // Check file size (limit to 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image size must be less than 5MB');
+        return;
+      }
+      
+      setImageFile(file);
+      
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          setImagePreview(e.target.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
-
-  const handleEmojiClick = (emojiData: any) => {
-    setContent((prevContent) => prevContent + emojiData.emoji);
-    setShowEmojiPicker(false);
-    if (contentRef.current) {
-      contentRef.current.focus();
-    }
-  };
-
-  const handleMediaUpload = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Check file size (5MB limit)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('File size exceeds 5MB limit');
+  
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    
+    if (!content.trim() && !imageFile) {
+      toast.error('Please enter some content or attach an image');
       return;
     }
-
-    // Create a preview URL
-    const previewUrl = URL.createObjectURL(file);
-    setMediaPreview(previewUrl);
-    setMediaFile(file);
-
-    // Determine media type
-    if (file.type.startsWith('image/')) {
-      setMediaType('image');
-    } else if (file.type.startsWith('video/')) {
-      setMediaType('video');
-    } else {
-      toast.error('Unsupported file type');
-      resetMedia();
+    
+    if (!connected) {
+      const confirmConnect = window.confirm('You need to connect your wallet to create a post. Connect now?');
+      if (confirmConnect) {
+        connectWallet();
+      }
+      return;
     }
+    
+    setIsSubmitting(true);
+    
+    // Call the onSubmit function passed from parent
+    const success = onSubmit(content, imageFile || undefined);
+    
+    if (success) {
+      // Reset form
+      setContent('');
+      setImageFile(null);
+      setImagePreview(null);
+      setShowEmojiPicker(false);
+    }
+    
+    setIsSubmitting(false);
   };
-
-  const resetMedia = () => {
-    if (mediaPreview) {
-      URL.revokeObjectURL(mediaPreview);
-    }
-    setMediaFile(null);
-    setMediaPreview(null);
-    setMediaType(null);
+  
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-
-    // Check if the user is connected
-    if (!connected) {
-      const confirm = window.confirm('Please connect your wallet to post. Would you like to connect now?');
-      if (confirm) {
-        await connectWallet();
-        // If still not connected after trying, return
-        if (!connected) return;
-      } else {
-        return;
-      }
-    }
-
-    // Validate input - either content or media must be present
-    const trimmedContent = content.trim();
-    if (!trimmedContent && !mediaFile) {
-      toast.error('Please enter text or upload media');
-      return;
-    }
-
-    // Prevent double submission
-    if (isSubmitting) return;
-    setIsSubmitting(true);
-
-    try {
-      // Generate a unique ID for the post
-      const postId = uuidv4();
-
-      let mediaUrl = '';
-
-      // Handle media upload
-      if (mediaFile) {
-        // Create a FormData instance for the file upload
-        const formData = new FormData();
-        formData.append('file', mediaFile);
-        formData.append('upload_preset', 'gigaaura_uploads'); // Configure on Cloudinary
-
-        try {
-          // Upload to Cloudinary directly
-          const uploadRes = await fetch(
-            `https://api.cloudinary.com/v1_1/${
-              process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'demo'
-            }/${mediaType === 'video' ? 'video' : 'image'}/upload`,
-            {
-              method: 'POST',
-              body: formData,
-            }
-          );
-
-          if (!uploadRes.ok) {
-            throw new Error(`Upload failed: ${uploadRes.statusText}`);
-          }
-
-          const uploadData = await uploadRes.json();
-          mediaUrl = uploadData.secure_url;
-        } catch (uploadError) {
-          console.error('Media upload error:', uploadError);
-          toast.error('Failed to upload media. Please try again.');
-          setIsSubmitting(false);
-          return;
-        }
-      }
-
-      // Construct post object
-      const newPost = {
-        id: postId,
-        content: trimmedContent,
-        authorWallet: walletAddress,
-        authorUsername: username,
-        authorAvatar: avatar || '/assets/avatars/default-avatar.png',
-        createdAt: new Date().toISOString(),
-        mediaUrl: mediaUrl || null,
-        mediaType: mediaFile ? mediaType : null,
-        likes: 0,
-        comments: 0,
-        shares: 0,
-        likedBy: [],
-        commentsList: [],
-        sharedBy: [],
-        bookmarkedBy: [],
-      };
-
-      // Call API to save post
-      try {
-        // Make API call to create post
-        const response = await axios.post(`${getApiBaseUrl()}/api/posts`, newPost);
-        if (response.status !== 201) {
-          throw new Error('Failed to create post');
-        }
-      } catch (apiError) {
-        console.error('API error:', apiError);
-        // Continue with local storage fallback if API fails
-      }
-
-      // Call onSubmit callback
-      onSubmit(newPost);
-
-      // Reset form
-      setContent('');
-      resetMedia();
-      
-      // Show success toast
-      toast.success('Post created successfully!');
-      
-      // If textarea was resized, reset it
-      if (contentRef.current) {
-        contentRef.current.style.height = 'auto';
-      }
-      
-    } catch (error) {
-      console.error('Error creating post:', error);
-      toast.error('Failed to create post. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
+  
+  const addEmoji = (emoji: string) => {
+    setContent(prev => prev + emoji);
   };
-
-  // Close emoji picker when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        emojiPickerRef.current &&
-        !emojiPickerRef.current.contains(event.target as Node)
-      ) {
-        setShowEmojiPicker(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  // Character counter color logic
-  const getCharCounterColor = () => {
-    const charsLeft = MAX_CONTENT_LENGTH - content.length;
-    if (charsLeft <= 20) return 'text-red-500';
-    if (charsLeft <= 40) return 'text-yellow-500';
-    return 'text-gray-400';
-  };
-
+  
   return (
-    <div className="border-b border-gray-100 dark:border-gray-800 pb-4">
-      <div className="flex">
-        {/* User Avatar */}
-        <div className="flex-shrink-0 mr-3">
-          <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-100 dark:border-gray-800">
-            {connected ? (
-              <Image
-                src={avatar || '/assets/avatars/default-avatar.png'}
-                alt={username || 'User'}
-                width={48}
-                height={48}
-                className="object-cover h-full w-full"
-              />
-            ) : (
-              <div className="flex items-center justify-center h-full w-full bg-gray-100 dark:bg-gray-800 text-gray-500">
-                ?
+    <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-black p-4">
+      <form onSubmit={handleSubmit}>
+        <div className="flex">
+          {/* User Avatar */}
+          <div className="flex-shrink-0 mr-3">
+            <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700">
+              {connected ? (
+                avatar ? (
+                  <Image 
+                    src={avatar} 
+                    alt={username || 'User'} 
+                    width={40} 
+                    height={40} 
+                    className="object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-r from-blue-400 to-indigo-600 flex items-center justify-center text-white font-bold">
+                    {username?.[0] || walletAddress?.substring(0, 2)}
+                  </div>
+                )
+              ) : (
+                <div 
+                  className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center cursor-pointer"
+                  onClick={connectWallet}
+                >
+                  <span className="text-gray-500 dark:text-gray-400 text-xs">Connect</span>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Post Input & Media */}
+          <div className="flex-grow">
+            {connected && username && (
+              <div className="flex items-center mb-2">
+                <span className="font-bold text-sm text-black dark:text-white">{username}</span>
+                <CheckBadgeIcon className="ml-1 h-4 w-4 text-[#1D9BF0]" />
               </div>
             )}
-          </div>
-        </div>
 
-        {/* Post Form */}
-        <div className="flex-grow">
-          <form onSubmit={handleSubmit}>
-            {/* Text Input */}
-            <div className="mb-3">
-              <textarea
-                ref={contentRef}
-                placeholder={connected ? placeholder : "Connect wallet to post"}
-                value={content}
-                onChange={handleTextAreaChange}
-                className="w-full border-0 focus:ring-0 text-lg bg-transparent placeholder-gray-400 text-black dark:text-white resize-none min-h-[60px]"
-                disabled={!connected || isSubmitting}
-                rows={2}
-                autoComplete="off"
-              />
-            </div>
-
-            {/* Media Preview */}
-            {mediaPreview && (
-              <div className="relative mb-4 overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800">
+            <textarea
+              placeholder={connected ? "What's happening?" : "Connect wallet to post"}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              disabled={!connected || isSubmitting}
+              className="w-full bg-transparent text-black dark:text-white placeholder-gray-500 border-none outline-none resize-none mb-2 min-h-[80px] text-[18px]"
+              maxLength={280}
+            />
+            
+            {/* Image Preview */}
+            {imagePreview && (
+              <div className="relative mb-4 rounded-xl overflow-hidden">
                 <button
                   type="button"
-                  className="absolute top-2 right-2 bg-black/70 text-white p-1 rounded-full z-10 hover:bg-black/90 transition-colors"
-                  onClick={resetMedia}
+                  onClick={removeImage}
+                  className="absolute top-2 right-2 bg-black bg-opacity-70 text-white p-1 rounded-full"
                 >
-                  <XMarkIcon className="h-5 w-5" />
+                  <FaTimes />
                 </button>
-                {mediaType === 'image' ? (
-                  <div className="h-64 w-full relative">
-                    <Image
-                      src={mediaPreview}
-                      alt="Preview"
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
-                ) : mediaType === 'video' ? (
-                  <video
-                    src={mediaPreview}
-                    controls
-                    className="w-full h-64 object-contain bg-black"
-                  />
-                ) : null}
+                <Image
+                  src={imagePreview}
+                  alt="Preview"
+                  width={500}
+                  height={300}
+                  className="w-full max-h-80 object-contain rounded-xl"
+                />
               </div>
             )}
-
-            {/* Emoji Picker */}
-            {showEmojiPicker && (
-              <div
-                ref={emojiPickerRef}
-                className="absolute z-10 mt-2"
-                style={{ transform: 'scale(0.8)', transformOrigin: 'bottom left' }}
-              >
-                <Picker onEmojiClick={handleEmojiClick} />
-              </div>
-            )}
-
-            {/* Action Buttons Row */}
-            <div className="flex items-center justify-between">
-              <div className="flex space-x-2">
-                {/* Media Upload */}
+            
+            {/* Action Bar */}
+            <div className="flex justify-between items-center mt-3 border-t border-gray-100 dark:border-gray-800 pt-3">
+              <div className="flex space-x-3">
                 <input
                   type="file"
-                  id="file-upload"
+                  accept="image/*"
+                  onChange={handleImageUpload}
                   ref={fileInputRef}
-                  onChange={handleMediaUpload}
-                  accept="image/*,video/*"
                   className="hidden"
-                  disabled={!connected || isSubmitting}
+                  id="image-upload"
                 />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={!connected || isSubmitting}
-                  className="text-[#1D9BF0] p-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                  aria-label="Add media"
+                <label
+                  htmlFor="image-upload"
+                  className={`p-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer ${twitterBlue}`}
                 >
-                  <PhotoIcon className="h-5 w-5" />
-                </button>
-
+                  <FaImage />
+                </label>
                 <button
                   type="button"
-                  className="text-[#1D9BF0] p-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                  aria-label="Add GIF"
-                  disabled={!connected || isSubmitting}
-                >
-                  <GifIcon className="h-5 w-5" />
-                </button>
-
-                <button
-                  type="button"
-                  className="text-[#1D9BF0] p-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                  aria-label="Add poll"
-                  disabled={!connected || isSubmitting}
-                >
-                  <ChartBarIcon className="h-5 w-5" />
-                </button>
-
-                <button
-                  type="button"
+                  className={`p-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 ${twitterBlue}`}
                   onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                  className="text-[#1D9BF0] p-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                  aria-label="Add emoji"
-                  disabled={!connected || isSubmitting}
                 >
-                  <FaceSmileIcon className="h-5 w-5" />
+                  <FaRegSmile />
                 </button>
-
                 <button
                   type="button"
-                  className="text-[#1D9BF0] p-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                  aria-label="Add location"
-                  disabled={!connected || isSubmitting}
+                  className={`p-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 ${twitterBlue}`}
                 >
-                  <MapPinIcon className="h-5 w-5" />
+                  <FaMapMarkerAlt />
                 </button>
               </div>
-
-              <div className="flex items-center space-x-3">
-                {/* Character Counter */}
+              
+              {/* Character Count & Post Button */}
+              <div className="flex items-center">
                 {content.length > 0 && (
-                  <div className={`text-sm ${getCharCounterColor()}`}>
-                    {MAX_CONTENT_LENGTH - content.length}
+                  <div className="mr-3 text-sm">
+                    <span className={content.length > 260 ? 'text-yellow-500' : 'text-gray-500'}>
+                      {content.length}
+                    </span>
+                    <span className="text-gray-500">/280</span>
                   </div>
                 )}
-
-                {/* Submit Button */}
+                
                 <button
                   type="submit"
-                  className={`px-4 py-2 rounded-full font-medium ${
-                    (!connected || (!content.trim() && !mediaFile) || isSubmitting)
-                      ? 'bg-blue-300 text-white cursor-not-allowed'
-                      : 'bg-[#1D9BF0] hover:bg-[#1A8CD8] text-white'
+                  disabled={(!content.trim() && !imageFile) || isSubmitting || !connected}
+                  className={`px-5 py-2 rounded-full font-bold text-white ${
+                    (!content.trim() && !imageFile) || isSubmitting || !connected
+                      ? 'bg-blue-300 dark:bg-blue-800 cursor-not-allowed'
+                      : `${twitterBlueBg} transition-colors`
                   }`}
-                  disabled={!connected || (!content.trim() && !mediaFile) || isSubmitting}
                 >
                   {isSubmitting ? 'Posting...' : 'Post'}
                 </button>
               </div>
             </div>
-          </form>
+          </div>
         </div>
-      </div>
+      </form>
     </div>
   );
 };

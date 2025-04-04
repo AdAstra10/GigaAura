@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../lib/store';
-import { setFeed, addPost, Post, addComment, setComments, loadFromCache, setError, setLoading } from '../lib/slices/postsSlice';
+import { setFeed, addPost, Post, addComment, setComments, loadFromCache } from '../lib/slices/postsSlice';
 import { useWallet } from '../contexts/WalletContext';
 import { addTransaction } from '../lib/slices/auraPointsSlice';
 import { addNotification } from '../lib/slices/notificationsSlice';
@@ -18,9 +18,6 @@ import { cacheFeed, cacheUserPosts } from '../services/cache';
 import db from '../giga-aura/services/db-init';
 import axios from 'axios';
 import pusherClient, { PUSHER_CHANNELS, PUSHER_EVENTS } from '../lib/pusher';
-import { ArrowPathIcon, PencilIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
-import Link from 'next/link';
-import { ArrowDownIcon } from '@heroicons/react/24/outline';
 
 // Import the emoji picker dynamically to avoid SSR issues
 // IMPORTANT: Keep this import outside of the component to prevent rendering issues
@@ -41,46 +38,6 @@ const getApiBaseUrl = (): string => {
   }
   return '';
 };
-
-// Fix the PostCardSkeleton import by creating a simple implementation
-const PostCardSkeleton: React.FC = () => {
-  return (
-    <div className="border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-black p-4 animate-pulse">
-      <div className="flex">
-        <div className="flex-shrink-0 mr-3">
-          <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700"></div>
-        </div>
-        
-        <div className="flex-grow">
-          {/* Author Header */}
-          <div className="flex items-center mb-2">
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
-            <div className="mx-2 h-4 bg-gray-200 dark:bg-gray-700 rounded w-2"></div>
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-16"></div>
-          </div>
-          
-          {/* Post Content */}
-          <div className="space-y-2 mb-3">
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-4/6"></div>
-          </div>
-          
-          {/* Interaction Buttons */}
-          <div className="flex justify-between mt-3">
-            <div className="h-5 w-5 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
-            <div className="h-5 w-5 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
-            <div className="h-5 w-5 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
-            <div className="h-5 w-5 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Fix the function signature and define MAX_RETRIES
-const MAX_RETRIES = 5;
 
 // Simple LoadingSpinner component
 const LoadingSpinner = () => (
@@ -168,29 +125,33 @@ function FeedSafetyWrapper(props: Record<string, any>) {
 
 // Inner feed component with main logic
 function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
-  const dispatch = useDispatch();
-  const { feed: reduxPosts, loading, error } = useSelector((state: RootState) => state.posts);
-  const [activeTab, setActiveTab] = useState<'for-you' | 'following'>('for-you');
-  const [hasNewPosts, setHasNewPosts] = useState(false);
-  const [endReached, setEndReached] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
+  const [activeTab, setActiveTab] = useState('for-you');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const feedRef = useRef<HTMLDivElement>(null);
   const { showBoundary } = useErrorBoundary();
   const [newPostContent, setNewPostContent] = useState('');
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const { connectWallet, connected, walletAddress } = useWallet();
   const { username, avatar } = useSelector((state: RootState) => state.user);
+  const dispatch = useDispatch();
   
+  // Get posts from Redux store
+  const reduxPosts = useSelector((state: RootState) => state.posts.feed);
+  const reduxComments = useSelector((state: RootState) => state.posts.comments);
+
   // Add auto-refresh functionality
   const [autoRefresh, setAutoRefresh] = useState(true);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Add state for tracking new posts
+  const [hasNewPosts, setHasNewPosts] = useState(false);
   const [lastPostCount, setLastPostCount] = useState(0);
   const [lastFetchTime, setLastFetchTime] = useState(new Date());
   const sseRef = useRef<EventSource | null>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const MAX_RETRIES = 5;
   const [isRefreshing, setIsRefreshing] = useState(false);
   const pusherChannelRef = useRef<any>(null);
 
@@ -630,7 +591,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   }, [dispatch, isRefreshing]);
 
   const handleTabChange = (tab: string) => {
-    setActiveTab(tab as 'for-you' | 'following');
+    setActiveTab(tab);
   };
   
   // Function to handle creating a new post
@@ -830,7 +791,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         <button 
               className="px-4 py-2 bg-primary text-white rounded-full hover:bg-primary-hover"
               onClick={() => {
-                dispatch(setError(null));
+                setError(null);
                 setRetryCount(0);
               }}
             >
@@ -872,7 +833,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
 
     return (
       <div className="space-y-4">
-        {filteredPosts.map((post: Post) => {
+        {filteredPosts.map((post) => {
           // Add safety checks for post data
           if (!post) return null;
           
@@ -897,177 +858,72 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
     );
   };
 
-  // Add handleLoadMore function
-  const handleLoadMore = () => {
-    if (loadingMore || endReached) return;
-    setLoadingMore(true);
-    
-    // Get the oldest post date to use as a cursor
-    const oldestPost = reduxPosts[reduxPosts.length - 1];
-    const oldestDate = oldestPost ? oldestPost.createdAt : new Date().toISOString();
-    
-    axios.get(`${getApiBaseUrl()}/api/posts?before=${oldestDate}&limit=10`)
-      .then(response => {
-        if (response.data && Array.isArray(response.data)) {
-          if (response.data.length === 0) {
-            setEndReached(true);
-          } else {
-            dispatch(setFeed(response.data));
-          }
-        }
-      })
-      .catch(error => {
-        console.error('Error loading more posts:', error);
-        toast.error('Failed to load more posts');
-      })
-      .finally(() => {
-        setLoadingMore(false);
-      });
-  };
-
-  // Add handleRefreshFeed function
-  const handleRefreshFeed = () => {
-    setHasNewPosts(false);
-    // Force a refresh
-    axios.get(`${getApiBaseUrl()}/api/posts`)
-      .then(response => {
-        if (response.data && Array.isArray(response.data)) {
-          dispatch(setFeed(response.data));
-        }
-      })
-      .catch(error => {
-        console.error('Error refreshing feed:', error);
-      });
-  };
-
   return (
     <div className="w-full max-w-xl mx-auto">
-      {/* Tabs */}
-      <div className="-mx-4 border-b border-gray-100 dark:border-gray-800">
-        <div className="flex">
+      {/* New Post Banner */}
+      {hasNewPosts && (
+        <div 
+          className="sticky top-16 z-10 w-full bg-[#1D9BF0] text-white py-2 px-4 rounded-lg mb-4 cursor-pointer flex items-center justify-center shadow-sm"
+          onClick={() => {
+            setHasNewPosts(false);
+            // Force a refresh
+            axios.get(`${getApiBaseUrl()}/api/posts`)
+              .then(response => {
+                if (response.data && Array.isArray(response.data)) {
+                  dispatch(setFeed(response.data));
+                }
+              })
+              .catch(error => {
+                console.error('Error refreshing feed:', error);
+              });
+          }}
+        >
+          <div className="flex items-center">
+            <FaRegListAlt className="mr-2" />
+            <span>New posts available! Click to refresh</span>
+          </div>
+        </div>
+      )}
+
+      {/* Tab selector - Twitter style */}
+      <div className="flex border-b dark:border-gray-800 mb-3">
           <button
-            onClick={() => setActiveTab('for-you')}
-            className={`px-8 py-3 text-sm font-medium relative ${
+          className={`relative flex-1 py-4 font-bold text-center ${
               activeTab === 'for-you' 
                 ? 'text-black dark:text-white' 
-                : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+              : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-900/30'
             }`}
+            onClick={() => handleTabChange('for-you')}
           >
-            For You
+          For You
             {activeTab === 'for-you' && (
-              <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-12 h-1 bg-[#1D9BF0] rounded-full" />
+            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-1 bg-[#1D9BF0] rounded-full"></div>
             )}
           </button>
           <button
-            onClick={() => setActiveTab('following')}
-            className={`px-8 py-3 text-sm font-medium relative ${
+          className={`relative flex-1 py-4 font-bold text-center ${
               activeTab === 'following' 
                 ? 'text-black dark:text-white' 
-                : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+              : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-900/30'
             }`}
+            onClick={() => handleTabChange('following')}
           >
             Following
             {activeTab === 'following' && (
-              <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-12 h-1 bg-[#1D9BF0] rounded-full" />
+            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-1 bg-[#1D9BF0] rounded-full"></div>
             )}
           </button>
-        </div>
       </div>
       
-      {/* New Post Banner */}
-      {hasNewPosts && (
-        <button
-          onClick={handleRefreshFeed}
-          className="w-full py-3 text-[#1D9BF0] font-medium bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors -mx-4 px-4 flex items-center justify-center border-b border-gray-100 dark:border-gray-800"
-        >
-          <ArrowPathIcon className="w-4 h-4 mr-2" />
-          Show new posts
-        </button>
-      )}
-      
-      {/* Post List */}
-        {loading ? (
-        <div className="space-y-0 border-x border-gray-100 dark:border-gray-800 -mx-4">
-          <PostCardSkeleton />
-          <PostCardSkeleton />
-          <PostCardSkeleton />
-        </div>
-        ) : error ? (
-        <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
-          <p className="text-red-600 dark:text-red-400">{error}</p>
-          <button
-            onClick={() => {
-              dispatch(setError(null));
-              setRetryCount(0);
-            }}
-            className="mt-2 bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 px-4 py-2 rounded-lg"
-          >
-            Try again
-          </button>
-        </div>
-        ) : reduxPosts.length === 0 ? (
-        <div className="text-center py-12 border-x border-gray-100 dark:border-gray-800 -mx-4">
-          <DocumentTextIcon className="h-12 w-12 mx-auto text-gray-400" />
-          <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-gray-100">No posts yet</h3>
-          <p className="mt-2 text-gray-500 dark:text-gray-400">
-            {activeTab === 'for-you'
-              ? 'Be the first to post something!'
-              : 'Follow some users to see their posts here.'}
-          </p>
-          {activeTab === 'for-you' && (
-            <div className="mt-6">
-              <Link
-                href="/compose"
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full shadow-sm text-white bg-[#1D9BF0] hover:bg-[#1A8CD8]"
-              >
-                <PencilIcon className="-ml-1 mr-2 h-5 w-5" aria-hidden="true" />
-                Create a post
-              </Link>
-            </div>
-          )}
-          </div>
-        ) : (
-        <div className="space-y-0 border-x border-gray-100 dark:border-gray-800 -mx-4">
-          {reduxPosts.map((post: Post) => (
-            <PostCard
-              key={post.id}
-              post={post}
-              comments={Array.isArray(post.comments) ? post.comments : []}
-              onShare={handleRefreshFeed}
-              onFollow={handleRefreshFeed}
-            />
-          ))}
-          
-          {endReached && (
-            <div className="text-center py-8 text-gray-500 border-b border-gray-100 dark:border-gray-800">
-              You've reached the end of your feed.
-            </div>
-        )}
+      {/* Create post form */}
+      <div className="mb-4">
+        <CreatePostForm onSubmit={handleCreatePost} />
       </div>
-      )}
       
-      {/* Loading More */}
-      {!error && !loading && !endReached && reduxPosts.length > 0 && (
-        <div className="flex justify-center my-4">
-          <button
-            onClick={handleLoadMore}
-            className="bg-white dark:bg-black hover:bg-gray-50 dark:hover:bg-gray-900 text-gray-900 dark:text-gray-100 py-2 px-4 border border-gray-200 dark:border-gray-800 rounded-full flex items-center space-x-2"
-            disabled={loadingMore}
-          >
-            {loadingMore ? (
-              <>
-                <ArrowPathIcon className="h-5 w-5 text-gray-400 animate-spin" />
-                <span>Loading...</span>
-              </>
-            ) : (
-              <>
-                <ArrowDownIcon className="h-5 w-5 text-gray-400" />
-                <span>Load more</span>
-              </>
-            )}
-          </button>
-        </div>
-      )}
+      {/* Posts feed */}
+      <div ref={feedRef} className="space-y-3">
+        {renderPosts()}
+      </div>
     </div>
   );
 }
