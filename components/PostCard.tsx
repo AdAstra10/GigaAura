@@ -441,10 +441,10 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
   };
 
   return (
-    <div className="border border-[var(--border-color)] dark:border-gray-800 rounded-xl bg-white dark:bg-black p-4 mb-4 overflow-hidden transition-shadow hover:shadow-md">
+    <div className="border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-black p-4 hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
       <div className="flex">
         <div className="flex-shrink-0 mr-3">
-          <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700">
+          <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-100 dark:border-gray-800">
             {post.authorAvatar ? (
               <Image 
                 src={post.authorAvatar} 
@@ -474,7 +474,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
                 </button>
                 {post.authorUsername && (
                   <span className="ml-1">
-                    <CheckBadgeIcon className="h-4 w-4 text-primary" />
+                    <CheckBadgeIcon className="h-4 w-4 text-[#1D9BF0]" />
                   </span>
                 )}
               </div>
@@ -504,7 +504,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
           
           {/* Media */}
           {post.mediaUrl && (
-            <div className="mb-3 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-800">
+            <div className="mb-3 rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800">
               {post.mediaType === 'image' ? (
                 <Image 
                   src={post.mediaUrl} 
@@ -577,7 +577,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
               </button>
               {post.likes > 0 && (
                 <span className={`text-sm transition-colors ${isLiked ? 'text-pink-500' : 'group-hover:text-pink-500'}`}>
-                  {post.likes + (isLiked ? 1 : 0)}
+                  {post.likes}
                 </span>
               )}
             </div>
@@ -618,15 +618,15 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
           
           {/* Comment Section */}
           {showComments && (
-            <div className="mt-4 border-t border-[var(--border-color)] pt-4">
+            <div className="mt-4 border-t border-gray-100 dark:border-gray-800 pt-4">
               {/* Comment Form */}
               <form onSubmit={handleSubmitComment} className="mb-4">
                 <div className="flex">
                   <div className="flex-shrink-0 mr-2">
-                    <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+                    <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-800">
                       {connected ? (
                         <Image 
-                          src={avatar || 'https://i.pravatar.cc/150?img=1'} 
+                          src={avatar || '/assets/avatars/default-avatar.png'} 
                           alt={username || 'User'} 
                           width={32} 
                           height={32} 
@@ -641,7 +641,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
                   </div>
                   <div className="flex-grow">
                     <textarea
-                      className="w-full p-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-black dark:text-white resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full p-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-black dark:text-white resize-none focus:outline-none focus:ring-1 focus:ring-blue-400"
                       placeholder={connected ? "Post your reply" : "Connect wallet to comment"}
                       value={commentText}
                       onChange={(e) => setCommentText(e.target.value)}
@@ -653,7 +653,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
                         type="submit"
                         className={`px-4 py-2 rounded-full font-medium ${
                           connected && commentText.trim() && !isSubmitting
-                            ? 'bg-primary hover:bg-primary-hover text-white'
+                            ? 'bg-[#1D9BF0] hover:bg-[#1A8CD8] text-white'
                             : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                         }`}
                         disabled={!connected || !commentText.trim() || isSubmitting}
@@ -673,7 +673,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
                       <div className="flex-shrink-0 mr-2">
                         <div className="w-8 h-8 rounded-full overflow-hidden">
                           <Image 
-                            src={comment.authorAvatar || 'https://i.pravatar.cc/150?img=1'} 
+                            src={comment.authorAvatar || '/assets/avatars/default-avatar.png'} 
                             alt={comment.authorUsername || 'User'} 
                             width={32} 
                             height={32} 
@@ -682,7 +682,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
                         </div>
                       </div>
                       <div className="flex-grow">
-                        <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg">
+                        <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
                           <div className="flex items-center mb-1">
                             <span className="font-bold text-black dark:text-white mr-2">
                               {comment.authorUsername || 'Anonymous'}

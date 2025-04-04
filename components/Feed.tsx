@@ -921,7 +921,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       </div>
 
       {/* Posts feed */}
-      <div ref={feedRef} className="space-y-3">
+      <div ref={feedRef} className="space-y-0 border-x border-gray-100 dark:border-gray-800 -mx-4">
         {renderPosts()}
       </div>
     </div>
