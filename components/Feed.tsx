@@ -857,21 +857,31 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
 
     if (filteredPosts.length === 0) {
       return (
-        <div className="w-full flex justify-center items-center py-8">
-          <div className="text-center">
-            <p className="mb-4 text-[var(--text-primary)]">No posts to display.</p>
-            {activeTab === 'following' && (
-              <p className="text-sm text-[var(--text-secondary)]">
-                Follow other users to see their posts here.
-              </p>
-            )}
-          </div>
+        <div className="text-center py-12 border-x border-gray-100 dark:border-gray-800 -mx-4">
+          <DocumentTextIcon className="h-12 w-12 mx-auto text-gray-400" />
+          <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-gray-100">No posts yet</h3>
+          <p className="mt-2 text-gray-500 dark:text-gray-400">
+            {activeTab === 'for-you'
+              ? 'Be the first to post something!'
+              : 'Follow some users to see their posts here.'}
+          </p>
+          {activeTab === 'for-you' && (
+            <div className="mt-6">
+              <Link
+                href="/compose"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full shadow-sm text-white bg-[#1D9BF0] hover:bg-[#1A8CD8]"
+              >
+                <PencilIcon className="-ml-1 mr-2 h-5 w-5" aria-hidden="true" />
+                Create a post
+              </Link>
+            </div>
+          )}
         </div>
       );
     }
 
     return (
-      <div className="space-y-4">
+      <div className="space-y-0 border-x border-gray-100 dark:border-gray-800 -mx-4 divide-y divide-gray-100 dark:divide-gray-800">
         {filteredPosts.map((post: Post) => {
           // Add safety checks for post data
           if (!post) return null;
@@ -974,6 +984,11 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         </div>
       </div>
 
+      {/* Create Post Form */}
+      <div className="mb-4 mt-4">
+        <CreatePostForm onSubmit={handleCreatePost} />
+      </div>
+
       {/* New Post Banner */}
       {hasNewPosts && (
         <button
@@ -1027,7 +1042,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           )}
         </div>
       ) : (
-        <div className="space-y-0 border-x border-gray-100 dark:border-gray-800 -mx-4">
+        <div className="space-y-0 border-x border-gray-100 dark:border-gray-800 -mx-4 divide-y divide-gray-100 dark:divide-gray-800">
           {reduxPosts.map((post: Post) => (
             <PostCard
               key={post.id}

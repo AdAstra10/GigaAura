@@ -441,7 +441,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
   };
 
   return (
-    <div className="border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-black p-4 hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
+    <div className="bg-white dark:bg-black p-4 hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
       <div className="flex">
         <div className="flex-shrink-0 mr-3">
           <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-100 dark:border-gray-800">
