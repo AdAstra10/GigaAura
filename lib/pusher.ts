@@ -35,8 +35,9 @@ const createPusherClient = () => {
         }
       },
       // Transport fallback settings
-      activityTimeout: 60000, // Increase activity timeout (default 120000)
-      pongTimeout: 30000, // Increase pong timeout (default 30000)
+      activityTimeout: 30000, // Decrease activity timeout for faster reconnects (was 60000)
+      pongTimeout: 15000, // Decrease pong timeout for faster reconnects (was 30000)
+      enableStats: true, // Enable connection statistics
     });
 
     // Setup additional default event handlers

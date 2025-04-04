@@ -1,204 +1,234 @@
-import React, { useState, useRef } from 'react';
-import { FaRegSmile, FaImage, FaTimes } from 'react-icons/fa';
+import React, { useState, useRef, FormEvent } from 'react';
 import { useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
-import dynamic from 'next/dynamic';
+import { useWallet } from '../contexts/WalletContext';
 import Image from 'next/image';
+import { FaImage, FaRegSmile, FaMapMarkerAlt, FaCalendarAlt, FaTimes } from 'react-icons/fa';
+import { CheckBadgeIcon } from '@heroicons/react/24/solid';
 import toast from 'react-hot-toast';
 
-// Import the emoji picker dynamically to avoid SSR issues
-const EmojiPicker = dynamic(
-  () => import('emoji-picker-react'),
-  { ssr: false }
-);
-
-// Define prop types for better type safety
 interface CreatePostFormProps {
   onSubmit: (content: string, mediaFile?: File) => boolean;
-  placeholder?: string;
-  buttonText?: string;
-  autoFocus?: boolean;
-  className?: string;
 }
 
-export default function CreatePostForm({
-  onSubmit,
-  placeholder = "What's on your mind?",
-  buttonText = "Post",
-  autoFocus = false,
-  className = "",
-}: CreatePostFormProps) {
-  const { walletAddress, username, avatar } = useSelector((state: RootState) => state.user);
+const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit }) => {
   const [content, setContent] = useState('');
-  const [image, setImage] = useState<File | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const textAreaRef = useRef<HTMLTextAreaElement>(null);
+  const { connected, connectWallet, walletAddress } = useWallet();
+  const { username, avatar } = useSelector((state: RootState) => state.user);
+  
+  // Twitter Blue styling
+  const twitterBlue = "text-[#1D9BF0] dark:text-[#1D9BF0]";
+  const twitterBlueBg = "bg-[#1D9BF0] hover:bg-[#1A8CD8]";
 
-  // Handle form submission
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Don't allow empty posts
-    if (!content.trim()) {
-      toast.error('Please enter some content for your post');
-      return;
-    }
-    
-    // Don't allow posts if not connected
-    if (!walletAddress) {
-      toast.error('Please connect your wallet to create a post');
-      return;
-    }
-    
-    try {
-      setIsSubmitting(true);
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
       
-      // Call the onSubmit prop function with the content and image
-      const success = onSubmit(content, image || undefined);
-      
-      if (success) {
-        // Reset form on success
-        setContent('');
-        setImage(null);
-        setImagePreview(null);
-        setShowEmojiPicker(false);
-        
-        // Focus the textarea
-        textAreaRef.current?.focus();
-      }
-    } catch (error) {
-      console.error('Error submitting post:', error);
-      toast.error('Error creating post. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Handle emoji selection
-  const handleEmojiClick = (emojiObject: any) => {
-    setContent((prevContent) => prevContent + emojiObject.emoji);
-    // Focus back to textarea after selecting emoji
-    setTimeout(() => {
-      if (textAreaRef.current) {
-        textAreaRef.current.focus();
-      }
-    }, 0);
-  };
-
-  // Handle image upload
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Image size should be less than 5MB');
+      // Check if file is an image
+      if (!file.type.match('image.*')) {
+        toast.error('Please select an image file');
         return;
       }
       
-      setImage(file);
+      // Check file size (limit to 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image size must be less than 5MB');
+        return;
+      }
+      
+      setImageFile(file);
+      
+      // Create preview URL
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          setImagePreview(e.target.result as string);
+        }
       };
       reader.readAsDataURL(file);
     }
   };
-
-  // Handle removing the image
-  const handleRemoveImage = () => {
-    setImage(null);
+  
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    
+    if (!content.trim() && !imageFile) {
+      toast.error('Please enter some content or attach an image');
+      return;
+    }
+    
+    if (!connected) {
+      const confirmConnect = window.confirm('You need to connect your wallet to create a post. Connect now?');
+      if (confirmConnect) {
+        connectWallet();
+      }
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    // Call the onSubmit function passed from parent
+    const success = onSubmit(content, imageFile || undefined);
+    
+    if (success) {
+      // Reset form
+      setContent('');
+      setImageFile(null);
+      setImagePreview(null);
+      setShowEmojiPicker(false);
+    }
+    
+    setIsSubmitting(false);
+  };
+  
+  const removeImage = () => {
+    setImageFile(null);
     setImagePreview(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
-
+  
+  const addEmoji = (emoji: string) => {
+    setContent(prev => prev + emoji);
+  };
+  
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-4 ${className}`}>
+    <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-black p-4">
       <form onSubmit={handleSubmit}>
-        <div className="flex items-start mb-3">
-          <div className="w-10 h-10 rounded-full overflow-hidden mr-3 flex-shrink-0">
-            <Image
-              src={avatar || '/assets/avatars/default.png'}
-              alt="User Avatar"
-              width={40}
-              height={40}
-              className="w-full h-full object-cover"
-            />
-          </div>
-          
-          <textarea
-            ref={textAreaRef}
-            className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:text-white resize-none"
-            placeholder={placeholder}
-            rows={3}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            autoFocus={autoFocus}
-          />
-        </div>
-        
-        {/* Image preview */}
-        {imagePreview && (
-          <div className="relative mb-3 w-full">
-            <div className="max-h-60 w-full rounded-lg overflow-hidden">
-              <img src={imagePreview} alt="Preview" className="w-full h-full object-contain" />
-            </div>
-            <button
-              type="button"
-              onClick={handleRemoveImage}
-              className="absolute top-2 right-2 bg-gray-800 bg-opacity-70 text-white rounded-full p-1"
-            >
-              <FaTimes />
-            </button>
-          </div>
-        )}
-        
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-            >
-              <FaImage />
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageChange}
-            />
-            
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                <FaRegSmile />
-              </button>
-              
-              {showEmojiPicker && (
-                <div className="absolute bottom-12 left-0 z-10">
-                  <EmojiPicker onEmojiClick={handleEmojiClick} />
+        <div className="flex">
+          {/* User Avatar */}
+          <div className="flex-shrink-0 mr-3">
+            <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700">
+              {connected ? (
+                avatar ? (
+                  <Image 
+                    src={avatar} 
+                    alt={username || 'User'} 
+                    width={40} 
+                    height={40} 
+                    className="object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-r from-blue-400 to-indigo-600 flex items-center justify-center text-white font-bold">
+                    {username?.[0] || walletAddress?.substring(0, 2)}
+                  </div>
+                )
+              ) : (
+                <div 
+                  className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center cursor-pointer"
+                  onClick={connectWallet}
+                >
+                  <span className="text-gray-500 dark:text-gray-400 text-xs">Connect</span>
                 </div>
               )}
             </div>
           </div>
           
-          <button
-            type="submit"
-            disabled={!content.trim() || isSubmitting || !walletAddress}
-            className={`px-4 py-2 bg-primary text-white rounded-full hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed ${isSubmitting ? 'opacity-70' : ''}`}
-          >
-            {isSubmitting ? 'Posting...' : buttonText}
-          </button>
+          {/* Post Input & Media */}
+          <div className="flex-grow">
+            {connected && username && (
+              <div className="flex items-center mb-2">
+                <span className="font-bold text-sm text-black dark:text-white">{username}</span>
+                <CheckBadgeIcon className="ml-1 h-4 w-4 text-[#1D9BF0]" />
+              </div>
+            )}
+
+            <textarea
+              placeholder={connected ? "What's happening?" : "Connect wallet to post"}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              disabled={!connected || isSubmitting}
+              className="w-full bg-transparent text-black dark:text-white placeholder-gray-500 border-none outline-none resize-none mb-2 min-h-[80px] text-[18px]"
+              maxLength={280}
+            />
+            
+            {/* Image Preview */}
+            {imagePreview && (
+              <div className="relative mb-4 rounded-xl overflow-hidden">
+                <button
+                  type="button"
+                  onClick={removeImage}
+                  className="absolute top-2 right-2 bg-black bg-opacity-70 text-white p-1 rounded-full"
+                >
+                  <FaTimes />
+                </button>
+                <Image
+                  src={imagePreview}
+                  alt="Preview"
+                  width={500}
+                  height={300}
+                  className="w-full max-h-80 object-contain rounded-xl"
+                />
+              </div>
+            )}
+            
+            {/* Action Bar */}
+            <div className="flex justify-between items-center mt-3 border-t border-gray-100 dark:border-gray-800 pt-3">
+              <div className="flex space-x-3">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  ref={fileInputRef}
+                  className="hidden"
+                  id="image-upload"
+                />
+                <label
+                  htmlFor="image-upload"
+                  className={`p-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer ${twitterBlue}`}
+                >
+                  <FaImage />
+                </label>
+                <button
+                  type="button"
+                  className={`p-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 ${twitterBlue}`}
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                >
+                  <FaRegSmile />
+                </button>
+                <button
+                  type="button"
+                  className={`p-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 ${twitterBlue}`}
+                >
+                  <FaMapMarkerAlt />
+                </button>
+              </div>
+              
+              {/* Character Count & Post Button */}
+              <div className="flex items-center">
+                {content.length > 0 && (
+                  <div className="mr-3 text-sm">
+                    <span className={content.length > 260 ? 'text-yellow-500' : 'text-gray-500'}>
+                      {content.length}
+                    </span>
+                    <span className="text-gray-500">/280</span>
+                  </div>
+                )}
+                
+                <button
+                  type="submit"
+                  disabled={(!content.trim() && !imageFile) || isSubmitting || !connected}
+                  className={`px-5 py-2 rounded-full font-bold text-white ${
+                    (!content.trim() && !imageFile) || isSubmitting || !connected
+                      ? 'bg-blue-300 dark:bg-blue-800 cursor-not-allowed'
+                      : `${twitterBlueBg} transition-colors`
+                  }`}
+                >
+                  {isSubmitting ? 'Posting...' : 'Post'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </form>
     </div>
   );
-} 
+};
+
+export default CreatePostForm; 

@@ -155,6 +155,9 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const pusherChannelRef = useRef<any>(null);
 
+  // Add this CSS class after the imports for Twitter Blue color
+  const twitterBlue = "text-[#1D9BF0] dark:text-[#1D9BF0]";
+
   // Main useEffect for loading posts
   useEffect(() => {
     const loadPosts = async () => {
@@ -300,7 +303,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           console.log('Auto-refreshing feed...');
           loadPosts();
         }
-      }, 60000); // Refresh every 60 seconds
+      }, 10000); // Refresh every 10 seconds (was 60000)
     }
     
     // Set up Server-Sent Events for real-time updates
@@ -496,12 +499,52 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         channel.bind(PUSHER_EVENTS.NEW_POST, (data: any) => {
           console.log('Received new post via Pusher:', data);
           if (data && data.id) {
-            // Add the new post to the Redux store
+            // Add the new post to the Redux store immediately
             dispatch(addPost(data));
-            // Show notification about new posts
+            
+            // Show notification of new posts
             setHasNewPosts(true);
-            // Refresh the list to ensure consistency with database
-            refreshPosts();
+            
+            // For instant updates without full refresh, just add the new post to Redux
+            // This avoids the need to wait for the next refresh interval
+            
+            // Show toast notification
+            toast.success('New post received!', {
+              id: 'new-post-' + data.id,
+              duration: 3000,
+            });
+            
+            // Refresh in background without setting loading state
+            // This ensures we get other recent posts as well
+            const quietRefresh = async () => {
+              try {
+                const timestamp = new Date().getTime();
+                const apiUrl = `${getApiBaseUrl()}/api/posts?t=${timestamp}`;
+                
+                const response = await fetch(apiUrl, {
+                  method: 'GET',
+                  headers: {
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Accept': 'application/json',
+                  },
+                  mode: 'same-origin',
+                  credentials: 'same-origin',
+                });
+                
+                if (response.ok) {
+                  const posts = await response.json();
+                  if (Array.isArray(posts) && posts.length > 0) {
+                    dispatch(setFeed(posts));
+                  }
+                }
+              } catch (error) {
+                console.error('Error in quiet refresh:', error);
+              }
+            };
+            
+            // Perform background refresh
+            quietRefresh();
           }
         });
         
@@ -820,7 +863,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       {/* New Post Banner */}
       {hasNewPosts && (
         <div 
-          className="sticky top-16 z-10 w-full bg-primary text-white py-2 px-4 rounded-lg mb-4 cursor-pointer flex items-center justify-center"
+          className="sticky top-16 z-10 w-full bg-[#1D9BF0] text-white py-2 px-4 rounded-lg mb-4 cursor-pointer flex items-center justify-center shadow-sm"
           onClick={() => {
             setHasNewPosts(false);
             // Force a refresh
@@ -842,37 +885,43 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         </div>
       )}
 
-      {/* Tab selector */}
-      <div className="flex border-b dark:border-gray-700 mb-4">
+      {/* Tab selector - Twitter style */}
+      <div className="flex border-b dark:border-gray-800 mb-3">
         <button
-          className={`flex-1 py-2 font-semibold text-center ${
+          className={`relative flex-1 py-4 font-bold text-center ${
             activeTab === 'for-you'
-              ? 'text-primary border-b-2 border-primary'
-              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              ? 'text-black dark:text-white'
+              : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-900/30'
           }`}
           onClick={() => handleTabChange('for-you')}
         >
           For You
+          {activeTab === 'for-you' && (
+            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-1 bg-[#1D9BF0] rounded-full"></div>
+          )}
         </button>
         <button
-          className={`flex-1 py-2 font-semibold text-center ${
+          className={`relative flex-1 py-4 font-bold text-center ${
             activeTab === 'following'
-              ? 'text-primary border-b-2 border-primary'
-              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              ? 'text-black dark:text-white'
+              : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-900/30'
           }`}
           onClick={() => handleTabChange('following')}
         >
           Following
+          {activeTab === 'following' && (
+            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-1 bg-[#1D9BF0] rounded-full"></div>
+          )}
         </button>
       </div>
 
       {/* Create post form */}
-      <div className="mb-6">
+      <div className="mb-4">
         <CreatePostForm onSubmit={handleCreatePost} />
       </div>
 
       {/* Posts feed */}
-      <div ref={feedRef}>
+      <div ref={feedRef} className="space-y-3">
         {renderPosts()}
       </div>
     </div>

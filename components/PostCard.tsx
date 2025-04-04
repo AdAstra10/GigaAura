@@ -441,10 +441,10 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
   };
 
   return (
-    <div className="border border-[var(--border-color)] rounded-lg bg-white dark:bg-gray-900 p-4 mb-4 overflow-hidden transition-shadow hover:shadow-md">
+    <div className="border border-[var(--border-color)] dark:border-gray-800 rounded-xl bg-white dark:bg-black p-4 mb-4 overflow-hidden transition-shadow hover:shadow-md">
       <div className="flex">
-        <div className="flex-shrink-0 mr-4">
-          <div className="w-12 h-12 rounded-full overflow-hidden">
+        <div className="flex-shrink-0 mr-3">
+          <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700">
             {post.authorAvatar ? (
               <Image 
                 src={post.authorAvatar} 
@@ -454,7 +454,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
                 className="object-cover"
               />
             ) : (
-              <div className="w-full h-full bg-gradient-to-r from-purple-400 to-purple-600 flex items-center justify-center text-white font-bold">
+              <div className="w-full h-full bg-gradient-to-r from-blue-400 to-indigo-600 flex items-center justify-center text-white font-bold">
                 {post.authorUsername?.[0] || post.authorWallet.substring(0, 2)}
               </div>
             )}
@@ -463,52 +463,48 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
         
         <div className="flex-grow">
           {/* Author Header */}
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center">
-              <button 
-                onClick={handleViewProfile}
-                className="font-bold hover:underline text-black dark:text-white"
-              >
-                {displayName}
-              </button>
-              
-              {post.authorWallet !== walletAddress && (
+          <div className="flex items-start mb-1">
+            <div className="flex flex-col">
+              <div className="flex items-center">
                 <button 
-                  onClick={handleFollowToggle}
-                  className={`ml-2 text-xs py-1 px-2 rounded-full ${
-                    isFollowing 
-                      ? 'bg-[#F6B73C]/10 text-[#F6B73C] hover:bg-[#F6B73C]/20' 
-                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                  }`}
+                  onClick={handleViewProfile}
+                  className="font-bold text-black dark:text-white hover:underline"
                 >
-                  {isFollowing ? 'Following' : 'Follow'}
+                  {displayName}
                 </button>
-              )}
-              
-              <span className="mx-2 text-gray-500">•</span>
-              <span className="text-gray-500 text-sm">
-                {formatDate(post.createdAt)}
+                {post.authorUsername && (
+                  <span className="ml-1">
+                    <CheckBadgeIcon className="h-4 w-4 text-primary" />
+                  </span>
+                )}
+              </div>
+              <span className="text-gray-500 text-sm leading-none">
+                @{displayWallet}
               </span>
             </div>
+            <span className="mx-2 text-gray-500">·</span>
+            <span className="text-gray-500 text-sm">
+              {formatDate(post.createdAt)}
+            </span>
             
-            <div className="text-gray-500">
+            <div className="ml-auto text-gray-500">
               <button 
-                className="hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full p-1"
+                className="hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full p-1 transition-colors"
                 aria-label="More options"
               >
-                <FaEllipsisH />
+                <FaEllipsisH className="text-gray-500 dark:text-gray-400" />
               </button>
             </div>
           </div>
           
           {/* Post Content */}
-          <div className="mb-3 text-black dark:text-white whitespace-pre-wrap break-words">
+          <div className="mb-3 text-black dark:text-white whitespace-pre-wrap break-words text-[15px] leading-normal">
             {post.content}
           </div>
           
           {/* Media */}
           {post.mediaUrl && (
-            <div className="mb-3 rounded-lg overflow-hidden">
+            <div className="mb-3 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-800">
               {post.mediaType === 'image' ? (
                 <Image 
                   src={post.mediaUrl} 
@@ -527,50 +523,50 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
             </div>
           )}
           
-          {/* Interaction Buttons */}
-          <div className="flex justify-between mt-4">
-            <div className="flex items-center group">
+          {/* Interaction Buttons - Twitter style */}
+          <div className="flex justify-between mt-3 text-gray-500 dark:text-gray-400 max-w-md">
+            <div className="group flex items-center space-x-1">
               <button 
                 onClick={handleToggleComments}
                 aria-label="Comment"
-                className="p-2 rounded-full text-gray-500 group-hover:text-blue-500 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/10"
+                className="p-2 rounded-full group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 group-hover:text-blue-500 transition-colors"
               >
                 <ChatBubbleLeftIcon className="h-5 w-5" />
               </button>
               {post.comments > 0 && (
-                <span className="text-sm text-gray-500 group-hover:text-blue-500">
+                <span className="text-sm group-hover:text-blue-500 transition-colors">
                   {post.comments}
                 </span>
               )}
             </div>
             
-            <div className="flex items-center group">
+            <div className="group flex items-center space-x-1">
               <button 
                 onClick={handleSharePost}
                 aria-label="Repost"
-                className={`p-2 rounded-full ${
+                className={`p-2 rounded-full transition-colors ${
                   hasShared 
-                    ? 'text-green-500' 
-                    : 'text-gray-500 group-hover:text-green-500 group-hover:bg-green-50 dark:group-hover:bg-green-900/10'
+                    ? 'text-green-500 bg-green-50 dark:bg-green-900/20' 
+                    : 'group-hover:bg-green-50 dark:group-hover:bg-green-900/20 group-hover:text-green-500'
                 }`}
               >
                 <ArrowPathRoundedSquareIcon className="h-5 w-5" />
               </button>
               {post.shares > 0 && (
-                <span className={`text-sm ${hasShared ? 'text-green-500' : 'text-gray-500 group-hover:text-green-500'}`}>
+                <span className={`text-sm transition-colors ${hasShared ? 'text-green-500' : 'group-hover:text-green-500'}`}>
                   {post.shares}
                 </span>
               )}
             </div>
             
-            <div className="flex items-center group">
+            <div className="group flex items-center space-x-1">
               <button 
                 onClick={handleLike}
                 aria-label="Like"
-                className={`p-2 rounded-full ${
+                className={`p-2 rounded-full transition-colors ${
                   isLiked 
-                    ? 'text-pink-500' 
-                    : 'text-gray-500 group-hover:text-pink-500 group-hover:bg-pink-50 dark:group-hover:bg-pink-900/10'
+                    ? 'text-pink-500 bg-pink-50 dark:bg-pink-900/20' 
+                    : 'group-hover:bg-pink-50 dark:group-hover:bg-pink-900/20 group-hover:text-pink-500'
                 }`}
               >
                 {isLiked ? (
@@ -580,20 +576,20 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
                 )}
               </button>
               {post.likes > 0 && (
-                <span className={`text-sm ${isLiked ? 'text-pink-500' : 'text-gray-500 group-hover:text-pink-500'}`}>
+                <span className={`text-sm transition-colors ${isLiked ? 'text-pink-500' : 'group-hover:text-pink-500'}`}>
                   {post.likes + (isLiked ? 1 : 0)}
                 </span>
               )}
             </div>
             
-            <div className="flex items-center group">
+            <div className="group flex items-center space-x-1">
               <button 
                 onClick={handleBookmark}
                 aria-label="Bookmark"
-                className={`p-2 rounded-full ${
+                className={`p-2 rounded-full transition-colors ${
                   isBookmarked 
-                    ? 'text-blue-500' 
-                    : 'text-gray-500 group-hover:text-blue-500 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/10'
+                    ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+                    : 'group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 group-hover:text-blue-500'
                 }`}
               >
                 {isBookmarked ? (
@@ -604,7 +600,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
               </button>
             </div>
             
-            <div className="flex items-center group">
+            <div className="group flex items-center space-x-1">
               <button 
                 onClick={() => {
                   const postUrl = `${window.location.origin}/post/${post.id}`;
@@ -613,7 +609,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
                     .catch(() => toast.error('Failed to copy link'));
                 }}
                 aria-label="Share"
-                className="p-2 rounded-full text-gray-500 group-hover:text-blue-500 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/10"
+                className="p-2 rounded-full group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 group-hover:text-blue-500 transition-colors"
               >
                 <ShareIcon className="h-5 w-5" />
               </button>
