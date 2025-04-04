@@ -632,19 +632,19 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
   const handleTabChange = (tab: string) => {
     setActiveTab(tab as 'for-you' | 'following');
   };
-
+  
   // Function to handle creating a new post
   const handleCreatePost = (content: string, mediaFile?: File): boolean => {
     if (!content.trim()) {
       toast.error('Post content cannot be empty');
-      return false;
-    }
-    
+        return false;
+      }
+      
     if (!walletAddress) {
       toast.error('Please connect your wallet to create a post');
-      return false;
-    }
-
+        return false;
+      }
+      
     try {
       // Generate a new unique ID for the post
       const postId = uuidv4();
@@ -822,12 +822,12 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       );
     }
 
-    if (error) {
-      return (
+  if (error) {
+    return (
         <div className="w-full flex justify-center items-center py-8">
           <div className="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
             <p className="text-red-500 dark:text-red-400 mb-2">{error}</p>
-            <button
+        <button 
               className="px-4 py-2 bg-primary text-white rounded-full hover:bg-primary-hover"
               onClick={() => {
                 dispatch(setError(null));
@@ -835,7 +835,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
               }}
             >
               Try Again
-            </button>
+        </button>
           </div>
         </div>
       );
@@ -857,31 +857,21 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
 
     if (filteredPosts.length === 0) {
       return (
-        <div className="text-center py-12 border-x border-gray-100 dark:border-gray-800 -mx-4">
-          <DocumentTextIcon className="h-12 w-12 mx-auto text-gray-400" />
-          <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-gray-100">No posts yet</h3>
-          <p className="mt-2 text-gray-500 dark:text-gray-400">
-            {activeTab === 'for-you'
-              ? 'Be the first to post something!'
-              : 'Follow some users to see their posts here.'}
-          </p>
-          {activeTab === 'for-you' && (
-            <div className="mt-6">
-              <Link
-                href="/compose"
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full shadow-sm text-white bg-[#1D9BF0] hover:bg-[#1A8CD8]"
-              >
-                <PencilIcon className="-ml-1 mr-2 h-5 w-5" aria-hidden="true" />
-                Create a post
-              </Link>
-            </div>
-          )}
+        <div className="w-full flex justify-center items-center py-8">
+          <div className="text-center">
+            <p className="mb-4 text-[var(--text-primary)]">No posts to display.</p>
+            {activeTab === 'following' && (
+              <p className="text-sm text-[var(--text-secondary)]">
+                Follow other users to see their posts here.
+              </p>
+            )}
+          </div>
         </div>
       );
     }
 
     return (
-      <div className="space-y-0 border-x border-gray-100 dark:border-gray-800 -mx-4 divide-y divide-gray-100 dark:divide-gray-800">
+      <div className="space-y-4">
         {filteredPosts.map((post: Post) => {
           // Add safety checks for post data
           if (!post) return null;
@@ -958,8 +948,8 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           <button
             onClick={() => setActiveTab('for-you')}
             className={`px-8 py-3 text-sm font-medium relative ${
-              activeTab === 'for-you'
-                ? 'text-black dark:text-white'
+              activeTab === 'for-you' 
+                ? 'text-black dark:text-white' 
                 : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
             }`}
           >
@@ -971,8 +961,8 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           <button
             onClick={() => setActiveTab('following')}
             className={`px-8 py-3 text-sm font-medium relative ${
-              activeTab === 'following'
-                ? 'text-black dark:text-white'
+              activeTab === 'following' 
+                ? 'text-black dark:text-white' 
                 : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
             }`}
           >
@@ -983,12 +973,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           </button>
         </div>
       </div>
-
-      {/* Create Post Form */}
-      <div className="mb-4 mt-4">
-        <CreatePostForm onSubmit={handleCreatePost} />
-      </div>
-
+      
       {/* New Post Banner */}
       {hasNewPosts && (
         <button
@@ -1001,13 +986,13 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       )}
       
       {/* Post List */}
-      {loading ? (
+        {loading ? (
         <div className="space-y-0 border-x border-gray-100 dark:border-gray-800 -mx-4">
           <PostCardSkeleton />
           <PostCardSkeleton />
           <PostCardSkeleton />
         </div>
-      ) : error ? (
+        ) : error ? (
         <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
           <p className="text-red-600 dark:text-red-400">{error}</p>
           <button
@@ -1020,7 +1005,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
             Try again
           </button>
         </div>
-      ) : reduxPosts.length === 0 ? (
+        ) : reduxPosts.length === 0 ? (
         <div className="text-center py-12 border-x border-gray-100 dark:border-gray-800 -mx-4">
           <DocumentTextIcon className="h-12 w-12 mx-auto text-gray-400" />
           <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-gray-100">No posts yet</h3>
@@ -1040,9 +1025,9 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
               </Link>
             </div>
           )}
-        </div>
-      ) : (
-        <div className="space-y-0 border-x border-gray-100 dark:border-gray-800 -mx-4 divide-y divide-gray-100 dark:divide-gray-800">
+          </div>
+        ) : (
+        <div className="space-y-0 border-x border-gray-100 dark:border-gray-800 -mx-4">
           {reduxPosts.map((post: Post) => (
             <PostCard
               key={post.id}
@@ -1057,8 +1042,8 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
             <div className="text-center py-8 text-gray-500 border-b border-gray-100 dark:border-gray-800">
               You've reached the end of your feed.
             </div>
-          )}
-        </div>
+        )}
+      </div>
       )}
       
       {/* Loading More */}
@@ -1096,4 +1081,4 @@ export default function Feed({ isMetaMaskDetected }: { isMetaMaskDetected?: bool
       <FeedSafetyWrapper isMetaMaskDetected={isMetaMaskDetected} />
     </FeedErrorBoundary>
   );
-} 
+}
