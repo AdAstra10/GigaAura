@@ -309,13 +309,20 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       if (cachedPosts) {
         const posts = JSON.parse(cachedPosts);
         if (Array.isArray(posts) && posts.length > 0) {
+          console.log('Loaded', posts.length, 'posts from localStorage on initial mount');
           dispatch(setFeed(posts));
+          
+          // Initialize filtered posts without waiting for the effect with reduxPosts dependency
+          if (activeTab === 'following' && following.length > 0) {
+            const filteredCache = posts.filter(post => following.includes(post.authorWallet));
+            console.log('Filtered to', filteredCache.length, 'following posts');
+          }
         }
       }
     } catch (error) {
       console.error('Error loading posts from localStorage:', error);
     }
-  }, [dispatch]);
+  }, [dispatch]); // Only run on initial mount
 
   // Effect for loading posts on mount and periodically
   useEffect(() => {
@@ -338,16 +345,20 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
           return;
         }
         
-        // Second, try to load from localStorage via loadFromCache
-        dispatch(loadFromCache());
-        
-        // If we have posts in the Redux store after loading from cache, no need to fetch
-        if (reduxPosts.length > 0) {
-          setLoading(false);
-          setLastPostCount(reduxPosts.length);
-          setLastFetchTime(new Date());
-          setIsRefreshing(false);
-          return;
+        // Second, try to load from localStorage
+        let existingPosts: Post[] = [];
+        try {
+          const cachedPosts = localStorage.getItem('giga-aura-posts');
+          if (cachedPosts) {
+            existingPosts = JSON.parse(cachedPosts);
+            if (Array.isArray(existingPosts) && existingPosts.length > 0) {
+              // Use existing posts from localStorage while we fetch from API
+              dispatch(setFeed(existingPosts));
+              console.log('Initially loaded', existingPosts.length, 'posts from localStorage');
+            }
+          }
+        } catch (e) {
+          console.error('Error loading posts from localStorage:', e);
         }
         
         // Finally, fetch from API
@@ -372,17 +383,58 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         const data = await response.json();
         
         if (Array.isArray(data) && data.length > 0) {
-          dispatch(setFeed(data));
+          // Merge with existing posts to prevent loss
+          // Use a Map to deduplicate by ID while preserving the order of new posts first
+          const postMap = new Map();
+          
+          // Add API posts first
+          data.forEach(post => {
+            if (post && post.id) {
+              postMap.set(post.id, post);
+            }
+          });
+          
+          // Then add any existing posts that aren't in the API response
+          existingPosts.forEach(post => {
+            if (post && post.id && !postMap.has(post.id)) {
+              postMap.set(post.id, post);
+            }
+          });
+          
+          // Convert map back to array
+          const mergedPosts = Array.from(postMap.values());
+          
+          // Update Redux store
+          dispatch(setFeed(mergedPosts));
+          
           // Cache the feed in localStorage
           if (typeof window !== 'undefined') {
-            localStorage.setItem('giga-aura-posts', JSON.stringify(data));
+            localStorage.setItem('giga-aura-posts', JSON.stringify(mergedPosts));
+            console.log('Saved merged', mergedPosts.length, 'posts to localStorage');
           }
+        } else if (existingPosts.length > 0) {
+          // If API returned no posts but we have existing posts, keep them
+          console.warn('API returned empty data, keeping existing posts:', existingPosts.length);
         } else {
           console.warn('API returned empty or invalid data:', data);
         }
       } catch (error) {
         console.error('Error loading posts:', error);
         setRetryCount(prev => prev + 1);
+        
+        // Try to load from localStorage on error
+        try {
+          const cachedPosts = localStorage.getItem('giga-aura-posts');
+          if (cachedPosts) {
+            const posts = JSON.parse(cachedPosts);
+            if (Array.isArray(posts) && posts.length > 0) {
+              dispatch(setFeed(posts));
+              console.log('Restored', posts.length, 'posts from localStorage after load error');
+            }
+          }
+        } catch (e) {
+          console.error('Error restoring from localStorage:', e);
+        }
       } finally {
         setLoading(false);
         setIsRefreshing(false);
@@ -473,6 +525,17 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       setIsRefreshing(true);
       setHasNewPosts(false);
       
+      // Get existing posts from localStorage first
+      let existingPosts: Post[] = [];
+      try {
+        const cachedPosts = localStorage.getItem('giga-aura-posts');
+        if (cachedPosts) {
+          existingPosts = JSON.parse(cachedPosts);
+        }
+      } catch (e) {
+        console.error('Error parsing cached posts:', e);
+      }
+      
       const timestamp = new Date().getTime();
       const apiUrl = `${getApiBaseUrl()}/api/posts?t=${timestamp}`;
       
@@ -494,19 +557,64 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       const data = await response.json();
       
       if (Array.isArray(data) && data.length > 0) {
-        dispatch(setFeed(data));
+        // Merge with existing posts to prevent loss during refresh
+        // Use a Map to deduplicate by ID while preserving the order of new posts first
+        const postMap = new Map();
+        
+        // Add API posts first
+        data.forEach(post => {
+          if (post && post.id) {
+            postMap.set(post.id, post);
+          }
+        });
+        
+        // Then add any existing posts that aren't in the API response
+        existingPosts.forEach(post => {
+          if (post && post.id && !postMap.has(post.id)) {
+            postMap.set(post.id, post);
+          }
+        });
+        
+        // Convert map back to array
+        const mergedPosts = Array.from(postMap.values());
+        
+        // Update Redux store
+        dispatch(setFeed(mergedPosts));
+        
         // Cache the feed
         if (typeof window !== 'undefined') {
-          localStorage.setItem('giga-aura-posts', JSON.stringify(data));
+          localStorage.setItem('giga-aura-posts', JSON.stringify(mergedPosts));
+          console.log('Saved', mergedPosts.length, 'posts to localStorage after refresh');
         }
+        
         toast.success('Feed updated!');
       } else {
-        console.warn('API returned empty or invalid data during refresh:', data);
-        toast.success('No new posts available');
+        // If API returned no posts, keep our existing posts
+        if (existingPosts.length > 0) {
+          dispatch(setFeed(existingPosts));
+          console.warn('API returned empty data during refresh, keeping existing posts:', existingPosts.length);
+        } else {
+          console.warn('API returned empty or invalid data during refresh:', data);
+          toast.success('No new posts available');
+        }
       }
     } catch (error) {
       console.error('Error refreshing posts:', error);
       toast.error('Error refreshing feed');
+      
+      // On error, try to restore from localStorage
+      try {
+        const cachedPosts = localStorage.getItem('giga-aura-posts');
+        if (cachedPosts) {
+          const posts = JSON.parse(cachedPosts);
+          if (Array.isArray(posts) && posts.length > 0) {
+            dispatch(setFeed(posts));
+            console.log('Restored', posts.length, 'posts from localStorage after refresh error');
+          }
+        }
+      } catch (e) {
+        console.error('Error restoring from localStorage:', e);
+      }
     } finally {
       setIsRefreshing(false);
     }

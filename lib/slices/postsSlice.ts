@@ -95,6 +95,28 @@ export const postsSlice = createSlice({
       cacheFeed(state.feed);
       cacheUserPosts(state.userPosts);
       
+      // Also directly save to localStorage with the key used by Feed component
+      if (typeof window !== 'undefined') {
+        try {
+          // Get existing posts from localStorage
+          const existingPostsJSON = localStorage.getItem('giga-aura-posts');
+          let existingPosts = [];
+          
+          if (existingPostsJSON) {
+            existingPosts = JSON.parse(existingPostsJSON);
+          }
+          
+          // Add new post to the beginning of the array
+          const updatedPosts = [newPost, ...existingPosts];
+          
+          // Save updated array back to localStorage
+          localStorage.setItem('giga-aura-posts', JSON.stringify(updatedPosts));
+          console.log('Post saved to localStorage with key giga-aura-posts');
+        } catch (error) {
+          console.error('Error saving post to localStorage:', error);
+        }
+      }
+      
       // Sync to Firestore
       db.savePost(newPost)
         .then(success => {

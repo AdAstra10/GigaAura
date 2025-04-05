@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import db from '../../giga-aura/services/postgresql-db';
-import { triggerNewPost, triggerUpdatedPost } from '../../lib/pusher-server';
-import { Post } from '../../lib/slices/postsSlice';
+import pusherServer, { triggerNewPost, triggerUpdatedPost } from '../../lib/pusher-server';
+import { v4 as uuidv4 } from 'uuid';
 
 // Set CORS headers for all responses
 function setCorsHeaders(res: NextApiResponse) {
@@ -43,100 +43,90 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } else if (req.method === 'POST') {
       // Create a new post
       try {
-        const newPost = req.body;
+        const { content, authorWallet, authorUsername, authorAvatar, mediaUrl, mediaType } = req.body;
         
-        // Enhanced validation for required fields
-        if (!newPost || !newPost.content) {
-          res.status(400).json({ 
-            success: false, 
-            warning: 'Post content is required',
-            data: null
-          });
-          return;
+        // Validate required fields
+        if (!content || !authorWallet) {
+          return res.status(400).json({ error: 'Missing required fields' });
         }
         
-        // Attempt to save the post
-        const savedPost = await db.savePost(newPost);
+        // Create the post object
+        const post = {
+          id: uuidv4(),
+          content,
+          authorWallet,
+          authorUsername: authorUsername || null,
+          authorAvatar: authorAvatar || null,
+          createdAt: new Date().toISOString(),
+          mediaUrl: mediaUrl || null,
+          mediaType: mediaType || null,
+          likes: 0,
+          comments: 0,
+          shares: 0,
+          likedBy: [],
+          sharedBy: [],
+          bookmarkedBy: [],
+        };
         
-        // Trigger Pusher event after successfully saving post
-        let pusherSuccess = false;
-        if (savedPost) {
-          try {
-            pusherSuccess = await triggerNewPost(savedPost);
-            if (pusherSuccess) {
-              console.log('Pusher event triggered for new post');
-            } else {
-              console.warn('Failed to trigger Pusher event, but post was saved');
-            }
-          } catch (pusherError) {
-            console.error('Error with Pusher:', pusherError);
-          }
+        // Save the post to the database
+        const success = await db.savePost(post);
+        
+        if (success) {
+          // Trigger Pusher event for real-time updates
+          await triggerNewPost(post);
+          
+          return res.status(201).json(post);
+        } else {
+          return res.status(500).json({ error: 'Failed to save post' });
         }
-        
-        // Return success response with the saved post and Pusher status
-        res.status(201).json({ 
-          success: true, 
-          data: savedPost,
-          pusherEvent: pusherSuccess,
-          timestamp: new Date().toISOString()
-        });
       } catch (error) {
-        console.error('Error saving post:', error);
-        // Return warning instead of error to prevent client-side failures
-        res.status(200).json({ 
-          success: false, 
-          warning: 'Failed to save post, please try again later',
-          data: null
-        });
+        console.error('Error creating post:', error);
+        return res.status(500).json({ error: 'Failed to create post' });
       }
     } else if (req.method === 'PUT') {
       // Update an existing post
       try {
-        const post = req.body;
+        const { id } = req.query;
+        const { likes, likedBy, shares, sharedBy, bookmarkedBy, comments } = req.body;
         
-        // Enhanced validation
-        if (!post || !post.id) {
-          res.status(400).json({
-            success: false,
-            warning: 'Post ID is required for updates',
-            data: null
-          });
-          return;
+        // Validate required fields
+        if (!id) {
+          return res.status(400).json({ error: 'Missing post ID' });
         }
         
-        // Attempt to update the post
-        const updatedPost = await db.updatePost(post);
+        // Get the existing post
+        const posts = await db.getPosts();
+        const existingPost = posts.find(p => p.id === id);
         
-        // Trigger Pusher event for post update
-        let pusherSuccess = false;
-        if (updatedPost) {
-          try {
-            pusherSuccess = await triggerUpdatedPost(updatedPost);
-            if (pusherSuccess) {
-              console.log('Pusher event triggered for updated post');
-            } else {
-              console.warn('Failed to trigger Pusher event, but post was updated');
-            }
-          } catch (pusherError) {
-            console.error('Error with Pusher:', pusherError);
-          }
+        if (!existingPost) {
+          return res.status(404).json({ error: 'Post not found' });
         }
         
-        // Return success response
-        res.status(200).json({
-          success: true,
-          data: updatedPost,
-          pusherEvent: pusherSuccess,
-          timestamp: new Date().toISOString()
-        });
+        // Update the post
+        const updatedPost = {
+          ...existingPost,
+          likes: likes !== undefined ? likes : existingPost.likes,
+          likedBy: likedBy || existingPost.likedBy || [],
+          shares: shares !== undefined ? shares : existingPost.shares,
+          sharedBy: sharedBy || existingPost.sharedBy || [],
+          bookmarkedBy: bookmarkedBy || existingPost.bookmarkedBy || [],
+          comments: comments !== undefined ? comments : existingPost.comments,
+        };
+        
+        // Save the updated post
+        const success = await db.updatePost(updatedPost);
+        
+        if (success) {
+          // Trigger Pusher event for real-time updates
+          await triggerUpdatedPost(updatedPost);
+          
+          return res.status(200).json(updatedPost);
+        } else {
+          return res.status(500).json({ error: 'Failed to update post' });
+        }
       } catch (error) {
         console.error('Error updating post:', error);
-        // Return warning instead of error
-        res.status(200).json({
-          success: false,
-          warning: 'Failed to update post, please try again later',
-          data: null
-        });
+        return res.status(500).json({ error: 'Failed to update post' });
       }
     } else {
       // Method not allowed
