@@ -44,7 +44,7 @@ class MyDocument extends Document {
                       style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; 
                       font-src 'self' https://fonts.gstatic.com; 
                       img-src 'self' data: https://*.gigaaura.com https://i.pravatar.cc https://picsum.photos https://images.unsplash.com https://*.googleapis.com https://*.gstatic.com; 
-                      connect-src 'self' https://*.gigaaura.com https://*.onrender.com https://cloudflareinsights.com https://*.googleapis.com https://firestore.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://*.firebase.googleapis.com https://*.gstatic.com wss://*.pusher.com https://*.pusher.com;
+                      connect-src 'self' https://gigaaura.com https://*.gigaaura.com https://*.onrender.com https://cloudflareinsights.com https://*.googleapis.com https://firestore.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://*.firebase.googleapis.com https://*.gstatic.com wss://*.pusher.com https://*.pusher.com https://*.gigaaura.com/api/events;
                       worker-src 'self' blob:;
                       child-src 'self' blob:;
                       object-src 'none';

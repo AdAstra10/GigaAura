@@ -14,6 +14,7 @@ import { followUser, unfollowUser } from '../lib/slices/userSlice';
 import { FaRegComment, FaRegHeart, FaHeart, FaRetweet, FaRegShareSquare, FaEllipsisH } from 'react-icons/fa';
 import { ChatBubbleLeftIcon, ArrowPathRoundedSquareIcon, HeartIcon, ShareIcon, BookmarkIcon as BookmarkOutlineIcon } from '@heroicons/react/24/outline';
 import { CheckBadgeIcon, BookmarkIcon as BookmarkSolidIcon } from '@heroicons/react/24/solid';
+import Image from 'next/image';
 
 interface PostCardProps {
   post: Post;
@@ -440,26 +441,29 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
   };
 
   return (
-    <div className="border-b border-gray-200 dark:border-gray-800 p-4 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
+    <article className="w-full border-b border-gray-200 dark:border-gray-800 p-4 hover:bg-gray-50 dark:hover:bg-gray-900/20 transition-colors">
+      {/* Post Header - Author info */}
       <div className="flex">
-        {/* Left: Avatar */}
+        {/* Author Avatar */}
         <div className="flex-shrink-0 mr-3">
-          <div 
-            className="w-10 h-10 rounded-full overflow-hidden cursor-pointer"
-            onClick={handleViewProfile}
+          <Link 
+            href={`/profile/${post.authorWallet}`}
+            className="block rounded-full overflow-hidden w-10 h-10 hover:opacity-90 transition-opacity"
           >
             {post.authorAvatar ? (
-              <img 
+              <Image 
                 src={post.authorAvatar} 
-                alt={post.authorUsername || 'User'} 
+                width={40} 
+                height={40} 
+                alt={post.authorUsername || ''} 
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full bg-primary flex items-center justify-center text-white">
-                {post.authorUsername ? post.authorUsername.charAt(0).toUpperCase() : post.authorWallet.substring(0, 2)}
+              <div className="w-full h-full bg-gradient-to-r from-blue-400 to-indigo-600 flex items-center justify-center text-white font-bold">
+                {(post.authorUsername?.[0] || post.authorWallet?.[0] || '?').toUpperCase()}
               </div>
             )}
-          </div>
+          </Link>
         </div>
         
         {/* Right: Content */}
@@ -673,7 +677,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
           )}
         </div>
       </div>
-    </div>
+    </article>
   );
 };
 

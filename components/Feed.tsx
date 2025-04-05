@@ -622,7 +622,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
 
   // Now return the JSX for the feed component with the X-style UI
   return (
-    <div className="max-w-xl mx-auto">
+    <div className="w-full">
       {/* Tab navigation - "For you" and "Following" tabs */}
       <div className="border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white dark:bg-black z-10">
         <div className="flex w-full">

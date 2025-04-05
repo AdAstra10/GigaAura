@@ -232,8 +232,12 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
 
       // Check if this is a different address
       if (newAddress && newAddress !== walletAddress) {
-        // Update state and Redux
+        // First disconnect the current wallet
+        await disconnectWallet();
+        
+        // Update state and Redux with the new wallet
         setWalletState(newAddress);
+        setWalletConnected(true);
         dispatch(setWalletAddress(newAddress));
         
         // Update localStorage
@@ -325,7 +329,9 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
           if (provider.on) {
             // Listen for account changes
             provider.on('accountChanged', handleAccountChange);
-            console.log("Set up wallet account change listener");
+            // Listen for disconnect events
+            provider.on('disconnect', disconnectWallet);
+            console.log("Set up wallet event listeners");
           }
         } else {
           console.log("Compatible wallet not found. Please install Phantom wallet extension.");
@@ -358,7 +364,11 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         const provider = getProvider();
         if (provider && provider.off) {
           provider.off('accountChanged', handleAccountChange);
-          console.log("Removed wallet account change listener");
+          // Add listener for disconnect events
+          if (provider.off) {
+            provider.off('disconnect', disconnectWallet);
+          }
+          console.log("Removed wallet event listeners");
         }
       } catch (error) {
         console.error("Error removing wallet event listeners:", error);
@@ -416,7 +426,11 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       if (provider.on) {
         // Listen for account changes
         provider.on('accountChanged', handleAccountChange);
-        console.log("Set up wallet account change listener");
+        // Add listener for disconnect events
+        if (provider.on) {
+          provider.on('disconnect', disconnectWallet);
+        }
+        console.log("Set up wallet event listeners");
       }
       
       // Show success toast
@@ -468,6 +482,49 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       console.error("Error disconnecting wallet:", error);
     }
   };
+
+  // Add polling mechanism to periodically check wallet
+  useEffect(() => {
+    // Skip if no wallet is connected
+    if (!walletConnected || !walletAddress) return;
+    
+    let pollInterval: NodeJS.Timeout;
+    
+    // Function to check current wallet address
+    const checkCurrentWallet = async () => {
+      try {
+        const provider = getProvider();
+        if (!provider) return;
+        
+        // Get current wallet address from provider
+        const currentPublicKey = provider.publicKey;
+        if (!currentPublicKey) {
+          // Wallet was disconnected externally
+          console.log("Wallet disconnected externally, logging out");
+          await disconnectWallet();
+          return;
+        }
+        
+        const currentAddress = safeGetAddress(currentPublicKey);
+        
+        // If wallet address changed, update it
+        if (currentAddress && currentAddress !== walletAddress) {
+          console.log("Wallet address changed during polling:", currentAddress);
+          handleAccountChange(currentPublicKey);
+        }
+      } catch (error) {
+        console.error("Error checking wallet address:", error);
+      }
+    };
+    
+    // Poll every 3 seconds
+    pollInterval = setInterval(checkCurrentWallet, 3000);
+    
+    // Clean up on unmount
+    return () => {
+      clearInterval(pollInterval);
+    };
+  }, [walletConnected, walletAddress, disconnectWallet, handleAccountChange]);
 
   return (
     <WalletContext.Provider
