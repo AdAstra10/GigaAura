@@ -208,6 +208,115 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
     ? reduxPosts.filter(post => following.includes(post.authorWallet))
     : reduxPosts;
 
+  // Set up Pusher for real-time updates
+  useEffect(() => {
+    // Skip if SSR or not auto-refreshing
+    if (typeof window === 'undefined' || !autoRefresh) return;
+
+    try {
+      // Subscribe to cache-posts-channel for real-time post updates
+      const postsChannel = pusherClient.subscribe('cache-posts-channel');
+      
+      // Listen for new post events
+      postsChannel.bind('new-post-event', (postData: any) => {
+        console.log('Received new post via Pusher:', postData);
+        if (postData && postData.id) {
+          // Add the new post to Redux store
+          dispatch(addPost(postData));
+          
+          // Update localStorage cache
+          try {
+            const cachedPosts = localStorage.getItem('giga-aura-posts');
+            let posts = [];
+            
+            if (cachedPosts) {
+              posts = JSON.parse(cachedPosts);
+              
+              // Check if post already exists
+              const existingIndex = posts.findIndex((p: any) => p.id === postData.id);
+              if (existingIndex >= 0) {
+                // Update existing post
+                posts[existingIndex] = postData;
+              } else {
+                // Add new post to beginning
+                posts.unshift(postData);
+              }
+            } else {
+              // Initialize cache with this post
+              posts = [postData];
+            }
+            
+            // Save updated posts to localStorage
+            localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
+          } catch (error) {
+            console.error('Error updating localStorage with Pusher post:', error);
+          }
+          
+          setHasNewPosts(true);
+        }
+      });
+      
+      // Listen for updated post events
+      postsChannel.bind('updated-post-event', (postData: any) => {
+        console.log('Received updated post via Pusher:', postData);
+        if (postData && postData.id) {
+          // Update the post in Redux store using setFeed with updated posts
+          try {
+            // Get current posts from Redux
+            const currentPosts = [...reduxPosts];
+            
+            // Find and update the post
+            const updatedPosts = currentPosts.map((post) => 
+              post.id === postData.id ? {...post, ...postData} : post
+            );
+            
+            // Update Redux with modified posts list
+            dispatch(setFeed(updatedPosts));
+            
+            // Update localStorage cache
+            const cachedPosts = localStorage.getItem('giga-aura-posts');
+            if (cachedPosts) {
+              let posts = JSON.parse(cachedPosts);
+              
+              // Update post if it exists
+              const updatedCachedPosts = posts.map((p: any) => 
+                p.id === postData.id ? {...p, ...postData} : p
+              );
+              
+              // Save updated posts to localStorage
+              localStorage.setItem('giga-aura-posts', JSON.stringify(updatedCachedPosts));
+            }
+          } catch (error) {
+            console.error('Error updating post in Redux or localStorage:', error);
+          }
+        }
+      });
+      
+      // Clean up on unmount
+      return () => {
+        postsChannel.unbind_all();
+        pusherClient.unsubscribe('cache-posts-channel');
+      };
+    } catch (error) {
+      console.error('Error setting up Pusher for feed:', error);
+    }
+  }, [dispatch, autoRefresh, reduxPosts]);
+
+  // Load initial posts from localStorage if available
+  useEffect(() => {
+    try {
+      const cachedPosts = localStorage.getItem('giga-aura-posts');
+      if (cachedPosts) {
+        const posts = JSON.parse(cachedPosts);
+        if (Array.isArray(posts) && posts.length > 0) {
+          dispatch(setFeed(posts));
+        }
+      }
+    } catch (error) {
+      console.error('Error loading posts from localStorage:', error);
+    }
+  }, [dispatch]);
+
   // Effect for loading posts on mount and periodically
   useEffect(() => {
     // Implementation details...
