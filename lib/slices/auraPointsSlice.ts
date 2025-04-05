@@ -6,7 +6,9 @@ import db from '../../services/db';
 export interface AuraTransaction {
   id: string;
   amount: number;
-  action: 'post_created' | 'like_received' | 'comment_made' | 'comment_received' | 'follower_gained' | 'post_shared' | 'follow_given';
+  action: 'post_created' | 'like_received' | 'comment_made' | 'comment_received' | 
+         'follower_gained' | 'post_shared' | 'follow_given' | 'follow_user' | 
+         'share_post' | 'bookmark_post';
   timestamp: string;
   counterpartyName?: string;
   counterpartyWallet?: string;

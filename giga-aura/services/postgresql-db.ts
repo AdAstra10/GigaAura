@@ -223,7 +223,16 @@ export const savePost = async (post: Post): Promise<boolean> => {
   // Always save to local storage regardless of DB availability
   if (typeof window !== 'undefined') {
     try {
-      localStorage.setItem(`giga-aura-post-${post.id}`, JSON.stringify(post));
+      // Make sure post has proper initial values for likes
+      const postWithDefaults = {
+        ...post,
+        likes: post.likes || 0,
+        comments: post.comments || 0,
+        shares: post.shares || 0,
+        likedBy: post.likedBy || []
+      };
+      
+      localStorage.setItem(`giga-aura-post-${post.id}`, JSON.stringify(postWithDefaults));
       
       // Update posts list in localStorage
       const cachedPostIds = localStorage.getItem('giga-aura-post-ids');
@@ -243,64 +252,95 @@ export const savePost = async (post: Post): Promise<boolean> => {
         // Create a new array with the updated post
         postsCache = [
           ...postsCache.slice(0, existingPostIndex),
-          post,
+          postWithDefaults,
           ...postsCache.slice(existingPostIndex + 1)
         ];
       } else {
         // Create a new array with the post at the beginning
-        postsCache = [post, ...postsCache];
+        postsCache = [postWithDefaults, ...postsCache];
       }
       
       // Also update the full posts cache
-      localStorage.setItem('giga-aura-posts', JSON.stringify(postsCache));
-      console.log('Post saved to local storage:', post.id);
+      try {
+        const cachedPosts = localStorage.getItem('giga-aura-posts');
+        if (cachedPosts) {
+          const parsedPosts = JSON.parse(cachedPosts);
+          if (Array.isArray(parsedPosts)) {
+            const updatedPosts = [...parsedPosts];
+            const existingIndex = updatedPosts.findIndex(p => p.id === post.id);
+            
+            if (existingIndex >= 0) {
+              updatedPosts[existingIndex] = postWithDefaults;
+            } else {
+              updatedPosts.unshift(postWithDefaults);
+            }
+            
+            localStorage.setItem('giga-aura-posts', JSON.stringify(updatedPosts));
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to update posts cache in localStorage:', e);
+      }
     } catch (e) {
       console.warn('Failed to save post to localStorage:', e);
     }
   }
   
-  // If we know there are database connection issues or running in browser, don't attempt to save to the database
-  if (hasDatabaseConnectionIssue || typeof window !== 'undefined' || !pool) {
-    console.log('Skipping database save due to client-side execution or connection issues');
-    return true; // Consider it a success since we saved locally
+  // If we know there are database connection issues, skip DB operations
+  if (hasDatabaseConnectionIssue || typeof window !== 'undefined') {
+    return true; // Return true for client-side since we saved to localStorage
   }
-
+  
+  // Server-side database operations
   try {
     const client = await pool.connect();
     
     try {
-      // Extract comments from post for storing in the database
-      const comments = post.comments || [];
+      // Ensure post has proper initial values
+      const postWithDefaults = {
+        ...post,
+        likes: post.likes || 0,
+        comments: post.comments || 0,
+        shares: post.shares || 0,
+        likedBy: post.likedBy || []
+      };
       
       // Save post to the database
       const query = `
         INSERT INTO posts (
           id, content, author_wallet, author_name, 
-          created_at, likes, liked_by, shares, comments, data
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          created_at, likes, liked_by, shares, shared_by, 
+          bookmarked_by, data
+        ) VALUES (
+          $1, $2, $3, $4, 
+          $5, $6, $7, $8, $9, 
+          $10, $11
+        )
         ON CONFLICT (id) DO UPDATE SET
-          content = $2,
-          author_name = $4,
-          likes = $6,
-          liked_by = $7,
-          shares = $8,
-          comments = $9,
-          data = $10,
+          content = EXCLUDED.content,
+          author_name = EXCLUDED.author_name,
+          likes = EXCLUDED.likes,
+          liked_by = EXCLUDED.liked_by,
+          shares = EXCLUDED.shares,
+          shared_by = EXCLUDED.shared_by,
+          bookmarked_by = EXCLUDED.bookmarked_by,
+          data = EXCLUDED.data,
           updated_at = CURRENT_TIMESTAMP
         RETURNING *
       `;
       
       const values = [
-        post.id,
-        post.content,
-        post.authorWallet,
-        post.authorName,
-        post.createdAt || new Date().toISOString(),
-        post.likes || 0,
-        JSON.stringify(post.likedBy || []),
-        post.shares || 0,
-        JSON.stringify(comments),
-        JSON.stringify(post) // Store the entire post as JSON for future-proofing
+        postWithDefaults.id,
+        postWithDefaults.content,
+        postWithDefaults.authorWallet,
+        postWithDefaults.authorUsername,
+        postWithDefaults.createdAt,
+        postWithDefaults.likes,
+        JSON.stringify(postWithDefaults.likedBy || []),
+        postWithDefaults.shares || 0,
+        JSON.stringify(postWithDefaults.sharedBy || []),
+        JSON.stringify(postWithDefaults.bookmarkedBy || []),
+        JSON.stringify(postWithDefaults)
       ];
       
       await client.query(query, values);
@@ -309,14 +349,14 @@ export const savePost = async (post: Post): Promise<boolean> => {
     } catch (error) {
       handleDatabaseError(error);
       console.error('Error saving post to database:', error);
-      return true; // Consider it a success since we saved to local storage
+      return false;
     } finally {
       client.release();
     }
   } catch (error) {
     handleDatabaseError(error);
     console.error('Error connecting to database pool:', error);
-    return true; // Consider it a success since we saved to local storage
+    return false;
   }
 };
 
@@ -533,7 +573,14 @@ export const updatePost = async (post: Post): Promise<boolean> => {
         try {
           const posts = JSON.parse(cachedPosts);
           if (Array.isArray(posts)) {
-            const updatedPosts = posts.map(p => p.id === post.id ? post : p);
+            // Ensure the likedBy array is properly managed
+            const updatedPost = {
+              ...post,
+              likedBy: post.likedBy || [],
+              likes: post.likedBy ? post.likedBy.length : 0
+            };
+            
+            const updatedPosts = posts.map(p => p.id === post.id ? updatedPost : p);
             localStorage.setItem(postsKey, JSON.stringify(updatedPosts));
           }
         } catch (e) {
@@ -550,8 +597,8 @@ export const updatePost = async (post: Post): Promise<boolean> => {
   }
   
   // If we know there are database connection issues, skip DB operations
-  if (hasDatabaseConnectionIssue) {
-    console.log('Skipping database update due to known connection issues');
+  if (hasDatabaseConnectionIssue || typeof window !== 'undefined') {
+    console.log('Skipping database update due to known connection issues or client-side environment');
     return true; // Consider it a success since we updated locally
   }
   
@@ -601,6 +648,27 @@ export const updatePost = async (post: Post): Promise<boolean> => {
         }
       }
       
+      // Process liked_by array
+      let likedBy: string[] = [];
+      if (post.likedBy && Array.isArray(post.likedBy)) {
+        likedBy = post.likedBy;
+      } else if (existingResult.rows.length > 0 && existingResult.rows[0].liked_by) {
+        try {
+          const existingLikedBy = existingResult.rows[0].liked_by;
+          if (Array.isArray(existingLikedBy)) {
+            likedBy = existingLikedBy;
+          } else if (typeof existingLikedBy === 'string') {
+            // Try to parse string as JSON
+            likedBy = safeJsonParse(existingLikedBy, []);
+          }
+        } catch (error) {
+          console.error('Error parsing existing liked_by:', error);
+        }
+      }
+      
+      // Ensure likes count matches likedBy array length
+      const likesCount = likedBy.length;
+      
       // Save post to the database
       const query = `
         UPDATE posts SET
@@ -621,13 +689,17 @@ export const updatePost = async (post: Post): Promise<boolean> => {
       const values = [
         post.content,
         post.authorUsername,
-        post.likes || 0,
-        JSON.stringify(post.likedBy || []),
+        likesCount, // Use the calculated likes count 
+        JSON.stringify(likedBy),
         post.shares || 0,
         JSON.stringify(sharedBy),
         JSON.stringify(post.comments || []),
         JSON.stringify(bookmarkedBy),
-        JSON.stringify(post), // Store the entire post as JSON for future-proofing
+        JSON.stringify({
+          ...post,
+          likes: likesCount, // Ensure data JSON also has correct likes count
+          likedBy: likedBy
+        }),
         post.id
       ];
       
