@@ -24,20 +24,15 @@ const createPusherClient = () => {
     const client = new Pusher(appKey, {
       cluster: cluster,
       forceTLS: true, // Use TLS for secure connections
-      enabledTransports: ['ws', 'wss', 'xhr_streaming', 'xhr_polling'], // Explicitly enable all transports
-      disabledTransports: [], // Don't disable any transports
+      enabledTransports: ['ws', 'wss'], // Only use WebSocket transport to avoid SockJS issues
+      disabledTransports: ['xhr_streaming', 'xhr_polling', 'sockjs'], // Disable HTTP fallbacks to prevent CSP issues
       authEndpoint: '/api/pusher/auth', // Authentication endpoint for private channels
-      wsHost: 'ws-us2.pusher.com', // Explicitly set WebSocket host to match CSP
-      httpHost: 'sockjs-us2.pusher.com', // Explicitly set HTTP host
-      auth: {
-        headers: {
-          // Add any necessary auth headers (if needed)
-        }
-      },
+      wsHost: `ws-${cluster}.pusher.com`, // Dynamically set WebSocket host based on cluster
+      enableStats: false, // Disable stats collection to prevent CSP issues with stats.pusher.com
+      disableStats: true, // For older versions compatibility
       // Transport fallback settings
       activityTimeout: 30000, // Decrease activity timeout for faster reconnects (was 60000)
       pongTimeout: 15000, // Decrease pong timeout for faster reconnects (was 30000)
-      enableStats: true, // Enable connection statistics
     });
 
     // Setup additional default event handlers
@@ -74,15 +69,16 @@ const createPusherClient = () => {
         // Check for CSP violations
         if (err && err.type === 'WebSocketError') {
           console.error('Possible CSP violation. Check that your Content-Security-Policy allows connections to Pusher domains.');
-          console.error(`Make sure wss://ws-us2.pusher.com is allowed in your CSP connect-src directive.`);
+          console.error(`Make sure wss://ws-${cluster}.pusher.com is allowed in your CSP connect-src directive.`);
           
           // Log connection information for debugging
           console.debug('Connection Details:', {
-            wsHost: 'ws-us2.pusher.com',
-            httpHost: 'sockjs-us2.pusher.com',
+            wsHost: `ws-${cluster}.pusher.com`,
             cluster: cluster,
             forceTLS: true,
-            state: client.connection.state
+            state: client.connection.state,
+            enabledTransports: ['ws', 'wss'],
+            disabledTransports: ['xhr_streaming', 'xhr_polling', 'sockjs'],
           });
         }
       });
@@ -121,7 +117,7 @@ const pusherClient = createPusherClient();
 
 // Export Pusher event channel names for consistency
 export const PUSHER_CHANNELS = {
-  POSTS: 'posts-channel',
+  POSTS: 'cache-posts-channel',
   NOTIFICATIONS: 'notifications-channel',
   TEST: 'test-channel',
 };
