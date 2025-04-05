@@ -13,6 +13,8 @@ interface PhantomWallet {
   isPhantom?: boolean;
   connect: (options?: { onlyIfTrusted: boolean }) => Promise<{ publicKey: { toString: () => string } }>;
   disconnect: () => Promise<void>;
+  on?: (event: string, callback: (...args: any[]) => void) => void;
+  off?: (event: string, callback: (...args: any[]) => void) => void;
 }
 
 // Extended Window interface to include Solana and Phantom
@@ -214,6 +216,42 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     }
   };
 
+  // Handle wallet account change
+  const handleAccountChange = async (newPublicKey: any) => {
+    try {
+      // Handle account change - newPublicKey could be null if disconnected
+      if (!newPublicKey) {
+        // Disconnect if Phantom wallet has been disconnected
+        await disconnectWallet();
+        toast.success("Wallet disconnected");
+        return;
+      }
+
+      const newAddress = safeGetAddress(newPublicKey);
+      console.log("Wallet account changed to:", newAddress);
+
+      // Check if this is a different address
+      if (newAddress && newAddress !== walletAddress) {
+        // Update state and Redux
+        setWalletState(newAddress);
+        dispatch(setWalletAddress(newAddress));
+        
+        // Update localStorage
+        localStorage.setItem('walletAddress', newAddress);
+        localStorage.setItem('walletConnected', 'true');
+        
+        // Load user data for the new address
+        loadWalletAuraPoints(newAddress, dispatch);
+        loadUserProfileData(newAddress);
+        
+        toast.success("Wallet account changed successfully");
+      }
+    } catch (error) {
+      console.error("Error handling account change:", error);
+      toast.error("Failed to update wallet account");
+    }
+  };
+
   // Initialize wallet connection
   useEffect(() => {
     const checkIfWalletIsConnected = async () => {
@@ -282,6 +320,13 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
               console.log("Using saved wallet address:", savedWalletAddress);
             }
           }
+          
+          // Set up account change listener for Phantom wallet
+          if (provider.on) {
+            // Listen for account changes
+            provider.on('accountChanged', handleAccountChange);
+            console.log("Set up wallet account change listener");
+          }
         } else {
           console.log("Compatible wallet not found. Please install Phantom wallet extension.");
           
@@ -306,6 +351,19 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     if (typeof window !== 'undefined') {
       checkIfWalletIsConnected();
     }
+    
+    // Clean up event listeners when component unmounts
+    return () => {
+      try {
+        const provider = getProvider();
+        if (provider && provider.off) {
+          provider.off('accountChanged', handleAccountChange);
+          console.log("Removed wallet account change listener");
+        }
+      } catch (error) {
+        console.error("Error removing wallet event listeners:", error);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -354,6 +412,13 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       loadWalletAuraPoints(walletAddress, dispatch);
       loadUserProfileData(walletAddress);
       
+      // Set up account change listener if not already set
+      if (provider.on) {
+        // Listen for account changes
+        provider.on('accountChanged', handleAccountChange);
+        console.log("Set up wallet account change listener");
+      }
+      
       // Show success toast
       toast.success("Wallet connected successfully!");
       
@@ -379,9 +444,16 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   // Disconnect wallet
   const disconnectWallet = async () => {
     try {
+      // Remove event listeners first
+      if (walletProvider && walletProvider.off) {
+        walletProvider.off('accountChanged', handleAccountChange);
+      }
+      
+      // Then disconnect
       if (walletProvider) {
         await walletProvider.disconnect();
       }
+      
       setWalletState(null);
       setWalletConnected(false);
       setWalletProvider(null);
