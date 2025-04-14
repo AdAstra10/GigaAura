@@ -132,7 +132,7 @@ const userSlice = createSlice({
     },
     updateProfile: (state, action: PayloadAction<Partial<User>>) => {
       const { username, avatar, bio, bannerImage } = action.payload;
-      
+
       // Local username uniqueness check (can remain as a pre-check)
       if (username && username !== state.username) {
         if (!isUsernameUnique(username, state.walletAddress)) {
@@ -140,14 +140,53 @@ const userSlice = createSlice({
           // Don't block the state update here; server will be the source of truth
         }
       }
-      
+
       // Update the state
       if (username !== undefined) state.username = username;
       if (avatar !== undefined) state.avatar = avatar;
       if (bio !== undefined) state.bio = bio;
       if (bannerImage !== undefined) state.bannerImage = bannerImage;
-      
-      // Removed direct localStorage saving from here; moved to the thunk
+
+      // --- REMOVED OLD LOCALSTORAGE SAVING LOGIC --- 
+      // This was causing the QuotaExceededError and is redundant
+      // The saveUserProfile thunk handles persistence via the API and optionally
+      // updates a user-specific localStorage key.
+      /* 
+      if (typeof window !== 'undefined' && state.walletAddress) {
+        try {
+          // Save username
+          if (username) {
+            const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
+            usernames[state.walletAddress] = username;
+            localStorage.setItem('usernames', JSON.stringify(usernames));
+          }
+          
+          // Save avatar
+          if (avatar) {
+            const profilePictures = JSON.parse(localStorage.getItem('profilePictures') || '{}');
+            profilePictures[state.walletAddress] = avatar;
+            localStorage.setItem('profilePictures', JSON.stringify(profilePictures));
+          }
+          
+          // Save bio
+          if (bio) {
+            const bios = JSON.parse(localStorage.getItem('userBios') || '{}');
+            bios[state.walletAddress] = bio;
+            localStorage.setItem('userBios', JSON.stringify(bios));
+          }
+          
+          // Save banner image
+          if (bannerImage) {
+            const bannerImages = JSON.parse(localStorage.getItem('bannerImages') || '{}');
+            bannerImages[state.walletAddress] = bannerImage;
+            localStorage.setItem('bannerImages', JSON.stringify(bannerImages));
+          }
+        } catch (error) {
+          console.error('Error saving profile data to localStorage:', error);
+        }
+      }
+      */
+      // --- END REMOVED LOGIC --- 
     },
     toggleDarkMode: (state) => {
       state.darkMode = !state.darkMode;
