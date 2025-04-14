@@ -7,6 +7,7 @@
 import { Post, Comment } from '@lib/slices/postsSlice';
 import { AuraPointsState, AuraTransaction } from '@lib/slices/auraPointsSlice';
 import { Notification } from '@lib/slices/notificationsSlice';
+import { User } from '@lib/slices/userSlice'; // Assuming User type is available
 
 // PostgreSQL connection configuration
 const pgConfig = {
@@ -160,18 +161,17 @@ initDatabase();
 /**
  * Handle database connection errors
  */
-const handleDatabaseError = (error: any): void => {
-  console.error('Database error:', error);
-  
-  if (!hasDatabaseConnectionIssue) {
-    console.warn('Database connection issue detected. Switching to local-only mode.');
-    hasDatabaseConnectionIssue = true;
-    
-    // Display a helpful message about the connection issue
-    console.info('Database Troubleshooting: \n' +
-      'This is likely due to connectivity issues with the PostgreSQL database.\n' +
-      'The app will continue to function using local storage only.');
-  }
+const handleDatabaseError = (error: any, context: string = 'Unknown context'): void => {
+  console.error(`Database error in ${context}:`, error);
+
+  // Log a warning but don't permanently switch to local-only mode here.
+  // Let the individual functions decide how to handle the error (e.g., fallback or return failure).
+  console.warn('Database operation failed. Check connection and query details.');
+  // Commenting out the permanent switch:
+  // if (!hasDatabaseConnectionIssue) {
+  //   console.warn('Database connection issue detected. Relying on local storage/cache where possible.');
+  //   hasDatabaseConnectionIssue = true;
+  // }
 };
 
 /**
@@ -220,7 +220,7 @@ const safeJsonParse = (data: any, fallback: any = null) => {
  * Save a post to the database
  */
 export const savePost = async (post: Post): Promise<boolean> => {
-  // Always save to local storage regardless of DB availability
+  // Local storage saving logic can remain for client-side caching/optimism
   if (typeof window !== 'undefined') {
     try {
       // Make sure post has proper initial values for likes
@@ -286,15 +286,18 @@ export const savePost = async (post: Post): Promise<boolean> => {
     }
   }
   
-  // If we know there are database connection issues, skip DB operations
-  if (hasDatabaseConnectionIssue || typeof window !== 'undefined') {
-    return true; // Return true for client-side since we saved to localStorage
+  // If the pool failed to initialize, we cannot proceed with DB operations.
+  // Return false as the persistent save failed.
+  if (!pool || hasDatabaseConnectionIssue) {
+     console.warn('Skipping database save: Pool not initialized or connection issue flag set.');
+     return false; // Indicate DB save failure
   }
-  
+
   // Server-side database operations
+  let client;
   try {
-    const client = await pool.connect();
-    
+    client = await pool.connect();
+
     try {
       // Ensure post has proper initial values
       const postWithDefaults = {
@@ -308,12 +311,12 @@ export const savePost = async (post: Post): Promise<boolean> => {
       // Save post to the database
       const query = `
         INSERT INTO posts (
-          id, content, author_wallet, author_name, 
-          created_at, likes, liked_by, shares, shared_by, 
+          id, content, author_wallet, author_name,
+          created_at, likes, liked_by, shares, shared_by,
           bookmarked_by, data
         ) VALUES (
-          $1, $2, $3, $4, 
-          $5, $6, $7, $8, $9, 
+          $1, $2, $3, $4,
+          $5, $6, $7, $8, $9,
           $10, $11
         )
         ON CONFLICT (id) DO UPDATE SET
@@ -345,18 +348,18 @@ export const savePost = async (post: Post): Promise<boolean> => {
       
       await client.query(query, values);
       console.log('Post saved to database:', post.id);
-      return true;
+      return true; // Indicate DB save success
     } catch (error) {
-      handleDatabaseError(error);
-      console.error('Error saving post to database:', error);
-      return false;
+      handleDatabaseError(error, 'savePost query');
+      // console.error('Error saving post to database:', error); // Covered by handleDatabaseError
+      return false; // Indicate DB save failure
     } finally {
-      client.release();
+      if (client) client.release();
     }
   } catch (error) {
-    handleDatabaseError(error);
-    console.error('Error connecting to database pool:', error);
-    return false;
+    handleDatabaseError(error, 'savePost pool.connect');
+    // console.error('Error connecting to database pool:', error); // Covered by handleDatabaseError
+    return false; // Indicate DB connection failure
   }
 };
 
@@ -364,32 +367,42 @@ export const savePost = async (post: Post): Promise<boolean> => {
  * Get all posts from the database
  */
 export const getPosts = async (): Promise<Post[]> => {
-  // If we know there are database connection issues, or running in browser, skip database calls and use local cache directly
-  if (hasDatabaseConnectionIssue || typeof window !== 'undefined' || !pool) {
-    console.log('Using local cache due to client-side execution or database connection issues');
+  // If the pool is not available (server hasn't initialized it or error occurred),
+  // fall back to local cache/storage.
+  if (!pool || hasDatabaseConnectionIssue) {
+    console.warn('Using local cache/storage: Pool not initialized or connection issue flag set.');
     return getLocalPosts();
   }
 
+  // Attempt to fetch from the database
+  let client;
   try {
-    // Use cache as immediate fallback if available
-    if (postsCache.length > 0) {
-      console.log('Using cached posts while fetching from database');
-    }
-    
-    const client = await pool.connect();
-    
+    client = await pool.connect();
+    console.log('Attempting to fetch posts from database...'); // Added log
+
     try {
       // Query all posts, ordered by creation date descending (newest first)
       const result = await client.query(`
-        SELECT * FROM posts 
+        SELECT * FROM posts
         ORDER BY created_at DESC
       `);
-      
+
+      console.log(`Retrieved ${result.rows.length} rows from database`); // Added log
+
       if (result.rows.length === 0) {
-        console.log('No posts found in database, falling back to local cache');
-        return getLocalPosts();
+        console.log('No posts found in database.'); // Simplified log
+        // Update cache to be empty and return empty
+        postsCache = [];
+         if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('giga-aura-posts', JSON.stringify([]));
+            } catch (e) {
+              console.warn('Failed to clear posts cache in localStorage:', e);
+            }
+         }
+        return []; // Return empty array if DB is empty
       }
-      
+
       // Transform rows into Post objects
       const posts: Post[] = result.rows.map((row: any) => {
         try {
@@ -410,7 +423,7 @@ export const getPosts = async (): Promise<Post[]> => {
               // Fall back to constructing from individual fields
             }
           }
-          
+
           // Otherwise, construct from individual fields
           return {
             id: row.id,
@@ -428,36 +441,33 @@ export const getPosts = async (): Promise<Post[]> => {
           return null;
         }
       }).filter(Boolean) as Post[];
-      
-      console.log(`Retrieved ${posts.length} posts from database`);
-      
-      // Update cache
-      if (posts.length > 0) {
-        postsCache = [...posts];
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
-          } catch (e) {
-            console.warn('Failed to update posts cache in localStorage:', e);
-          }
+
+      console.log(`Successfully processed ${posts.length} posts from database`); // Added log
+
+      // Update cache with fresh data from DB
+      postsCache = [...posts];
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
+          console.log('Updated localStorage cache with fresh posts.'); // Added log
+        } catch (e) {
+          console.warn('Failed to update posts cache in localStorage:', e);
         }
       }
-      
-      return posts;
+
+      return posts; // Return fresh data from DB
     } catch (error) {
-      handleDatabaseError(error);
-      console.error('Error getting posts from database:', error);
-      
-      // Fall back to cache
+      handleDatabaseError(error, 'getPosts query');
+      // Fall back to cache ONLY if DB query fails
+      console.warn('Database query failed. Falling back to local cache/storage.');
       return getLocalPosts();
     } finally {
-      client.release();
+      if (client) client.release();
     }
   } catch (error) {
-    handleDatabaseError(error);
-    console.error('Error connecting to database pool:', error);
-    
-    // Fall back to cache
+    handleDatabaseError(error, 'getPosts pool.connect');
+    // Fall back to cache ONLY if DB connection fails
+    console.warn('Database connection failed. Falling back to local cache/storage.');
     return getLocalPosts();
   }
 };
@@ -558,12 +568,87 @@ export const getUserPosts = async (walletAddress: string): Promise<Post[]> => {
 };
 
 /**
+ * Get a single post by its ID
+ */
+export const getPostById = async (postId: string): Promise<Post | null> => {
+  if (!postId) return null;
+
+  // If the pool is not available, try local cache first
+  if (!pool || hasDatabaseConnectionIssue) {
+    console.warn(`Using local cache for getPostById(${postId}): Pool not initialized or connection issue.`);
+    const localPosts = getLocalPosts();
+    return localPosts.find(p => p.id === postId) || null;
+  }
+
+  let client;
+  try {
+    client = await pool.connect();
+    try {
+      const result = await client.query('SELECT * FROM posts WHERE id = $1', [postId]);
+
+      if (result.rows.length === 0) {
+        console.log(`Post ${postId} not found in database.`);
+        return null;
+      }
+
+      const row = result.rows[0];
+      // Transform row into Post object (using similar logic as getPosts)
+      const post: Post = (() => {
+         try {
+          if (row.data) {
+            const parsedData = safeJsonParse(row.data, {});
+            return {
+              ...parsedData,
+              likes: row.likes || 0,
+              shares: row.shares || 0,
+              likedBy: safeJsonParse(row.liked_by, []),
+              sharedBy: safeJsonParse(row.shared_by, []), // Added sharedBy
+              comments: safeJsonParse(row.comments, []),
+              bookmarkedBy: safeJsonParse(row.bookmarked_by, []) // Added bookmarkedBy
+            };
+          }
+          // Fallback construction
+          return {
+            id: row.id,
+            content: row.content,
+            authorWallet: row.author_wallet,
+            authorName: row.author_name || '',
+            createdAt: row.created_at?.toISOString() || new Date().toISOString(),
+            likes: row.likes || 0,
+            likedBy: safeJsonParse(row.liked_by, []),
+            comments: safeJsonParse(row.comments, []),
+            shares: row.shares || 0,
+            sharedBy: safeJsonParse(row.shared_by, []), // Added sharedBy
+            bookmarkedBy: safeJsonParse(row.bookmarked_by, []) // Added bookmarkedBy
+          };
+        } catch (e) {
+          console.error('Error parsing single post from database:', e);
+          return null; // Return null if parsing fails
+        }
+      })();
+
+
+      return post;
+
+    } catch (error) {
+      handleDatabaseError(error, `getPostById query (${postId})`);
+      return null; // Indicate DB query failure
+    } finally {
+      if (client) client.release();
+    }
+  } catch (error) {
+    handleDatabaseError(error, `getPostById pool.connect (${postId})`);
+    return null; // Indicate DB connection failure
+  }
+};
+
+/**
  * Update a post in the database (likes, comments, etc.)
  */
 export const updatePost = async (post: Post): Promise<boolean> => {
   if (!post || !post.id) return false;
-  
-  // Always update in localStorage first for immediate feedback
+
+  // Optimistic local storage update (can remain)
   if (typeof window !== 'undefined') {
     try {
       // Find and update the post in the feed cache
@@ -577,9 +662,14 @@ export const updatePost = async (post: Post): Promise<boolean> => {
             const updatedPost = {
               ...post,
               likedBy: post.likedBy || [],
-              likes: post.likedBy ? post.likedBy.length : 0
+              likes: post.likedBy ? post.likedBy.length : 0, // Ensure likes count matches likedBy length
+              // Ensure other fields are included if needed for local cache consistency
+              sharedBy: post.sharedBy || [],
+              shares: post.sharedBy ? post.sharedBy.length : 0, // Assuming shares count matches sharedBy length
+              comments: post.comments || [],
+              bookmarkedBy: post.bookmarkedBy || [],
             };
-            
+
             const updatedPosts = posts.map(p => p.id === post.id ? updatedPost : p);
             localStorage.setItem(postsKey, JSON.stringify(updatedPosts));
           }
@@ -587,89 +677,49 @@ export const updatePost = async (post: Post): Promise<boolean> => {
           console.warn('Failed to update post in localStorage:', e);
         }
       }
-      
+
       // Update the individual post cache
       localStorage.setItem(`giga-aura-post-${post.id}`, JSON.stringify(post));
-      console.log('Post updated in localStorage:', post.id);
+      console.log('Post updated optimistically in localStorage:', post.id);
     } catch (e) {
       console.warn('Failed to update post in localStorage:', e);
     }
   }
-  
-  // If we know there are database connection issues, skip DB operations
-  if (hasDatabaseConnectionIssue || typeof window !== 'undefined') {
-    console.log('Skipping database update due to known connection issues or client-side environment');
-    return true; // Consider it a success since we updated locally
+
+  // If the pool failed to initialize, we cannot proceed with DB operations.
+  if (!pool) { // Removed hasDatabaseConnectionIssue check here
+    console.warn('Skipping database update: Pool not initialized.');
+    return false; // Indicate DB update failure
   }
-  
+
+  let client;
   try {
-    const client = await pool.connect();
-    
+    client = await pool.connect();
+
     try {
-      // Get existing post from database
-      const existingResult = await client.query(
-        'SELECT * FROM posts WHERE id = $1',
-        [post.id]
-      );
-      
-      // Process bookmarked_by array
-      let bookmarkedBy: string[] = [];
-      if (post.bookmarkedBy && Array.isArray(post.bookmarkedBy)) {
-        bookmarkedBy = post.bookmarkedBy;
-      } else if (existingResult.rows.length > 0 && existingResult.rows[0].bookmarked_by) {
-        try {
-          const existingBookmarkedBy = existingResult.rows[0].bookmarked_by;
-          if (Array.isArray(existingBookmarkedBy)) {
-            bookmarkedBy = existingBookmarkedBy;
-          } else if (typeof existingBookmarkedBy === 'string') {
-            // Try to parse string as JSON
-            bookmarkedBy = safeJsonParse(existingBookmarkedBy, []);
-          }
-        } catch (error) {
-          console.error('Error parsing existing bookmarked_by:', error);
-        }
-      }
-      
-      // Process shared_by array
-      let sharedBy: string[] = [];
-      if (post.sharedBy && Array.isArray(post.sharedBy)) {
-        sharedBy = post.sharedBy;
-      } else if (existingResult.rows.length > 0 && existingResult.rows[0].shared_by) {
-        try {
-          const existingSharedBy = existingResult.rows[0].shared_by;
-          if (Array.isArray(existingSharedBy)) {
-            sharedBy = existingSharedBy;
-          } else if (typeof existingSharedBy === 'string') {
-            // Try to parse string as JSON
-            sharedBy = safeJsonParse(existingSharedBy, []);
-          }
-        } catch (error) {
-          console.error('Error parsing existing shared_by:', error);
-        }
-      }
-      
-      // Process liked_by array
-      let likedBy: string[] = [];
-      if (post.likedBy && Array.isArray(post.likedBy)) {
-        likedBy = post.likedBy;
-      } else if (existingResult.rows.length > 0 && existingResult.rows[0].liked_by) {
-        try {
-          const existingLikedBy = existingResult.rows[0].liked_by;
-          if (Array.isArray(existingLikedBy)) {
-            likedBy = existingLikedBy;
-          } else if (typeof existingLikedBy === 'string') {
-            // Try to parse string as JSON
-            likedBy = safeJsonParse(existingLikedBy, []);
-          }
-        } catch (error) {
-          console.error('Error parsing existing liked_by:', error);
-        }
-      }
-      
-      // Ensure likes count matches likedBy array length
+      // We expect the 'post' object passed in to have the complete, final state.
+      // The API handler should construct this object before calling updatePost.
+
+      // Ensure arrays are handled correctly and counts match array lengths
+      const likedBy = post.likedBy || [];
       const likesCount = likedBy.length;
-      
-      // Save post to the database
+      const sharedBy = post.sharedBy || [];
+      const sharesCount = sharedBy.length; // Assuming shares count matches sharedBy length
+      const comments = post.comments || [];
+      const bookmarkedBy = post.bookmarkedBy || [];
+
+      // Construct the final post data to be saved in the 'data' JSONB column
+      const postDataForJson = {
+        ...post,
+        likes: likesCount,
+        likedBy: likedBy,
+        shares: sharesCount,
+        sharedBy: sharedBy,
+        comments: comments,
+        bookmarkedBy: bookmarkedBy
+      };
+
+
       const query = `
         UPDATE posts SET
           content = $1,
@@ -685,38 +735,38 @@ export const updatePost = async (post: Post): Promise<boolean> => {
         WHERE id = $10
         RETURNING *
       `;
-      
+
       const values = [
         post.content,
-        post.authorUsername,
-        likesCount, // Use the calculated likes count 
+        post.authorUsername, // Make sure this field exists on the Post type or adjust
+        likesCount,
         JSON.stringify(likedBy),
-        post.shares || 0,
+        sharesCount, // Use calculated shares count
         JSON.stringify(sharedBy),
-        JSON.stringify(post.comments || []),
+        JSON.stringify(comments), // Save the full comments array
         JSON.stringify(bookmarkedBy),
-        JSON.stringify({
-          ...post,
-          likes: likesCount, // Ensure data JSON also has correct likes count
-          likedBy: likedBy
-        }),
+        JSON.stringify(postDataForJson), // Save the constructed JSON
         post.id
       ];
-      
-      await client.query(query, values);
-      console.log('Post updated in database:', post.id);
-      return true;
+
+      const result = await client.query(query, values);
+
+      if (result.rowCount === 0) {
+         console.warn(`Failed to update post ${post.id} in database: Post not found.`);
+         return false; // Post wasn't found to update
+      }
+
+      console.log('Post updated successfully in database:', post.id);
+      return true; // Indicate DB update success
     } catch (error) {
-      handleDatabaseError(error);
-      console.error('Error updating post in database:', error);
-      return true; // Consider it a success since we updated locally
+      handleDatabaseError(error, `updatePost query (${post.id})`);
+      return false; // Indicate DB update failure
     } finally {
-      client.release();
+      if (client) client.release();
     }
   } catch (error) {
-    handleDatabaseError(error);
-    console.error('Error connecting to database pool:', error);
-    return true; // Consider it a success since we updated locally
+    handleDatabaseError(error, `updatePost pool.connect (${post.id})`);
+    return false; // Indicate DB connection failure
   }
 };
 
@@ -1075,35 +1125,55 @@ export const getUser = async (walletAddress: string): Promise<any> => {
 /**
  * Update user data
  */
-export const updateUser = async (user: any): Promise<boolean> => {
+export const updateUser = async (user: Partial<User> & { walletAddress: string }): Promise<boolean> => {
   if (!user || !user.walletAddress) return false;
-  
-  // Always update localStorage
+
+  // Optimistic update in localStorage (can remain)
   if (typeof window !== 'undefined') {
     try {
-      localStorage.setItem(`giga-aura-user-${user.walletAddress}`, JSON.stringify(user));
+      // Fetch existing user data from local storage to merge
+      const existingUserJson = localStorage.getItem(`giga-aura-user-${user.walletAddress}`);
+      const existingUser = existingUserJson ? safeJsonParse(existingUserJson, {}) : {};
+      const updatedUserLocal = { ...existingUser, ...user };
+      localStorage.setItem(`giga-aura-user-${user.walletAddress}`, JSON.stringify(updatedUserLocal));
+      console.log(`User updated optimistically in localStorage for ${user.walletAddress}`);
     } catch (e) {
       console.warn(`Failed to update user in localStorage for ${user.walletAddress}:`, e);
     }
   }
-  
-  // If we know there are database connection issues, skip DB operations
-  if (hasDatabaseConnectionIssue) {
-    console.log('Skipping database update due to known connection issues');
-    return true; // Consider it a success since we updated locally
+
+  // If the pool is not initialized, we cannot proceed with DB operations.
+  if (!pool) {
+    console.warn('Skipping database update for user: Pool not initialized.');
+    return false; // Indicate DB update failure
   }
-  
+
+  let client;
   try {
-    const client = await pool.connect();
-    
+    client = await pool.connect();
+
     try {
-      // Update user in database
-      await client.query(`
+      // Fetch the current user data from DB to ensure we have all fields
+      const currentResult = await client.query('SELECT * FROM users WHERE wallet_address = $1', [user.walletAddress]);
+      const currentUserData = currentResult.rows.length > 0 ? currentResult.rows[0] : {};
+
+      // Merge new data with existing data
+      const username = user.username !== undefined ? user.username : currentUserData.username;
+      const avatar = user.avatar !== undefined ? user.avatar : currentUserData.avatar;
+      const bio = user.bio !== undefined ? user.bio : currentUserData.bio;
+      const bannerImage = user.bannerImage !== undefined ? user.bannerImage : currentUserData.banner_image;
+      // Ensure following/followers are arrays, merge if necessary (though typically updated elsewhere)
+      const following = Array.isArray(user.following) ? user.following : safeJsonParse(currentUserData.following, []);
+      const followers = Array.isArray(user.followers) ? user.followers : safeJsonParse(currentUserData.followers, []);
+
+
+      // Update user in database using INSERT ON CONFLICT
+      const query = `
         INSERT INTO users (
-          wallet_address, username, avatar, bio, banner_image, 
-          following, followers, updated_at
+          wallet_address, username, avatar, bio, banner_image,
+          following, followers, updated_at, created_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ON CONFLICT (wallet_address) DO UPDATE SET
           username = $2,
           avatar = $3,
@@ -1112,43 +1182,41 @@ export const updateUser = async (user: any): Promise<boolean> => {
           following = $6,
           followers = $7,
           updated_at = CURRENT_TIMESTAMP
-      `, [
+        RETURNING wallet_address
+      `;
+
+      const values = [
         user.walletAddress,
-        user.username,
-        user.avatar,
-        user.bio,
-        user.bannerImage,
-        JSON.stringify(user.following || []),
-        JSON.stringify(user.followers || [])
-      ]);
-      
-      console.log(`User updated for ${user.walletAddress}`);
-      
-      // Update posts that reference this user's name
-      const posts = await getPosts();
-      const userPosts = posts.filter(post => post.authorWallet === user.walletAddress);
-      
-      if (userPosts.length > 0) {
-        for (const post of userPosts) {
-          if (post.authorName !== user.username) {
-            post.authorName = user.username;
-            await savePost(post);
-          }
-        }
+        username,
+        avatar,
+        bio,
+        bannerImage,
+        JSON.stringify(following || []),
+        JSON.stringify(followers || [])
+      ];
+
+      const result = await client.query(query, values);
+
+      if (result.rowCount === 0) {
+        console.warn(`Failed to update user ${user.walletAddress} in database.`);
+        return false; // Indicate DB update failure
       }
-      
-      return true;
+
+      console.log(`User updated successfully in database for ${user.walletAddress}`);
+
+      // Removed the logic that updated all user's posts here for efficiency.
+      // Frontend should fetch current user details when displaying posts/profiles.
+
+      return true; // Indicate DB update success
     } catch (error) {
-      handleDatabaseError(error);
-      console.error(`Error updating user for ${user.walletAddress}:`, error);
-      return true; // Consider it a success since we updated locally
+      handleDatabaseError(error, `updateUser query (${user.walletAddress})`);
+      return false; // Indicate DB update failure
     } finally {
-      client.release();
+      if (client) client.release();
     }
   } catch (error) {
-    handleDatabaseError(error);
-    console.error('Error connecting to database pool:', error);
-    return true; // Consider it a success since we updated locally
+    handleDatabaseError(error, `updateUser pool.connect (${user.walletAddress})`);
+    return false; // Indicate DB connection failure
   }
 };
 
@@ -1600,6 +1668,7 @@ export const markAllNotificationsAsRead = async (walletAddress: string): Promise
 export default {
   savePost,
   getPosts,
+  getPostById,
   getUserPosts,
   updatePost,
   deletePost,

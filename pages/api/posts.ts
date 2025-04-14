@@ -87,42 +87,134 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Update an existing post
       try {
         const { id } = req.query;
-        const { likes, likedBy, shares, sharedBy, bookmarkedBy, comments } = req.body;
-        
-        // Validate required fields
-        if (!id) {
-          return res.status(400).json({ error: 'Missing post ID' });
+        // Extract the action (like, unlike, comment, share, unshare) and data from body
+        const { 
+          action, 
+          userId, // Wallet address of the user performing the action
+          username, // Username of the user performing the action
+          avatar,   // Avatar of the user performing the action
+          comment   // Content of the comment
+        } = req.body;
+
+        if (typeof id !== 'string') {
+          return res.status(400).json({ error: 'Invalid post ID' });
         }
-        
-        // Get the existing post
-        const posts = await db.getPosts();
-        const existingPost = posts.find(p => p.id === id);
-        
+        if (!action || !userId) {
+          return res.status(400).json({ error: 'Missing action or userId' });
+        }
+
+        // Fetch the existing post using the new db function
+        const existingPost = await db.getPostById(id);
+
         if (!existingPost) {
           return res.status(404).json({ error: 'Post not found' });
         }
-        
-        // Update the post
-        const updatedPost = {
-          ...existingPost,
-          likes: likes !== undefined ? likes : existingPost.likes,
-          likedBy: likedBy || existingPost.likedBy || [],
-          shares: shares !== undefined ? shares : existingPost.shares,
-          sharedBy: sharedBy || existingPost.sharedBy || [],
-          bookmarkedBy: bookmarkedBy || existingPost.bookmarkedBy || [],
-          comments: comments !== undefined ? comments : existingPost.comments,
-        };
-        
+
+        // Initialize notification details
+        let notificationType: 'like' | 'comment' | 'share' | null = null;
+        let notificationMessage: string = '';
+        let shouldNotify = false;
+
+        // Deep copy the post to avoid modifying the original object directly
+        let updatedPost = JSON.parse(JSON.stringify(existingPost)); 
+
+        // Process the action
+        switch (action) {
+          case 'like':
+            if (!updatedPost.likedBy.includes(userId)) {
+              updatedPost.likedBy.push(userId);
+              updatedPost.likes = updatedPost.likedBy.length;
+              if (userId !== updatedPost.authorWallet) {
+                 shouldNotify = true;
+                 notificationType = 'like';
+                 notificationMessage = `${username || 'A user'} liked your post.`;
+              }
+            }
+            break;
+          case 'unlike':
+            updatedPost.likedBy = updatedPost.likedBy.filter((u: string) => u !== userId);
+            updatedPost.likes = updatedPost.likedBy.length;
+            // No notification for unlike
+            break;
+          case 'share': // Assuming share means repost
+            if (!updatedPost.sharedBy.includes(userId)) {
+              updatedPost.sharedBy.push(userId);
+              updatedPost.shares = updatedPost.sharedBy.length;
+               if (userId !== updatedPost.authorWallet) {
+                 shouldNotify = true;
+                 notificationType = 'share';
+                 notificationMessage = `${username || 'A user'} shared your post.`;
+              }
+            }
+            break;
+          case 'unshare':
+            updatedPost.sharedBy = updatedPost.sharedBy.filter((u: string) => u !== userId);
+            updatedPost.shares = updatedPost.sharedBy.length;
+             // No notification for unshare
+            break;
+          case 'comment':
+            if (!comment || typeof comment !== 'string') {
+              return res.status(400).json({ error: 'Missing or invalid comment content' });
+            }
+            const newComment = {
+              id: uuidv4(),
+              postId: id,
+              authorWallet: userId,
+              authorUsername: username || null,
+              authorAvatar: avatar || null,
+              content: comment,
+              createdAt: new Date().toISOString(),
+            };
+            // Ensure comments array exists
+            if (!Array.isArray(updatedPost.comments)) {
+              updatedPost.comments = [];
+            }
+            updatedPost.comments.push(newComment);
+            // Consider adding a comments count field if needed
+            // updatedPost.commentsCount = updatedPost.comments.length;
+             if (userId !== updatedPost.authorWallet) {
+                 shouldNotify = true;
+                 notificationType = 'comment';
+                 notificationMessage = `${username || 'A user'} commented on your post: "${comment.substring(0, 30)}${comment.length > 30 ? '...' : ''}"`;
+             }
+            break;
+          // Add cases for deleting comments if needed
+          default:
+            return res.status(400).json({ error: 'Invalid action' });
+        }
+
         // Save the updated post
         const success = await db.updatePost(updatedPost);
-        
+
         if (success) {
           // Trigger Pusher event for real-time updates
           await triggerUpdatedPost(updatedPost);
-          
+
+          // Save notification if required
+          if (shouldNotify && notificationType && updatedPost.authorWallet) {
+             const notification = {
+                id: uuidv4(),
+                recipientWallet: updatedPost.authorWallet, // Notify the post author
+                type: notificationType,
+                message: notificationMessage,
+                fromWallet: userId,
+                fromUsername: username || null,
+                fromAvatar: avatar || null,
+                postId: id,
+                commentId: action === 'comment' ? updatedPost.comments[updatedPost.comments.length - 1].id : null, // Link comment ID if it was a comment
+                timestamp: new Date().toISOString(),
+                read: false,
+             };
+             await db.saveNotification(notification);
+             // Consider triggering a pusher event for the notification as well
+             // await triggerNewNotification(notification);
+          }
+
           return res.status(200).json(updatedPost);
         } else {
-          return res.status(500).json({ error: 'Failed to update post' });
+          // Update failed, log error or return appropriate status
+          console.error(`Failed to update post ${id} after action ${action}`);
+          return res.status(500).json({ error: 'Failed to update post in database' });
         }
       } catch (error) {
         console.error('Error updating post:', error);

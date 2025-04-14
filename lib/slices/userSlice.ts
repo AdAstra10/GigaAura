@@ -1,4 +1,5 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
+import { RootState } from '../store'; // Assuming RootState is exported from your store file
 
 export interface User {
   walletAddress: string | null;
@@ -41,6 +42,68 @@ const isUsernameUnique = (username: string, currentWallet: string | null): boole
   return true;
 };
 
+// --- Async Thunk for Saving Profile --- 
+export const saveUserProfile = createAsyncThunk(
+  'user/saveProfile',
+  async (profileData: Partial<User>, { getState, dispatch, rejectWithValue }) => {
+    const state = getState() as RootState; // Get current state to access walletAddress
+    const { walletAddress } = state.user;
+
+    if (!walletAddress) {
+      return rejectWithValue('User not authenticated');
+    }
+
+    // Include walletAddress in the data sent to the API
+    const dataToSend = {
+      walletAddress: walletAddress,
+      ...profileData,
+    };
+
+    try {
+      const response = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          // Add any necessary auth headers here
+        },
+        body: JSON.stringify(dataToSend),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Failed to save profile:', errorData);
+        return rejectWithValue(errorData.error || 'Failed to save profile');
+      }
+
+      const result = await response.json();
+      console.log('Profile saved successfully:', result);
+
+      // Dispatch the synchronous action to update the state locally *after* successful API call
+      dispatch(userSlice.actions.updateProfile(profileData)); 
+
+      // --- Optional: Update localStorage here after successful save --- 
+      // It might be slightly safer to update localStorage *after* the DB is confirmed updated
+      if (typeof window !== 'undefined') {
+         try {
+           const existingUserJson = localStorage.getItem(`giga-aura-user-${walletAddress}`);
+           const existingUser = existingUserJson ? JSON.parse(existingUserJson) : {};
+           const updatedUserLocal = { ...existingUser, ...profileData };
+           localStorage.setItem(`giga-aura-user-${walletAddress}`, JSON.stringify(updatedUserLocal));
+         } catch(e) {
+            console.warn("Failed to update localStorage post-save:", e);
+         }
+      }
+      // --- End Optional localStorage update ---
+
+      return result; // Return the API result if needed
+    } catch (error) {
+      console.error('Network or other error saving profile:', error);
+      return rejectWithValue('Network error saving profile');
+    }
+  }
+);
+// --- End Async Thunk --- 
+
 const userSlice = createSlice({
   name: 'user',
   initialState,
@@ -70,54 +133,21 @@ const userSlice = createSlice({
     updateProfile: (state, action: PayloadAction<Partial<User>>) => {
       const { username, avatar, bio, bannerImage } = action.payload;
       
-      // Check if username is being updated and is not unique
+      // Local username uniqueness check (can remain as a pre-check)
       if (username && username !== state.username) {
         if (!isUsernameUnique(username, state.walletAddress)) {
-          console.error('This username is already taken');
-          return state;
+          console.warn('Username might already be taken (local check)');
+          // Don't block the state update here; server will be the source of truth
         }
       }
       
-      // Always update the state with the new data
-      if (username) state.username = username;
-      if (avatar) state.avatar = avatar;
-      if (bio) state.bio = bio;
-      if (bannerImage) state.bannerImage = bannerImage;
+      // Update the state
+      if (username !== undefined) state.username = username;
+      if (avatar !== undefined) state.avatar = avatar;
+      if (bio !== undefined) state.bio = bio;
+      if (bannerImage !== undefined) state.bannerImage = bannerImage;
       
-      // Save user data to localStorage (for username persistence)
-      if (typeof window !== 'undefined' && state.walletAddress) {
-        try {
-          // Save username
-          if (username) {
-            const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
-            usernames[state.walletAddress] = username;
-            localStorage.setItem('usernames', JSON.stringify(usernames));
-          }
-          
-          // Save avatar
-          if (avatar) {
-            const profilePictures = JSON.parse(localStorage.getItem('profilePictures') || '{}');
-            profilePictures[state.walletAddress] = avatar;
-            localStorage.setItem('profilePictures', JSON.stringify(profilePictures));
-          }
-          
-          // Save bio
-          if (bio) {
-            const bios = JSON.parse(localStorage.getItem('userBios') || '{}');
-            bios[state.walletAddress] = bio;
-            localStorage.setItem('userBios', JSON.stringify(bios));
-          }
-          
-          // Save banner image
-          if (bannerImage) {
-            const bannerImages = JSON.parse(localStorage.getItem('bannerImages') || '{}');
-            bannerImages[state.walletAddress] = bannerImage;
-            localStorage.setItem('bannerImages', JSON.stringify(bannerImages));
-          }
-        } catch (error) {
-          console.error('Error saving profile data to localStorage:', error);
-        }
-      }
+      // Removed direct localStorage saving from here; moved to the thunk
     },
     toggleDarkMode: (state) => {
       state.darkMode = !state.darkMode;
@@ -160,6 +190,25 @@ const userSlice = createSlice({
       const followerWallet = action.payload;
       state.followers = state.followers.filter(w => w !== followerWallet);
     }
+  },
+  // Optional: Handle thunk lifecycle actions (pending, rejected) for loading/error states
+  extraReducers: (builder) => {
+    builder
+      .addCase(saveUserProfile.pending, (state) => {
+        // Optionally set a loading state, e.g., state.loadingProfile = true;
+        console.log('Saving profile...');
+      })
+      .addCase(saveUserProfile.fulfilled, (state, action) => {
+        // Optionally clear loading state, e.g., state.loadingProfile = false;
+        console.log('Profile saved successfully (thunk fulfilled).');
+        // State is updated via the dispatch within the thunk
+      })
+      .addCase(saveUserProfile.rejected, (state, action) => {
+        // Optionally clear loading state and set error, e.g.:
+        // state.loadingProfile = false;
+        // state.profileError = action.payload as string;
+        console.error('Profile save failed:', action.payload);
+      });
   },
 });
 
