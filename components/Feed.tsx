@@ -300,7 +300,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
     } catch (error) {
       console.error('Error setting up Pusher for feed:', error);
     }
-  }, [dispatch, autoRefresh, reduxPosts]);
+  }, [dispatch, autoRefresh]);
 
   // Load initial posts from localStorage if available
   useEffect(() => {
@@ -513,7 +513,7 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
         sseRef.current = null;
       }
     };
-  }, [dispatch, autoRefresh, walletAddress, isRefreshing, retryCount, reduxPosts.length]);
+  }, [dispatch, autoRefresh, walletAddress, isRefreshing, retryCount]);
 
   // Additional setup for Pusher for real-time updates is omitted for brevity
 
