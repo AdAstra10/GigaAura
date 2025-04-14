@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { RootState } from '../lib/store';
-import { setFeed, addPost, Post, addComment, setComments, loadFromCache, setError, setLoading } from '../lib/slices/postsSlice';
+import { RootState, AppDispatch } from '../lib/store';
+import { setFeed, addPost, Post, addComment, setComments, loadFromCache, setError, setLoading, saveNewPost } from '../lib/slices/postsSlice';
 import { useWallet } from '../contexts/WalletContext';
 import { addTransaction } from '../lib/slices/auraPointsSlice';
 import { addNotification } from '../lib/slices/notificationsSlice';
@@ -142,6 +142,9 @@ class FeedErrorBoundary extends React.Component<
   }
 }
 
+// Typed dispatch hook
+const useAppDispatch = () => useDispatch<AppDispatch>();
+
 // Main Feed component - The entry point for the entire feed system
 const Feed: React.FC = () => {
   return (
@@ -177,7 +180,7 @@ function FeedSafetyWrapper(props: Record<string, any>) {
 
 // Inner feed component with main logic
 function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const { feed: reduxPosts, loading, error } = useSelector((state: RootState) => state.posts);
   const [activeTab, setActiveTab] = useState<'for-you' | 'following'>('for-you');
   const [hasNewPosts, setHasNewPosts] = useState(false);
@@ -652,21 +655,43 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
       {/* New Post Form */}
       <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black p-4">
         <CreatePostForm onSubmit={(content, mediaFile) => {
-          // Simple implementation that dispatches to Redux
-          if (!walletAddress || !content.trim()) return false;
-          
-          const newPost = {
-            content,
-            authorWallet: walletAddress,
-            authorUsername: username || undefined,
-            authorAvatar: avatar || undefined,
-            mediaUrl: mediaFile ? URL.createObjectURL(mediaFile) : undefined,
-            mediaType: mediaFile?.type.startsWith('image/') ? 'image' as const : 
-                      mediaFile?.type.startsWith('video/') ? 'video' as const : undefined
+          // Define async function inside the handler
+          const handlePostSubmit = async () => {
+            if (!walletAddress || !content.trim()) {
+              toast.error("Cannot create an empty post.");
+              return false;
+            }
+
+            const postData = {
+              content,
+              mediaUrl: null, // Replace with actual URL after upload
+              mediaType: mediaFile?.type.startsWith('image/') ? 'image' as const :
+                        mediaFile?.type.startsWith('video/') ? 'video' as const : null
+            };
+
+            try {
+              const resultAction = await dispatch(saveNewPost(postData));
+              if (saveNewPost.fulfilled.match(resultAction)) {
+                toast.success('Post created successfully!');
+                return true;
+              } else {
+                const errorMsg = typeof resultAction.payload === 'string' ? resultAction.payload : 'Failed to create post.';
+                toast.error(errorMsg);
+                console.error('Post creation failed:', resultAction.payload);
+                return false;
+              }
+            } catch (err) {
+              console.error('Error dispatching saveNewPost:', err);
+              toast.error('An unexpected error occurred while posting.');
+              return false;
+            }
           };
-          
-          dispatch(addPost(newPost));
-          return true;
+
+          // Call the async function
+          handlePostSubmit(); 
+          // Return true optimistically
+          if (!walletAddress || !content.trim()) return false;
+          return true; 
         }} />
       </div>
       

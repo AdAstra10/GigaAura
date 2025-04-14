@@ -1,4 +1,5 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
+import { RootState } from '../store'; // Ensure RootState is imported
 import { v4 as uuidv4 } from 'uuid';
 import { 
   cacheFeed, 
@@ -12,37 +13,36 @@ export interface Post {
   id: string;
   content: string;
   authorWallet: string;
-  authorUsername?: string;
-  authorAvatar?: string;
+  authorUsername?: string | null; // Optional: display name
+  authorAvatar?: string | null;   // Optional: avatar URL
   authorName?: string;
   createdAt: string;
-  mediaUrl?: string;
-  mediaType?: 'image' | 'video';
+  mediaUrl?: string | null;      // Optional: URL for image/video
+  mediaType?: 'image' | 'video' | null; // Type of media
   likes: number;
-  comments: number;
+  comments: Comment[]; // Store comments directly
   shares: number;
-  likedBy: string[];
-  isLiked?: boolean;
-  sharedBy?: string[];
-  bookmarkedBy?: string[];
+  // Tracking arrays (wallet addresses)
+  likedBy: string[]; 
+  sharedBy: string[];
+  bookmarkedBy: string[];
 }
 
 export interface Comment {
   id: string;
   postId: string;
-  content: string;
   authorWallet: string;
-  authorUsername?: string;
-  authorAvatar?: string;
+  authorUsername?: string | null;
+  authorAvatar?: string | null;
+  content: string;
   createdAt: string;
-  likes: number;
 }
 
 export interface PostsState {
   feed: Post[];
   userPosts: Post[];
   currentPost: Post | null;
-  comments: Comment[];
+  comments: { [postId: string]: Comment[] };
   loading: boolean;
   error: string | null;
 }
@@ -51,17 +51,76 @@ const initialState: PostsState = {
   feed: [],
   userPosts: [],
   currentPost: null,
-  comments: [],
+  comments: {},
   loading: false,
   error: null,
 };
+
+// --- Async Thunk for Saving New Post --- 
+export const saveNewPost = createAsyncThunk(
+  'posts/saveNew',
+  async (postData: { content: string; mediaUrl?: string | null; mediaType?: 'image' | 'video' | null }, { getState, dispatch, rejectWithValue }) => {
+    const state = getState() as RootState;
+    const { walletAddress, username, avatar } = state.user;
+
+    if (!walletAddress) {
+      return rejectWithValue('User not authenticated to create post');
+    }
+    if (!postData.content?.trim()) {
+      return rejectWithValue('Post content cannot be empty');
+    }
+
+    // Construct the full post object for the API
+    const newPostPayload = {
+      content: postData.content,
+      authorWallet: walletAddress,
+      authorUsername: username || null,
+      authorAvatar: avatar || null,
+      mediaUrl: postData.mediaUrl || null,
+      mediaType: postData.mediaType || null,
+      // The backend API (/api/posts) will handle setting the ID, createdAt, likes, etc.
+    };
+
+    try {
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // Add auth headers if needed
+        },
+        body: JSON.stringify(newPostPayload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Failed to save new post via API:', errorData);
+        return rejectWithValue(errorData.error || 'Failed to save post');
+      }
+
+      const savedPost: Post = await response.json(); // API should return the complete saved post
+      console.log('New post saved successfully via API:', savedPost);
+
+      // Dispatch the synchronous action to add the *saved* post to the state
+      dispatch(postsSlice.actions.addPost(savedPost)); 
+
+      // Optionally update localStorage cache here if desired
+      // ... (localStorage update logic similar to saveUserProfile) ...
+
+      return savedPost; // Return the saved post object
+    } catch (error) {
+      console.error('Network or other error saving new post:', error);
+      return rejectWithValue('Network error saving post');
+    }
+  }
+);
+// --- End Async Thunk --- 
 
 export const postsSlice = createSlice({
   name: 'posts',
   initialState,
   reducers: {
     setFeed: (state, action: PayloadAction<Post[]>) => {
-      state.feed = action.payload;
+      state.feed = action.payload.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       
       // Cache the feed when it's updated
       cacheFeed(action.payload);
@@ -78,18 +137,11 @@ export const postsSlice = createSlice({
       // No need to sync to Firestore here as this is typically
       // used when loading FROM Firestore
     },
-    addPost: (state, action: PayloadAction<Omit<Post, 'id' | 'createdAt' | 'likes' | 'comments' | 'shares' | 'likedBy'>>) => {
-      const newPost: Post = {
-        ...action.payload,
-        id: uuidv4(),
-        createdAt: new Date().toISOString(),
-        likes: 0,
-        comments: 0,
-        shares: 0,
-        likedBy: [],
-      };
-      state.feed = [newPost, ...state.feed];
-      state.userPosts = [newPost, ...state.userPosts];
+    addPost: (state, action: PayloadAction<Post>) => {
+      // Avoid duplicates and add to the start
+      if (!state.feed.some(post => post.id === action.payload.id)) {
+        state.feed.unshift(action.payload);
+      }
       
       // Cache updated lists
       cacheFeed(state.feed);
@@ -107,7 +159,7 @@ export const postsSlice = createSlice({
           }
           
           // Add new post to the beginning of the array
-          const updatedPosts = [newPost, ...existingPosts];
+          const updatedPosts = [action.payload, ...existingPosts];
           
           // Save updated array back to localStorage
           localStorage.setItem('giga-aura-posts', JSON.stringify(updatedPosts));
@@ -118,7 +170,7 @@ export const postsSlice = createSlice({
       }
       
       // Sync to Firestore
-      db.savePost(newPost)
+      db.savePost(action.payload)
         .then(success => {
           console.log(`Post ${success ? 'saved to' : 'failed to save to'} Firestore`);
         })
@@ -126,78 +178,90 @@ export const postsSlice = createSlice({
           console.error('Error syncing post to Firestore:', error);
         });
     },
+    updatePost: (state, action: PayloadAction<Partial<Post> & { id: string }>) => {
+      const index = state.feed.findIndex(post => post.id === action.payload.id);
+      if (index !== -1) {
+        state.feed[index] = { ...state.feed[index], ...action.payload };
+      }
+      // Also update userPosts if needed
+      const userIndex = state.userPosts.findIndex(post => post.id === action.payload.id);
+      if (userIndex !== -1) {
+        state.userPosts[userIndex] = { ...state.userPosts[userIndex], ...action.payload };
+      }
+      
+      // Cache updated lists
+      cacheFeed(state.feed);
+      cacheUserPosts(state.userPosts);
+    },
     likePost: (state, action: PayloadAction<{ postId: string; walletAddress: string }>) => {
       const { postId, walletAddress } = action.payload;
-      
-      const updatePost = (post: Post) => {
+      const updateLike = (post: Post) => {
         if (post.id === postId) {
+          // Ensure likedBy is an array
+          post.likedBy = Array.isArray(post.likedBy) ? post.likedBy : [];
+          
+          // Add walletAddress if not already present
           if (!post.likedBy.includes(walletAddress)) {
-            post.likes += 1;
             post.likedBy.push(walletAddress);
-            post.isLiked = true;
+            post.likes = post.likedBy.length; // Update likes count
           }
         }
         return post;
       };
       
-      state.feed = state.feed.map(updatePost);
-      state.userPosts = state.userPosts.map(updatePost);
-      
+      state.feed = state.feed.map(updateLike);
+      state.userPosts = state.userPosts.map(updateLike);
       if (state.currentPost && state.currentPost.id === postId) {
-        state.currentPost = updatePost({ ...state.currentPost });
+        state.currentPost = updateLike({ ...state.currentPost });
       }
       
       // Cache updated lists
       cacheFeed(state.feed);
       cacheUserPosts(state.userPosts);
       
-      // Sync the updated post to Firestore
-      const updatedPost = state.feed.find(post => post.id === postId);
-      if (updatedPost) {
-        db.updatePost(updatedPost)
-          .then(success => {
-            console.log(`Like ${success ? 'saved to' : 'failed to save to'} Firestore`);
-          })
-          .catch(error => {
-            console.error('Error syncing like to Firestore:', error);
-          });
+      // Sync to Firestore (consider moving this to a thunk?)
+      const postToUpdate = state.feed.find(p => p.id === postId);
+      if (postToUpdate) {
+        db.updatePost(postToUpdate).then(success => {
+          console.log(`Post like update ${success ? 'synced' : 'failed to sync'} to Firestore`);
+        });
       }
     },
     unlikePost: (state, action: PayloadAction<{ postId: string; walletAddress: string }>) => {
       const { postId, walletAddress } = action.payload;
-      
-      const updatePost = (post: Post) => {
+      const updateUnlike = (post: Post) => {
         if (post.id === postId) {
-          if (post.likedBy.includes(walletAddress)) {
-            post.likes -= 1;
-            post.likedBy = post.likedBy.filter(wallet => wallet !== walletAddress);
-            post.isLiked = false;
+           // Ensure likedBy is an array
+          post.likedBy = Array.isArray(post.likedBy) ? post.likedBy : [];
+          
+          // Filter out walletAddress
+          const initialLength = post.likedBy.length;
+          post.likedBy = post.likedBy.filter(id => id !== walletAddress);
+          
+          // Update likes count only if an address was actually removed
+          if (post.likedBy.length < initialLength) {
+             post.likes = post.likedBy.length;
           }
         }
         return post;
       };
       
-      state.feed = state.feed.map(updatePost);
-      state.userPosts = state.userPosts.map(updatePost);
-      
+      state.feed = state.feed.map(updateUnlike);
+      state.userPosts = state.userPosts.map(updateUnlike);
       if (state.currentPost && state.currentPost.id === postId) {
-        state.currentPost = updatePost({ ...state.currentPost });
+        state.currentPost = updateUnlike({ ...state.currentPost });
       }
       
       // Cache updated lists
       cacheFeed(state.feed);
       cacheUserPosts(state.userPosts);
       
-      // Sync the updated post to Firestore
-      const updatedPost = state.feed.find(post => post.id === postId);
-      if (updatedPost) {
-        db.updatePost(updatedPost)
-          .then(success => {
-            console.log(`Unlike ${success ? 'saved to' : 'failed to save to'} Firestore`);
-          })
-          .catch(error => {
-            console.error('Error syncing unlike to Firestore:', error);
-          });
+      // Sync to Firestore (consider moving this to a thunk?)
+      const postToUpdate = state.feed.find(p => p.id === postId);
+      if (postToUpdate) {
+        db.updatePost(postToUpdate).then(success => {
+          console.log(`Post unlike update ${success ? 'synced' : 'failed to sync'} to Firestore`);
+        });
       }
     },
     sharePost: (state, action: PayloadAction<{ postId: string; walletAddress: string }>) => {
@@ -320,31 +384,24 @@ export const postsSlice = createSlice({
     setCurrentPost: (state, action: PayloadAction<Post>) => {
       state.currentPost = action.payload;
     },
-    setComments: (state, action: PayloadAction<Comment[]>) => {
-      state.comments = action.payload;
+    setComments: (state, action: PayloadAction<{ postId: string; comments: Comment[] }>) => {
+      state.comments[action.payload.postId] = action.payload.comments;
     },
-    addComment: (state, action: PayloadAction<Omit<Comment, 'id' | 'createdAt' | 'likes'>>) => {
-      const newComment: Comment = {
-        ...action.payload,
-        id: uuidv4(),
-        createdAt: new Date().toISOString(),
-        likes: 0,
-      };
-      state.comments = [newComment, ...state.comments];
-      
-      // Increment comment count on the post
-      const updatePost = (post: Post) => {
-        if (post.id === newComment.postId) {
-          post.comments += 1;
-        }
-        return post;
-      };
-      
-      state.feed = state.feed.map(updatePost);
-      state.userPosts = state.userPosts.map(updatePost);
-      
-      if (state.currentPost && state.currentPost.id === newComment.postId) {
-        state.currentPost = updatePost({ ...state.currentPost });
+    addComment: (state, action: PayloadAction<Comment>) => {
+      const { postId } = action.payload;
+      if (!state.comments[postId]) {
+        state.comments[postId] = [];
+      }
+      // Avoid adding duplicate comments
+      if (!state.comments[postId].some(c => c.id === action.payload.id)) {
+          state.comments[postId].push(action.payload);
+      }
+      // Also update the comment list within the post object in the feed
+      const postIndex = state.feed.findIndex(p => p.id === postId);
+      if (postIndex !== -1) {
+         if (!state.feed[postIndex].comments.some(c => c.id === action.payload.id)) {
+            state.feed[postIndex].comments.push(action.payload);
+         }
       }
       
       // Cache updated lists
@@ -356,48 +413,33 @@ export const postsSlice = createSlice({
     },
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
+      state.loading = false;
     },
     // New action to load data from cache
-    loadFromCache: (state) => {
-      try {
-        console.log('Loading posts from cache...');
-        // Get cached data with safety checks
-        const cachedFeed = getCachedFeed();
-        const cachedUserPosts = getCachedUserPosts();
-        
-        console.log('Cached feed:', cachedFeed);
-        console.log('Cached user posts:', cachedUserPosts);
-        
-        // Only set feed if valid array
-        if (cachedFeed && Array.isArray(cachedFeed)) {
-          // Additional safety: filter out any invalid posts
-          const validPosts = cachedFeed.filter(post => 
-            post && typeof post === 'object' && post.id
-          );
-          
-          console.log('Valid posts found in cache:', validPosts.length);
-          state.feed = validPosts;
-        } else {
-          console.log('No valid cached feed found');
-        }
-        
-        // Only set user posts if valid array
-        if (cachedUserPosts && Array.isArray(cachedUserPosts)) {
-          // Additional safety: filter out any invalid posts
-          const validUserPosts = cachedUserPosts.filter(post => 
-            post && typeof post === 'object' && post.id
-          );
-          
-          console.log('Valid user posts found in cache:', validUserPosts.length);
-          state.userPosts = validUserPosts;
-        } else {
-          console.log('No valid cached user posts found');
-        }
-      } catch (error) {
-        console.error('Error loading from cache:', error);
-        // If there's an error, don't modify state
-      }
+    loadFromCache: (state, action: PayloadAction<Post[]>) => {
+      state.feed = action.payload;
+      state.loading = false;
+      state.error = null;
     },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(saveNewPost.pending, (state) => {
+        // Optionally set loading state for posting
+        state.loading = true; 
+      })
+      .addCase(saveNewPost.fulfilled, (state, action) => {
+        state.loading = false;
+        // State is updated via the dispatch within the thunk
+        // The addPost reducer already adds the post to the feed
+        console.log('saveNewPost fulfilled, post added to state.');
+      })
+      .addCase(saveNewPost.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+        console.error('saveNewPost rejected:', action.payload);
+      });
+      // Add handlers for other thunks if needed
   },
 });
 
@@ -405,6 +447,7 @@ export const {
   setFeed,
   setUserPosts,
   addPost,
+  updatePost,
   likePost,
   unlikePost,
   sharePost,
