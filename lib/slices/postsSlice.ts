@@ -115,6 +115,70 @@ export const saveNewPost = createAsyncThunk(
 );
 // --- End Async Thunk --- 
 
+// --- Async Thunk for Submitting Comment --- 
+export const submitComment = createAsyncThunk(
+  'posts/submitComment',
+  async (commentData: { postId: string; content: string }, { getState, dispatch, rejectWithValue }) => {
+    const state = getState() as RootState;
+    const { walletAddress, username, avatar } = state.user;
+
+    if (!walletAddress) {
+      return rejectWithValue('User not authenticated to comment');
+    }
+    if (!commentData.content?.trim()) {
+      return rejectWithValue('Comment content cannot be empty');
+    }
+
+    const { postId, content } = commentData;
+
+    // Payload for the PUT request
+    const apiPayload = {
+      action: 'comment',
+      userId: walletAddress,
+      username: username || null,
+      avatar: avatar || null,
+      comment: content,
+    };
+
+    try {
+      const response = await fetch(`/api/posts?id=${postId}`, { // Include postId in query
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          // Add auth headers if needed
+        },
+        body: JSON.stringify(apiPayload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Failed to submit comment via API:', errorData);
+        return rejectWithValue(errorData.error || 'Failed to submit comment');
+      }
+
+      const updatedPost: Post = await response.json(); // API returns the updated post
+      console.log('Comment submitted successfully via API. Updated Post:', updatedPost);
+
+      // Find the newly added comment (usually the last one in the array)
+      const newComment = updatedPost.comments?.slice(-1)[0];
+
+      if (newComment) {
+        // Dispatch the synchronous action to add the *complete* comment to the state
+        dispatch(postsSlice.actions.addComment(newComment));
+        return newComment; // Return the saved comment object
+      } else {
+        console.error('Could not find the new comment in the API response');
+        return rejectWithValue('Failed to process comment after submission');
+      }
+
+    } catch (error) {
+      console.error('Network or other error submitting comment:', error);
+      return rejectWithValue('Network error submitting comment');
+    }
+  }
+);
+// --- End Async Thunk --- 
+
 export const postsSlice = createSlice({
   name: 'posts',
   initialState,
@@ -381,7 +445,7 @@ export const postsSlice = createSlice({
           });
       }
     },
-    setCurrentPost: (state, action: PayloadAction<Post>) => {
+    setCurrentPost: (state, action: PayloadAction<Post | null>) => {
       state.currentPost = action.payload;
     },
     setComments: (state, action: PayloadAction<{ postId: string; comments: Comment[] }>) => {
@@ -392,21 +456,23 @@ export const postsSlice = createSlice({
       if (!state.comments[postId]) {
         state.comments[postId] = [];
       }
-      // Avoid adding duplicate comments
       if (!state.comments[postId].some(c => c.id === action.payload.id)) {
-          state.comments[postId].push(action.payload);
+          state.comments[postId].unshift(action.payload); // Add to start
       }
-      // Also update the comment list within the post object in the feed
       const postIndex = state.feed.findIndex(p => p.id === postId);
       if (postIndex !== -1) {
+         // Ensure comments array exists on the post object
+         if (!Array.isArray(state.feed[postIndex].comments)) {
+            state.feed[postIndex].comments = [];
+         }
          if (!state.feed[postIndex].comments.some(c => c.id === action.payload.id)) {
-            state.feed[postIndex].comments.push(action.payload);
+            state.feed[postIndex].comments.unshift(action.payload); // Add to start
          }
       }
-      
       // Cache updated lists
       cacheFeed(state.feed);
       cacheUserPosts(state.userPosts);
+      // Firestore sync for comments might be better handled in the API endpoint
     },
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.loading = action.payload;
@@ -438,8 +504,21 @@ export const postsSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
         console.error('saveNewPost rejected:', action.payload);
+      })
+      .addCase(submitComment.pending, (state) => {
+        // Optionally set a specific loading state for comments
+        state.loading = true; 
+      })
+      .addCase(submitComment.fulfilled, (state, action) => {
+        state.loading = false;
+        // State is updated via the dispatch within the thunk
+        console.log('submitComment fulfilled, comment added via addComment reducer.');
+      })
+      .addCase(submitComment.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+        console.error('submitComment rejected:', action.payload);
       });
-      // Add handlers for other thunks if needed
   },
 });
 

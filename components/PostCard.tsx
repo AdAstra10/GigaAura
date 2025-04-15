@@ -2,7 +2,7 @@ import React, { useState, FormEvent, useEffect } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
-import { Post, Comment, likePost, unlikePost, addComment, sharePost, bookmarkPost, unbookmarkPost } from '../lib/slices/postsSlice';
+import { Post, Comment, likePost, unlikePost, addComment, sharePost, bookmarkPost, unbookmarkPost, submitComment } from '../lib/slices/postsSlice';
 import { addTransaction } from '../lib/slices/auraPointsSlice';
 import { addNotification } from '../lib/slices/notificationsSlice';
 import { useWallet } from '../contexts/WalletContext';
@@ -15,6 +15,7 @@ import { FaRegComment, FaRegHeart, FaHeart, FaRetweet, FaRegShareSquare, FaEllip
 import { ChatBubbleLeftIcon, ArrowPathRoundedSquareIcon, HeartIcon, ShareIcon, BookmarkIcon as BookmarkOutlineIcon } from '@heroicons/react/24/outline';
 import { CheckBadgeIcon, BookmarkIcon as BookmarkSolidIcon } from '@heroicons/react/24/solid';
 import Image from 'next/image';
+import { useAppDispatch } from '../hooks/useAppDispatch';
 
 interface PostCardProps {
   post: Post;
@@ -24,7 +25,7 @@ interface PostCardProps {
 }
 
 const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFollow }) => {
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const router = useRouter();
   const { connectWallet, connected } = useWallet();
   const { walletAddress, username, avatar } = useSelector((state: RootState) => state.user as {
@@ -167,63 +168,37 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
     setIsSubmitting(true);
     
     try {
-      // Create a comment object that matches what the addComment action expects
-      const commentPayload = {
-        postId: post.id,
-        content: commentText,
-        authorWallet: walletAddress,
-        authorUsername: username || undefined,
-        authorAvatar: avatar || 'https://i.pravatar.cc/150?img=1'
-      };
-      
-      // Dispatch the comment to Redux
-      dispatch(addComment(commentPayload));
-      
-      // Set showComments to true to make sure comments are visible
-      if (!showComments) {
-        setShowComments(true);
-      }
-      
-      // Add notification for the post creator if it's not the user's own post
-      if (post.authorWallet !== walletAddress) {
-        dispatch(addNotification({
-          type: 'comment',
-          message: `${username || truncateWallet(walletAddress)} commented on your post: "${commentText.substring(0, 30)}${commentText.length > 30 ? '...' : ''}"`,
-          fromWallet: walletAddress,
-          fromUsername: username || undefined,
-          postId: post.id
-        }));
-        
-        // Add Aura Points transaction for commenter
-        dispatch(addTransaction({
-          id: uuidv4(),
-          amount: 10, // 10 points for making a comment
-          timestamp: new Date().toISOString(),
-          action: 'comment_made',
-          counterpartyName: post.authorUsername || truncateWallet(post.authorWallet),
-          counterpartyWallet: post.authorWallet
-        }));
-        
-        // Add Aura Points transaction for post creator
-        dispatch(addTransaction({
-          id: uuidv4(),
-          amount: 10, // 10 points for received comment
-          timestamp: new Date().toISOString(),
-          action: 'comment_received',
-          counterpartyName: username || truncateWallet(walletAddress),
-          counterpartyWallet: walletAddress
-        }));
-        
-        // Show toast notification
-        toast.success('Comment posted successfully!');
+      // Dispatch the async thunk
+      const resultAction = await dispatch(submitComment({ 
+        postId: post.id, 
+        content: commentText 
+      }));
+
+      // Check if the thunk completed successfully
+      if (submitComment.fulfilled.match(resultAction)) {
+         // The thunk already dispatched addComment, so the state is updated.
+         // The notification logic should ideally be in the backend or triggered by the thunk.
+         // We can keep the UI feedback here.
+         setCommentText(''); // Clear input on success
+         setShowComments(true); // Ensure comments are visible
+         toast.success('Comment posted successfully!');
+
+         // Removed client-side notification dispatch - should be handled via backend/thunk
+         // Removed client-side Aura points dispatch - should be handled via backend/thunk
+
       } else {
-        toast.success('Comment added to your post!');
+        // Handle rejected case
+        const errorMsg = typeof resultAction.payload === 'string' 
+                          ? resultAction.payload 
+                          : 'Failed to post comment. Please try again.';
+        toast.error(errorMsg);
+        console.error('Comment submission failed:', resultAction.payload);
       }
-      
-      setCommentText('');
+
     } catch (error) {
-      console.error('Error adding comment:', error);
-      toast.error('Failed to post comment. Please try again.');
+      // Catch unexpected errors during dispatch
+      console.error('Error dispatching submitComment:', error);
+      toast.error('An unexpected error occurred while commenting.');
     } finally {
       setIsSubmitting(false);
     }
@@ -532,7 +507,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, comments = [], onShare, onFol
                 <ChatBubbleLeftIcon className="h-5 w-5" />
               </div>
               <span className={`ml-1 text-sm ${commentHover ? 'text-blue-500' : ''}`}>
-                {post.comments || 0}
+                {post.comments?.length || 0}
               </span>
             </button>
             
