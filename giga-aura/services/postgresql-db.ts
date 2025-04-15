@@ -313,11 +313,11 @@ export const savePost = async (post: Post): Promise<boolean> => {
         INSERT INTO posts (
           id, content, author_wallet, author_name,
           created_at, likes, liked_by, shares, shared_by,
-          bookmarked_by, data
+          bookmarked_by, comments, data
         ) VALUES (
           $1, $2, $3, $4,
           $5, $6, $7, $8, $9,
-          $10, $11
+          $10, $11, $12
         )
         ON CONFLICT (id) DO UPDATE SET
           content = EXCLUDED.content,
@@ -326,6 +326,7 @@ export const savePost = async (post: Post): Promise<boolean> => {
           liked_by = EXCLUDED.liked_by,
           shares = EXCLUDED.shares,
           shared_by = EXCLUDED.shared_by,
+          comments = EXCLUDED.comments,
           bookmarked_by = EXCLUDED.bookmarked_by,
           data = EXCLUDED.data,
           updated_at = CURRENT_TIMESTAMP
@@ -343,6 +344,7 @@ export const savePost = async (post: Post): Promise<boolean> => {
         postWithDefaults.shares || 0,
         JSON.stringify(postWithDefaults.sharedBy || []),
         JSON.stringify(postWithDefaults.bookmarkedBy || []),
+        JSON.stringify(postWithDefaults.comments || []),
         JSON.stringify(postWithDefaults)
       ];
       
