@@ -85,6 +85,18 @@ const initDatabase = async () => {
         )
       `);
       
+      // --- Add ALTER TABLE statements to ensure columns exist --- 
+      await client.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS shared_by JSONB DEFAULT '[]'`);
+      await client.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS comments JSONB DEFAULT '[]'`);
+      await client.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS bookmarked_by JSONB DEFAULT '[]'`);
+      // Ensure older columns also exist if added incrementally before
+      await client.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS likes INTEGER DEFAULT 0`);
+      await client.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS liked_by JSONB DEFAULT '[]'`);
+      await client.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS shares INTEGER DEFAULT 0`);
+      await client.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS data JSONB`);
+      await client.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`);
+      // --- End ALTER TABLE statements --- 
+      
       await client.query(`
         CREATE TABLE IF NOT EXISTS aura_points (
           wallet_address TEXT PRIMARY KEY,
