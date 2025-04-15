@@ -61,7 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           mediaUrl: mediaUrl || null,
           mediaType: mediaType || null,
           likes: 0,
-          comments: 0,
+          comments: [],
           shares: 0,
           likedBy: [],
           sharedBy: [],
