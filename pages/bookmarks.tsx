@@ -101,9 +101,11 @@ const Bookmarks: React.FC = () => {
         authorAvatar: "https://i.pravatar.cc/150?img=10",
         createdAt: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
         likes: 241,
-        comments: 57,
+        comments: [],
         shares: 32,
-        likedBy: []
+        likedBy: [],
+        sharedBy: [],
+        bookmarkedBy: []
       },
       {
         id: "bookmark2",
@@ -113,9 +115,11 @@ const Bookmarks: React.FC = () => {
         authorAvatar: "https://i.pravatar.cc/150?img=11",
         createdAt: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
         likes: 189,
-        comments: 42,
+        comments: [],
         shares: 21,
-        likedBy: []
+        likedBy: [],
+        sharedBy: [],
+        bookmarkedBy: []
       }
     ];
     
