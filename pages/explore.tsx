@@ -6,17 +6,14 @@ import Sidebar from '../components/Sidebar';
 import PostCard from '../components/PostCard';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../lib/store';
-import { Post, Comment, loadFromCache, setFeed } from '../lib/slices/postsSlice';
-import db from '../giga-aura/services/db-init';
+import { Post, loadFromCache, setFeed } from '../lib/slices/postsSlice';
+import db from '../giga-aura/services/postgresql-db';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
 const ExplorePage: NextPage = () => {
   const dispatch = useDispatch();
-  const { feed, comments } = useSelector((state: RootState) => state.posts as {
-    feed: Post[],
-    comments: Comment[]
-  });
+  const feed = useSelector((state: RootState) => state.posts.feed);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedFilter, setSelectedFilter] = useState<'trending' | 'latest' | 'popular'>('trending');
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -39,7 +36,6 @@ const ExplorePage: NextPage = () => {
       setIsLoading(true);
       
       try {
-        // First try to load posts from API
         console.log("Loading posts from API for Explore page");
         const response = await axios.get(`${getApiBaseUrl()}/api/posts`);
         
@@ -47,37 +43,30 @@ const ExplorePage: NextPage = () => {
           console.log("Found posts in API:", response.data.length);
           dispatch(setFeed(response.data));
         } else {
-          // Fallback to direct database call
-          console.log("No posts found in API, trying database directly");
-          const posts = await db.getPosts();
-          
-          if (posts && Array.isArray(posts) && posts.length > 0) {
-            console.log("Found posts in database:", posts.length);
-            dispatch(setFeed(posts));
-          } else {
-            // Fallback to local cache as last resort
-            console.log("No posts found in database, loading from cache");
-            dispatch(loadFromCache());
-          }
+          // Removed direct DB call from frontend - API should be the source
+          console.log("No posts found in API, attempting to load from cache");
+          // dispatch(loadFromCache()); // Assuming loadFromCache loads from localStorage
+          // If loadFromCache isn't implemented or suitable, dispatch empty feed:
+          dispatch(setFeed([])); 
         }
       } catch (error) {
         console.error("Error loading posts:", error);
-        // Fallback to cache
-        dispatch(loadFromCache());
+        // Fallback to cache or empty state
+        // dispatch(loadFromCache());
+        dispatch(setFeed([])); // Dispatch empty feed on error
       } finally {
         setIsLoading(false);
       }
     };
     
-    // Load posts initially
     loadPosts();
     
     // Set up auto-refresh interval (every 5 seconds for real-time updates)
     if (autoRefresh) {
       refreshIntervalRef.current = setInterval(() => {
         console.log('Auto-refreshing explore posts...');
-        loadPosts();
-      }, 5000); // 5 seconds for real-time effect
+        loadPosts(); // Reload posts periodically
+      }, 60000); // Poll every minute (adjust as needed)
       
       // Set up Server-Sent Events for real-time updates
       if (typeof window !== 'undefined') {
@@ -145,31 +134,24 @@ const ExplorePage: NextPage = () => {
     };
   }, [dispatch, autoRefresh]);
 
-  // Get comments for a specific post
-  const getPostComments = (postId: string) => {
-    return comments.filter((comment: Comment) => comment.postId === postId);
-  };
-
   // Filter posts based on selected filter
   const getFilteredPosts = () => {
     if (!feed || feed.length === 0) return [];
     
+    // Sort logic needs access to post.comments.length
     switch (selectedFilter) {
       case 'trending':
-        // Trending: Sort by combination of likes, comments and recency
         return [...feed].sort((a, b) => {
-          const scoreA = a.likes * 2 + a.comments * 3 + new Date(a.createdAt).getTime() / 10000000;
-          const scoreB = b.likes * 2 + b.comments * 3 + new Date(b.createdAt).getTime() / 10000000;
+          const scoreA = (a.likes || 0) * 2 + (a.comments?.length || 0) * 3 + new Date(a.createdAt).getTime() / 10000000;
+          const scoreB = (b.likes || 0) * 2 + (b.comments?.length || 0) * 3 + new Date(b.createdAt).getTime() / 10000000;
           return scoreB - scoreA;
         });
       case 'latest':
-        // Latest: Sort by creation date
         return [...feed].sort((a, b) => 
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
       case 'popular':
-        // Popular: Sort by likes count
-        return [...feed].sort((a, b) => b.likes - a.likes);
+        return [...feed].sort((a, b) => (b.likes || 0) - (a.likes || 0));
       default:
         return feed;
     }
@@ -296,7 +278,7 @@ const ExplorePage: NextPage = () => {
                   <PostCard 
                     key={post.id} 
                     post={post} 
-                    comments={getPostComments(post.id)} 
+                    comments={post.comments || []} 
                   />
                 ))
               )}
