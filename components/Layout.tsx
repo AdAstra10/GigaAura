@@ -32,23 +32,17 @@ const Layout: React.FC<LayoutProps> = ({ children, rightSidebarContent }) => {
         {/* Sticky Header */}
         <Header onToggleMobileSidebar={toggleMobileSidebar} />
 
-        {/* Main Content Grid */}
-        <div className="flex flex-grow max-w-6xl mx-auto w-full">
+        {/* Main Content Grid - Add padding-top here to account for header height (h-14) */}
+        <div className="flex flex-grow max-w-6xl mx-auto w-full pt-14">
             {/* Main Content Column (Takes children) */}
            <main className="flex-grow w-full max-w-2xl border-l border-r border-gray-200 dark:border-gray-800">
-             {/* Add padding-top to account for header height (h-14 = 3.5rem) */}
-             {/* <div className="pt-14"> Removed pt here, header sits above this now */}
                {children}
-             {/* </div> */}
            </main>
 
           {/* Right Sidebar (Optional) */}
           {rightSidebarContent && (
             <aside className="hidden lg:block w-[350px] pl-8 pr-6 py-4">
-              {/* Add padding-top to account for header height */} 
-              {/* <div className="pt-14"> Removed pt here, header sits above this now */}
                 {rightSidebarContent}
-              {/* </div> */}
             </aside>
           )}
         </div>
