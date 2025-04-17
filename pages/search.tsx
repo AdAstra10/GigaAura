@@ -265,7 +265,7 @@ const Search: React.FC = () => {
           <meta name="description" content="Search GigaAura for posts, people, and topics" />
         </Head>
 
-        <Header />
+        <Header onToggleMobileSidebar={() => {}} />
 
         <main className="tab-container">
           <div className="container mx-auto grid grid-cols-1 md:grid-cols-9 md:divide-x md:divide-[var(--border-color)]">

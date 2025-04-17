@@ -195,7 +195,8 @@ const UserProfilePage = () => {
       </Head>
       
       <div className="min-h-screen bg-light dark:bg-dark">
-        <Header />
+        {/* Remove the redundant Header instance here */}
+        {/* <Header /> */}
         
         <main className="container mx-auto grid grid-cols-1 md:grid-cols-12 md:divide-x md:divide-[var(--border-color)]">
           <div className="col-span-1 md:col-span-6 fixed-width-container">

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FaMoon, FaSun, FaRegBell, FaRegEnvelope, FaRegUser, FaArrowLeft } from 'react-icons/fa';
+import { FaMoon, FaSun } from 'react-icons/fa';
 import { useSelector } from 'react-redux';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -7,16 +7,20 @@ import { useWallet } from '../contexts/WalletContext';
 import { RootState } from '../lib/store';
 import { useDarkMode } from '../contexts/DarkModeContext';
 import Image from 'next/image';
+import { FaUserCircle } from 'react-icons/fa';
 
-const Header = () => {
+// Define props for the Header component
+interface HeaderProps {
+  onToggleMobileSidebar: () => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ onToggleMobileSidebar }) => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { connectWallet, disconnectWallet, connected, walletAddress } = useWallet();
   const user = useSelector((state: RootState) => state.user);
   const auraPoints = useSelector((state: RootState) => state.auraPoints.totalPoints || 0);
   const [displayedPoints, setDisplayedPoints] = useState(auraPoints);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
   const router = useRouter();
 
   // Update points with animation when they change
@@ -58,23 +62,6 @@ const Header = () => {
     return () => clearInterval(intervalId);
   };
 
-  useEffect(() => {
-    const checkIfMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    
-    // Initial check
-    checkIfMobile();
-    
-    // Add event listener
-    window.addEventListener('resize', checkIfMobile);
-    
-    // Clean up
-    return () => {
-      window.removeEventListener('resize', checkIfMobile);
-    };
-  }, []);
-
   const handleConnectWallet = async () => {
     try {
       await connectWallet();
@@ -89,79 +76,41 @@ const Header = () => {
     return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
   };
 
-  // Display header based on route
-  const renderPageTitle = () => {
-    const path = router.pathname;
-    
-    switch (true) {
-      case path === '/home':
-        return 'Home';
-      case path === '/explore':
-        return 'Explore';
-      case path === '/notifications':
-        return 'Notifications';
-      case path === '/messages':
-        return 'Messages';
-      case path === '/bookmarks':
-        return 'Bookmarks';
-      case path === '/profile':
-        return 'Profile';
-      case path === '/settings':
-        return 'Settings';
-      case path.includes('/profile/'):
-        return 'Profile';
-      default:
-        return 'GigaAura';
-    }
-  };
-
-  // Decide if we need a back button
-  const shouldShowBackButton = () => {
-    return router.pathname !== '/home' && router.pathname !== '/';
-  };
-
   return (
-    <header className="sticky top-0 z-50 bg-white dark:bg-black border-b border-[var(--border-color)] backdrop-blur-md bg-opacity-80 dark:bg-opacity-80">
-      {/* Mobile and middle-size screen header */}
-      <div className="flex justify-between items-center h-14 px-4">
-        {/* Left section: Back button or Title */}
-        <div className="flex items-center">
-          {shouldShowBackButton() ? (
-            <button 
-              onClick={() => router.back()} 
-              className="mr-4 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 text-black dark:text-white"
-            >
-              <FaArrowLeft className="h-5 w-5" />
+    <header className="sticky top-0 z-40 bg-white dark:bg-black border-b border-[var(--border-color)] backdrop-blur-md bg-opacity-80 dark:bg-opacity-80">
+      <div className="flex justify-between items-center h-14 px-4 max-w-6xl mx-auto">
+        {/* Left section: Mobile Sidebar Toggle */}
+        <div className="flex items-center md:hidden">
+          {connected && (
+            <button onClick={onToggleMobileSidebar} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800">
+              <div className="w-8 h-8 rounded-full overflow-hidden">
+                {user.avatar ? (
+                  <img 
+                    src={user.avatar} 
+                    alt={user.username || 'User'} 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <FaUserCircle className="w-full h-full text-gray-500" /> 
+                )}
+              </div>
             </button>
-          ) : (
-            <div className="w-10 h-10 flex items-center justify-center md:hidden">
-              {connected && (
-                <Link href="/profile">
-                  <div className="w-8 h-8 rounded-full overflow-hidden">
-                    {user.avatar ? (
-                      <img 
-                        src={user.avatar} 
-                        alt={user.username || 'User'} 
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-primary flex items-center justify-center text-white">
-                        {user.username ? user.username.charAt(0).toUpperCase() : walletAddress?.substring(0, 2)}
-                      </div>
-                    )}
-                  </div>
-                </Link>
-              )}
-            </div>
           )}
+          {/* Placeholder for unconnected state or if logo is needed */}
+          {!connected && <div className="w-8 h-8"></div>} 
         </div>
-        
+
+        {/* Center section: Logo/Title (Optional - kept minimal for now) */}
+        <div className="hidden md:block">
+          {/* Optionally add logo or title here if needed for desktop */}
+        </div>
+
         {/* Right section: Actions */}
         <div className="flex items-center space-x-3">
           {/* Toggle dark mode button */}
           <button
             onClick={toggleDarkMode}
-            className="p-2 text-black dark:text-white transition-colors"
+            className="p-2 text-black dark:text-white transition-colors rounded-full hover:bg-gray-200 dark:hover:bg-gray-800"
             aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
           >
             {isDarkMode ? (
@@ -171,9 +120,9 @@ const Header = () => {
             )}
           </button>
           
-          {/* Aura Points display - Only visible when connected */}
+          {/* Aura Points display - Always visible when connected */}
           {connected && (
-            <div className="hidden md:flex items-center bg-gray-200 dark:bg-gray-800 rounded-full py-1 px-3">
+            <div className="flex items-center bg-gray-200 dark:bg-gray-800 rounded-full py-1 px-3">
               <span className={`text-primary font-bold mr-1 ${isAnimating ? 'counter-animate' : ''}`}>
                 {displayedPoints}
               </span>
@@ -181,37 +130,30 @@ const Header = () => {
             </div>
           )}
           
-          {/* Connect Wallet Button or Profile - Based on connection state */}
+          {/* Connect Wallet Button or Profile Link */}
           {!connected ? (
             <button 
               onClick={handleConnectWallet}
-              className="bg-primary hover:bg-primary-hover rounded-full text-white font-medium py-2 px-4"
+              className="bg-primary hover:bg-primary-hover rounded-full text-white font-medium text-sm sm:text-base py-1.5 px-3 sm:py-2 sm:px-4 transition-colors"
             >
-              Connect Wallet
+              Connect
             </button>
           ) : (
-            <Link href="/profile">
-              <div className="flex items-center p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full cursor-pointer transition-colors">
-                <div className="mr-2 hidden md:block">
-                  <p className="text-sm font-medium text-black dark:text-white">
-                    {user.username || truncateWallet(walletAddress || '')}
-                  </p>
-                </div>
-                <div className="w-8 h-8 rounded-full overflow-hidden">
-                  {user.avatar ? (
-                    <img 
-                      src={user.avatar} 
-                      alt={user.username || 'User'} 
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-primary flex items-center justify-center text-white">
-                      {user.username ? user.username.charAt(0).toUpperCase() : walletAddress?.substring(0, 2)}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </Link>
+             // On desktop, show truncated address or username
+             <div className="hidden md:flex items-center p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full cursor-pointer transition-colors">
+               <Link href="/profile" className="flex items-center">
+                 <div className="w-8 h-8 rounded-full overflow-hidden mr-2">
+                   {user.avatar ? (
+                     <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover"/>
+                   ) : (
+                     <FaUserCircle className="w-full h-full text-gray-500" /> 
+                   )}
+                 </div>
+                 <span className="text-sm font-medium text-black dark:text-white">
+                   {user.username || truncateWallet(walletAddress || '')}
+                 </span>
+                </Link>
+             </div>
           )}
         </div>
       </div>
