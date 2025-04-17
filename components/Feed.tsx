@@ -147,610 +147,381 @@ const useAppDispatch = () => useDispatch<AppDispatch>();
 
 // Main Feed component - The entry point for the entire feed system
 const Feed: React.FC = () => {
-  return (
-    <FeedErrorBoundary fallback={<FeedErrorFallback error={new Error('Feed error')} resetErrorBoundary={() => {}} />}>
-      <FeedSafetyWrapper />
-    </FeedErrorBoundary>
-  );
+  // No ErrorBoundary needed here if Layout handles it, or keep if specific to Feed
+  return <FeedInner />;
 };
 
-// Safety wrapper component to handle additional checks
-function FeedSafetyWrapper(props: Record<string, any>) {
-  const [isMetaMaskDetected, setIsMetaMaskDetected] = useState(false);
-  const { showBoundary } = useErrorBoundary();
-
-  useEffect(() => {
-    // Check for ethereum in a type-safe way
-    try {
-      const win = window as unknown as { ethereum?: any };
-      setIsMetaMaskDetected(!!win.ethereum);
-    } catch (e) {
-      console.error("Error checking for ethereum:", e);
-    }
-  }, []);
-
-  // Render the FeedInner component with extra safety measures
-  try {
-    return <FeedInner {...props} isMetaMaskDetected={isMetaMaskDetected} />;
-  } catch (error) {
-    showBoundary(error instanceof Error ? error : new Error('Unknown feed error'));
-    return <LoadingSpinner />;
-  }
-}
-
 // Inner feed component with main logic
-function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
+function FeedInner() { // Removed props drilling for isMetaMaskDetected if not used
   const dispatch = useAppDispatch();
   const { feed: reduxPosts, loading, error } = useSelector((state: RootState) => state.posts);
   const [activeTab, setActiveTab] = useState<'for-you' | 'following'>('for-you');
   const [hasNewPosts, setHasNewPosts] = useState(false);
-  const [endReached, setEndReached] = useState(false);
+  const [endReached, setEndReached] = useState(false); // Assuming pagination/infinite scroll logic exists elsewhere or is TODO
   const [loadingMore, setLoadingMore] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
+  const [retryCount, setRetryCount] = useState(0); // Keep retry logic if needed
   const feedRef = useRef<HTMLDivElement>(null);
-  const { showBoundary } = useErrorBoundary();
-  const [newPostContent, setNewPostContent] = useState('');
-  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const { showBoundary } = useErrorBoundary(); // Keep if using ErrorBoundary
   const { connectWallet, connected, walletAddress } = useWallet();
   const { username, avatar, following } = useSelector((state: RootState) => state.user);
   
-  // Add auto-refresh functionality
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  // Auto-refresh and real-time state
+  const [autoRefresh, setAutoRefresh] = useState(true); // Can be a user setting
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Add state for tracking new posts
-  const [lastPostCount, setLastPostCount] = useState(0);
-  const [lastFetchTime, setLastFetchTime] = useState(new Date());
-  const sseRef = useRef<EventSource | null>(null);
-  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const sseRef = useRef<EventSource | null>(null); // For Server-Sent Events
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null); // For SSE reconnect
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const pusherChannelRef = useRef<any>(null);
+  // Removed Pusher refs if SSE is primary method now
 
   // Filter for following tab
-  const filteredPosts = activeTab === 'following' && following.length > 0
-    ? reduxPosts.filter(post => following.includes(post.authorWallet))
+  const filteredPosts = activeTab === 'following' && following?.length > 0
+    ? reduxPosts.filter(post => post.authorWallet && following.includes(post.authorWallet))
     : reduxPosts;
 
-  // Set up Pusher for real-time updates
-  useEffect(() => {
-    // Skip if SSR or not auto-refreshing
-    if (typeof window === 'undefined' || !autoRefresh) return;
-
-    try {
-      // Subscribe to cache-posts-channel for real-time post updates
-      const postsChannel = pusherClient.subscribe('cache-posts-channel');
-      
-      // Listen for new post events
-      postsChannel.bind('new-post-event', (postData: any) => {
-        console.log('Received new post via Pusher:', postData);
-        if (postData && postData.id) {
-          // Add the new post to Redux store
-          dispatch(addPost(postData));
-          
-          // Update localStorage cache
-          try {
-            const cachedPosts = localStorage.getItem('giga-aura-posts');
-            let posts = [];
-            
-            if (cachedPosts) {
-              posts = JSON.parse(cachedPosts);
-              
-              // Check if post already exists
-              const existingIndex = posts.findIndex((p: any) => p.id === postData.id);
-              if (existingIndex >= 0) {
-                // Update existing post
-                posts[existingIndex] = postData;
-              } else {
-                // Add new post to beginning
-                posts.unshift(postData);
-              }
-            } else {
-              // Initialize cache with this post
-              posts = [postData];
-            }
-            
-            // Save updated posts to localStorage
-            localStorage.setItem('giga-aura-posts', JSON.stringify(posts));
-          } catch (error) {
-            console.error('Error updating localStorage with Pusher post:', error);
-          }
-          
-          setHasNewPosts(true);
-        }
-      });
-      
-      // Listen for updated post events
-      postsChannel.bind('updated-post-event', (postData: any) => {
-        console.log('Received updated post via Pusher:', postData);
-        if (postData && postData.id) {
-          // Update the post in Redux store using setFeed with updated posts
-          try {
-            // Get current posts from Redux
-            const currentPosts = [...reduxPosts];
-            
-            // Find and update the post
-            const updatedPosts = currentPosts.map((post) => 
-              post.id === postData.id ? {...post, ...postData} : post
-            );
-            
-            // Update Redux with modified posts list
-            dispatch(setFeed(updatedPosts));
-            
-            // Update localStorage cache
-            const cachedPosts = localStorage.getItem('giga-aura-posts');
-            if (cachedPosts) {
-              let posts = JSON.parse(cachedPosts);
-              
-              // Update post if it exists
-              const updatedCachedPosts = posts.map((p: any) => 
-                p.id === postData.id ? {...p, ...postData} : p
-              );
-              
-              // Save updated posts to localStorage
-              localStorage.setItem('giga-aura-posts', JSON.stringify(updatedCachedPosts));
-            }
-          } catch (error) {
-            console.error('Error updating post in Redux or localStorage:', error);
-          }
-        }
-      });
-      
-      // Clean up on unmount
-      return () => {
-        postsChannel.unbind_all();
-        pusherClient.unsubscribe('cache-posts-channel');
-      };
-    } catch (error) {
-      console.error('Error setting up Pusher for feed:', error);
-    }
-  }, [dispatch, autoRefresh]);
+  // Function to get API base URL (ensure it works correctly on server/client)
+   const getApiBaseUrl = (): string => {
+     if (typeof window !== 'undefined') {
+       return window.location.origin;
+     }
+     // Attempt to get base URL on server (replace with actual env var if needed)
+     return process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : 'http://localhost:3000'; 
+   };
 
   // Load initial posts from localStorage if available
   useEffect(() => {
     try {
       const cachedPosts = localStorage.getItem('giga-aura-posts');
       if (cachedPosts) {
-        const posts = JSON.parse(cachedPosts);
-        if (Array.isArray(posts) && posts.length > 0) {
+        const posts: Post[] = JSON.parse(cachedPosts);
+        if (Array.isArray(posts) && posts.length > 0 && reduxPosts.length === 0) { // Only load if Redux is empty
           console.log('Loaded', posts.length, 'posts from localStorage on initial mount');
           dispatch(setFeed(posts));
-          
-          // Initialize filtered posts without waiting for the effect with reduxPosts dependency
-          if (activeTab === 'following' && following.length > 0) {
-            const filteredCache = posts.filter(post => following.includes(post.authorWallet));
-            console.log('Filtered to', filteredCache.length, 'following posts');
-          }
         }
       }
     } catch (error) {
       console.error('Error loading posts from localStorage:', error);
     }
-  }, [dispatch]); // Only run on initial mount
+  }, [dispatch]); // Only run once on mount
 
-  // Effect for loading posts on mount and periodically
+  // --- Load Posts Logic (Combined Initial Load & Refresh) --- 
+  const loadPosts = useCallback(async (isManualRefresh = false) => {
+     if (isRefreshing && !isManualRefresh) return; // Prevent overlapping auto-refreshes
+     
+     setIsRefreshing(true);
+     if (isManualRefresh) {
+       setHasNewPosts(false); // Clear banner on manual refresh
+       dispatch(setLoading(true)); // Show loading state for manual refresh
+     } else {
+       // Only show loading state on initial load, not auto-refresh
+       if (reduxPosts.length === 0) {
+         dispatch(setLoading(true));
+       }
+     }
+     
+     let existingPosts: Post[] = [];
+     try {
+       // Get existing posts from localStorage as a base
+       const cachedPosts = localStorage.getItem('giga-aura-posts');
+       if (cachedPosts) {
+         existingPosts = JSON.parse(cachedPosts);
+         if (!Array.isArray(existingPosts)) existingPosts = []; // Ensure it's an array
+       }
+     } catch (e) {
+       console.error('Error reading posts from localStorage:', e);
+     }
+
+     try {
+       const timestamp = new Date().getTime();
+       const apiUrl = `${getApiBaseUrl()}/api/posts?t=${timestamp}`;
+       
+       const response = await fetch(apiUrl, {
+         method: 'GET',
+         headers: {
+           'Cache-Control': 'no-cache, no-store, must-revalidate',
+           'Pragma': 'no-cache',
+           'Accept': 'application/json',
+         },
+         mode: 'same-origin', // Or 'cors' if API is elsewhere
+         credentials: 'same-origin', // Adjust if needed
+       });
+       
+       if (!response.ok) {
+         throw new Error(`API responded with status: ${response.status}`);
+       }
+       
+       const data = await response.json();
+       
+       if (Array.isArray(data)) {
+         // Merge API data with existing localStorage data
+         const postMap = new Map<string, Post>();
+         
+         // Add API posts first (newer)
+         data.forEach(post => {
+           if (post && post.id) postMap.set(post.id, post);
+         });
+         
+         // Add existing posts not present in API response
+         existingPosts.forEach(post => {
+           if (post && post.id && !postMap.has(post.id)) {
+             postMap.set(post.id, post);
+           }
+         });
+         
+         const mergedPosts = Array.from(postMap.values());
+         // Sort merged posts by date (newest first)
+         mergedPosts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+         dispatch(setFeed(mergedPosts));
+         
+         // Update localStorage cache
+         try {
+           localStorage.setItem('giga-aura-posts', JSON.stringify(mergedPosts));
+           console.log('Saved merged', mergedPosts.length, 'posts to localStorage');
+         } catch (cacheError) {
+           console.error('Error saving posts to localStorage:', cacheError);
+         }
+
+         if (isManualRefresh) toast.success('Feed updated!');
+
+       } else {
+         console.warn('API returned non-array data, keeping existing posts:', data);
+         // If API fails but we have cached posts, keep them
+         if (existingPosts.length > 0 && reduxPosts.length === 0) {
+            dispatch(setFeed(existingPosts));
+         }
+          if (isManualRefresh) toast.error('Could not update feed.');
+       }
+     } catch (error) {
+       console.error('Error loading/refreshing posts:', error);
+       if (isManualRefresh) toast.error('Error refreshing feed');
+       setRetryCount(prev => prev + 1); // Increment retry count if needed
+       
+       // On error, ensure we still have data from localStorage if Redux is empty
+       if (existingPosts.length > 0 && reduxPosts.length === 0) {
+         dispatch(setFeed(existingPosts));
+         console.log('Restored', existingPosts.length, 'posts from localStorage after load error');
+       }
+     } finally {
+       dispatch(setLoading(false));
+       setIsRefreshing(false);
+     }
+   }, [dispatch, isRefreshing, reduxPosts.length]); // Add dependencies
+
+
+  // --- Effect for Initial Load & Real-time Updates --- 
   useEffect(() => {
-    // Implementation details...
-    // Note: This function loads posts from the API or falls back to localStorage
-    
-    const loadPosts = async () => {
-      if (isRefreshing) return;
-      
-      try {
-        setIsRefreshing(true);
-        setLoading(true);
-        
-        // First, try to load from Redux store
-        if (reduxPosts.length > 0) {
-          setLoading(false);
-          setLastPostCount(reduxPosts.length);
-          setLastFetchTime(new Date());
-          setIsRefreshing(false);
-          return;
-        }
-        
-        // Second, try to load from localStorage
-        let existingPosts: Post[] = [];
-        try {
-          const cachedPosts = localStorage.getItem('giga-aura-posts');
-          if (cachedPosts) {
-            existingPosts = JSON.parse(cachedPosts);
-            if (Array.isArray(existingPosts) && existingPosts.length > 0) {
-              // Use existing posts from localStorage while we fetch from API
-              dispatch(setFeed(existingPosts));
-              console.log('Initially loaded', existingPosts.length, 'posts from localStorage');
-            }
-          }
-        } catch (e) {
-          console.error('Error loading posts from localStorage:', e);
-        }
-        
-        // Finally, fetch from API
-        const timestamp = new Date().getTime();
-        const apiUrl = `${window.location.origin}/api/posts?t=${timestamp}`;
-        
-        const response = await fetch(apiUrl, {
-          method: 'GET',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Accept': 'application/json',
-          },
-          mode: 'same-origin',
-          credentials: 'same-origin',
-        });
-        
-        if (!response.ok) {
-          throw new Error(`API responded with status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (Array.isArray(data) && data.length > 0) {
-          // Merge with existing posts to prevent loss
-          // Use a Map to deduplicate by ID while preserving the order of new posts first
-          const postMap = new Map();
-          
-          // Add API posts first
-          data.forEach(post => {
-            if (post && post.id) {
-              postMap.set(post.id, post);
-            }
-          });
-          
-          // Then add any existing posts that aren't in the API response
-          existingPosts.forEach(post => {
-            if (post && post.id && !postMap.has(post.id)) {
-              postMap.set(post.id, post);
-            }
-          });
-          
-          // Convert map back to array
-          const mergedPosts = Array.from(postMap.values());
-          
-          // Update Redux store
-          dispatch(setFeed(mergedPosts));
-          
-          // Cache the feed in localStorage
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('giga-aura-posts', JSON.stringify(mergedPosts));
-            console.log('Saved merged', mergedPosts.length, 'posts to localStorage');
-          }
-        } else if (existingPosts.length > 0) {
-          // If API returned no posts but we have existing posts, keep them
-          console.warn('API returned empty data, keeping existing posts:', existingPosts.length);
-        } else {
-          console.warn('API returned empty or invalid data:', data);
-        }
-      } catch (error) {
-        console.error('Error loading posts:', error);
-        setRetryCount(prev => prev + 1);
-        
-        // Try to load from localStorage on error
-        try {
-          const cachedPosts = localStorage.getItem('giga-aura-posts');
-          if (cachedPosts) {
-            const posts = JSON.parse(cachedPosts);
-            if (Array.isArray(posts) && posts.length > 0) {
-              dispatch(setFeed(posts));
-              console.log('Restored', posts.length, 'posts from localStorage after load error');
-            }
-          }
-        } catch (e) {
-          console.error('Error restoring from localStorage:', e);
-        }
-      } finally {
-        setLoading(false);
-        setIsRefreshing(false);
-      }
-    };
-    
     // Initial load
-    loadPosts();
+    if (reduxPosts.length === 0) {
+       loadPosts();
+     }
+
+    // Set up SSE for real-time updates
+    let sseCleanup: (() => void) | null = null;
+    if (autoRefresh && typeof window !== 'undefined' && !sseRef.current) {
+       const connectSSE = () => {
+         try {
+           console.log('Attempting to connect to SSE...');
+           const eventSource = new EventSource(`${getApiBaseUrl()}/api/events`);
+           sseRef.current = eventSource;
+           
+           eventSource.onmessage = (event) => {
+             if (event.data) {
+               try {
+                 const data = JSON.parse(event.data);
+                 if (data.type === 'new-post') {
+                   setHasNewPosts(true);
+                   // Optionally add post directly for instant update?
+                   // if (data.post) dispatch(addPost(data.post));
+                   console.log('SSE: New post detected');
+                 } else if (data.type === 'update-post') {
+                   // Handle post updates (likes, comments)
+                   console.log('SSE: Post update detected', data.post);
+                   // Find and update post in Redux store
+                   const updatedPost = data.post;
+                   if (updatedPost && updatedPost.id) {
+                      dispatch(setFeed(reduxPosts.map(p => p.id === updatedPost.id ? updatedPost : p)));
+                      // Update local storage too
+                      // ... (localStorage update logic needed)
+                   }
+                 }
+               } catch (e) {
+                 console.error('Error parsing SSE event:', e);
+               }
+             }
+           };
+           
+           eventSource.onerror = () => {
+             console.error('SSE connection error. Closing and attempting reconnect.');
+             eventSource.close();
+             sseRef.current = null;
+             if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+             // Simple reconnect delay
+             retryTimeoutRef.current = setTimeout(() => {
+               if (autoRefresh) connectSSE();
+             }, 5000);
+           };
+
+           eventSource.onopen = () => {
+             console.log('SSE connection established.');
+             if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current); // Clear retry timeout on successful open
+           };
+
+           sseCleanup = () => {
+             console.log('Cleaning up SSE connection.');
+             eventSource.close();
+             sseRef.current = null;
+             if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+           };
+
+         } catch (error) {
+           console.error('Error setting up SSE:', error);
+         }
+       };
+       connectSSE();
+     }
+
+    // Set up polling as fallback or primary refresh mechanism
+    if (autoRefresh && !sseRef.current) { // Only poll if SSE isn't active
+       if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current);
+       refreshIntervalRef.current = setInterval(() => {
+         loadPosts();
+       }, 60000); // Poll every minute
+     }
     
-    // Set up polling for new posts if auto-refresh is enabled
-    if (autoRefresh) {
-      refreshIntervalRef.current = setInterval(() => {
-        if (!isRefreshing) {
-          loadPosts();
-        }
-      }, 60000); // Poll every minute
-    }
-    
-    // Set up SSE for real-time updates (Server-Sent Events)
-    if (typeof window !== 'undefined' && autoRefresh && !sseRef.current) {
-      try {
-        const eventSource = new EventSource(`${getApiBaseUrl()}/api/events`);
-        
-        eventSource.onmessage = (event) => {
-          if (event.data) {
-            try {
-              const data = JSON.parse(event.data);
-              if (data.type === 'new-post') {
-                setHasNewPosts(true);
-                if (data.post) {
-                  dispatch(addPost(data.post));
-                }
-              }
-            } catch (e) {
-              console.error('Error parsing SSE event:', e);
-            }
-          }
-        };
-        
-        eventSource.onerror = () => {
-          console.error('SSE connection error');
-          eventSource.close();
-          
-          // Try to reconnect after 5 seconds
-          if (retryTimeoutRef.current) {
-            clearTimeout(retryTimeoutRef.current);
-          }
-          
-          retryTimeoutRef.current = setTimeout(() => {
-            if (autoRefresh) {
-              console.log('Attempting to reconnect to SSE...');
-              const newEventSource = new EventSource(`${getApiBaseUrl()}/api/events`);
-              sseRef.current = newEventSource;
-            }
-          }, 5000);
-        };
-        
-        sseRef.current = eventSource;
-      } catch (error) {
-        console.error('Error setting up SSE:', error);
-      }
-    }
-    
-    // Cleanup on unmount
+    // Cleanup on unmount or when autoRefresh changes
     return () => {
       if (refreshIntervalRef.current) {
         clearInterval(refreshIntervalRef.current);
       }
-      
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-      }
-      
-      if (sseRef.current) {
-        sseRef.current.close();
-        sseRef.current = null;
-      }
+      if (sseCleanup) {
+         sseCleanup();
+       }
     };
-  }, [dispatch, autoRefresh, walletAddress, isRefreshing, retryCount]);
+  }, [dispatch, autoRefresh, loadPosts, reduxPosts.length]); // Add loadPosts and reduxPosts.length
 
-  // Additional setup for Pusher for real-time updates is omitted for brevity
 
-  // Function to refresh posts - could be triggered by pull-to-refresh or button
-  const refreshPosts = async () => {
-    if (isRefreshing) return;
-    
-    try {
-      setIsRefreshing(true);
-      setHasNewPosts(false);
-      
-      // Get existing posts from localStorage first
-      let existingPosts: Post[] = [];
-      try {
-        const cachedPosts = localStorage.getItem('giga-aura-posts');
-        if (cachedPosts) {
-          existingPosts = JSON.parse(cachedPosts);
-        }
-      } catch (e) {
-        console.error('Error parsing cached posts:', e);
-      }
-      
-      const timestamp = new Date().getTime();
-      const apiUrl = `${getApiBaseUrl()}/api/posts?t=${timestamp}`;
-      
-      const response = await fetch(apiUrl, {
-        method: 'GET',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Accept': 'application/json',
-        },
-        mode: 'same-origin',
-        credentials: 'same-origin',
-      });
-      
-      if (!response.ok) {
-        throw new Error(`API responded with status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (Array.isArray(data) && data.length > 0) {
-        // Merge with existing posts to prevent loss during refresh
-        // Use a Map to deduplicate by ID while preserving the order of new posts first
-        const postMap = new Map();
-        
-        // Add API posts first
-        data.forEach(post => {
-          if (post && post.id) {
-            postMap.set(post.id, post);
-          }
-        });
-        
-        // Then add any existing posts that aren't in the API response
-        existingPosts.forEach(post => {
-          if (post && post.id && !postMap.has(post.id)) {
-            postMap.set(post.id, post);
-          }
-        });
-        
-        // Convert map back to array
-        const mergedPosts = Array.from(postMap.values());
-        
-        // Update Redux store
-        dispatch(setFeed(mergedPosts));
-        
-        // Cache the feed
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('giga-aura-posts', JSON.stringify(mergedPosts));
-          console.log('Saved', mergedPosts.length, 'posts to localStorage after refresh');
-        }
-        
-        toast.success('Feed updated!');
-      } else {
-        // If API returned no posts, keep our existing posts
-        if (existingPosts.length > 0) {
-          dispatch(setFeed(existingPosts));
-          console.warn('API returned empty data during refresh, keeping existing posts:', existingPosts.length);
-        } else {
-          console.warn('API returned empty or invalid data during refresh:', data);
-          toast.success('No new posts available');
-        }
-      }
-    } catch (error) {
-      console.error('Error refreshing posts:', error);
-      toast.error('Error refreshing feed');
-      
-      // On error, try to restore from localStorage
-      try {
-        const cachedPosts = localStorage.getItem('giga-aura-posts');
-        if (cachedPosts) {
-          const posts = JSON.parse(cachedPosts);
-          if (Array.isArray(posts) && posts.length > 0) {
-            dispatch(setFeed(posts));
-            console.log('Restored', posts.length, 'posts from localStorage after refresh error');
-          }
-        }
-      } catch (e) {
-        console.error('Error restoring from localStorage:', e);
-      }
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
+  // Function to handle post submission from CreatePostForm
+  const handlePostSubmit = async (content: string, mediaFile?: File): Promise<boolean> => {
+     if (!walletAddress || (!content.trim() && !mediaFile)) {
+       toast.error("Cannot create an empty post.");
+       return false;
+     }
 
-  // Now return the JSX for the feed component with the X-style UI
+     const postData = {
+       content,
+       mediaUrl: null, // Will be set after upload if mediaFile exists
+       mediaType: mediaFile?.type.startsWith('image/') ? 'image' as const : 
+                  mediaFile?.type.startsWith('video/') ? 'video' as const : null,
+       // Pass the file itself for the thunk to handle upload
+       mediaFile: mediaFile 
+     };
+
+     try {
+       // Dispatch the async thunk
+       const resultAction = await dispatch(saveNewPost(postData));
+       
+       if (saveNewPost.fulfilled.match(resultAction)) {
+         toast.success('Post created successfully!');
+         return true; // Indicate success to clear form
+       } else {
+         // Handle rejection: resultAction.payload should contain error info
+         const errorMsg = typeof resultAction.payload === 'string' 
+           ? resultAction.payload 
+           : 'Failed to create post. Please try again.';
+         toast.error(errorMsg);
+         console.error('Post creation failed:', resultAction.payload);
+         return false; // Indicate failure
+       }
+     } catch (err) { // Catch unexpected errors during dispatch
+       console.error('Error dispatching saveNewPost:', err);
+       toast.error('An unexpected error occurred while posting.');
+       return false; // Indicate failure
+     }
+   };
+
+  // --- JSX Rendering --- 
   return (
     <div className="w-full">
       {/* Tab navigation - "For you" and "Following" tabs */}
-      <div className="border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white dark:bg-black z-10">
+      <div className="sticky top-0 z-10 bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800">
         <div className="flex w-full">
           <button
             onClick={() => setActiveTab('for-you')}
-            className={`flex-1 py-4 text-center font-medium transition-colors ${
-              activeTab === 'for-you' 
-                ? 'text-black dark:text-white border-b-2 border-primary' 
-                : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900'
-            }`}
+            className={`flex-1 py-4 text-center font-medium transition-colors duration-200 ${activeTab === 'for-you' ? 'text-black dark:text-white border-b-2 border-primary' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900'}`}
           >
             For you
           </button>
           <button
             onClick={() => setActiveTab('following')}
-            className={`flex-1 py-4 text-center font-medium transition-colors ${
-              activeTab === 'following' 
-                ? 'text-black dark:text-white border-b-2 border-primary' 
-                : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900'
-            }`}
+            className={`flex-1 py-4 text-center font-medium transition-colors duration-200 ${activeTab === 'following' ? 'text-black dark:text-white border-b-2 border-primary' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900'}`}
           >
             Following
           </button>
         </div>
       </div>
       
-      {/* New Post Form */}
-      <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-black p-4">
-        <CreatePostForm onSubmit={(content, mediaFile) => {
-          // Define async function inside the handler
-          const handlePostSubmit = async () => {
-            if (!walletAddress || !content.trim()) {
-              toast.error("Cannot create an empty post.");
-              return false;
-            }
-
-            const postData = {
-              content,
-              mediaUrl: null, // Replace with actual URL after upload
-              mediaType: mediaFile?.type.startsWith('image/') ? 'image' as const :
-                        mediaFile?.type.startsWith('video/') ? 'video' as const : null
-            };
-
-            try {
-              const resultAction = await dispatch(saveNewPost(postData));
-              if (saveNewPost.fulfilled.match(resultAction)) {
-                toast.success('Post created successfully!');
-                return true;
-              } else {
-                const errorMsg = typeof resultAction.payload === 'string' ? resultAction.payload : 'Failed to create post.';
-                toast.error(errorMsg);
-                console.error('Post creation failed:', resultAction.payload);
-                return false;
-              }
-            } catch (err) {
-              console.error('Error dispatching saveNewPost:', err);
-              toast.error('An unexpected error occurred while posting.');
-              return false;
-            }
-          };
-
-          // Call the async function
-          handlePostSubmit(); 
-          // Return true optimistically
-          if (!walletAddress || !content.trim()) return false;
-          return true; 
-        }} />
+      {/* New Post Form - Now uses the refactored component */} 
+      {/* Apply top border here if needed, or let CreatePostForm handle its bottom border */}
+      <div className="border-b border-gray-200 dark:border-gray-800">
+        <CreatePostForm onSubmit={handlePostSubmit} />
       </div>
       
-      {/* Show "New posts" banner if there are new posts */}
+      {/* Show "New posts" banner if there are new posts */} 
       {hasNewPosts && (
         <button
-          onClick={refreshPosts}
+          onClick={() => loadPosts(true)} // Pass true for manual refresh
           className="w-full flex items-center justify-center py-3 bg-primary text-white hover:bg-primary-hover transition-colors"
         >
           <ArrowPathIcon className="h-5 w-5 mr-2" />
-          New posts available
+          New posts available - Click to load
         </button>
       )}
       
-      {/* Feed content */}
-      <div ref={feedRef} className="bg-white dark:bg-black divide-y divide-gray-200 dark:divide-gray-800">
-        {loading ? (
-          // Show skeletons when loading
+      {/* Feed content */} 
+      <div ref={feedRef} className="divide-y divide-gray-200 dark:divide-gray-800">
+        {(loading && reduxPosts.length === 0) ? (
+          // Show skeletons only on initial load
           <div>
-            {[...Array(3)].map((_, index) => (
+            {[...Array(5)].map((_, index) => (
               <PostCardSkeleton key={index} />
             ))}
           </div>
         ) : error ? (
           // Show error state
-          <div className="p-4 text-center text-red-500">
-            Error loading posts. Please try again.
+          <div className="p-4 py-10 text-center">
+             <p className="text-red-500 mb-4">Error loading posts. Please try again.</p>
             <button 
-              onClick={refreshPosts}
-              className="ml-2 text-primary hover:underline"
+              onClick={() => loadPosts(true)} // Pass true for manual refresh
+              className="px-4 py-2 bg-primary text-white rounded-full hover:bg-primary-hover transition-colors text-sm"
             >
-              Retry
+               <ArrowPathIcon className="h-4 w-4 inline mr-1"/> Retry
             </button>
           </div>
         ) : filteredPosts.length === 0 ? (
           // Empty state
-          <div className="py-10 text-center">
+          <div className="py-10 text-center px-4">
             {activeTab === 'following' ? (
-              <div className="p-4">
+              <div>
                 <h3 className="text-xl font-bold text-black dark:text-white mb-2">
-                  No posts from people you follow
+                  No posts from accounts you follow
                 </h3>
                 <p className="text-gray-500 dark:text-gray-400 mb-4">
-                  When you follow someone, their posts will show up here.
+                  Posts from accounts you follow will show up here.
                 </p>
                 <button
                   onClick={() => setActiveTab('for-you')}
                   className="px-4 py-2 bg-primary text-white rounded-full hover:bg-primary-hover transition-colors"
                 >
-                  Discover people to follow
+                  Explore Posts
                 </button>
               </div>
             ) : (
-              <div className="p-4">
+              <div>
                 <h3 className="text-xl font-bold text-black dark:text-white mb-2">
-                  No posts available
+                  Welcome to GigaAura!
                 </h3>
                 <p className="text-gray-500 dark:text-gray-400 mb-4">
-                  Be the first to post something!
+                  It's quiet right now... maybe create the first post?
                 </p>
               </div>
             )}
@@ -762,21 +533,21 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
               <PostCard 
                 key={post.id} 
                 post={post}
-                comments={[]} // We'll fetch comments separately when needed
+                comments={post.comments || []} // Ensure comments array is passed
               />
             ))}
             
-            {/* Loading more indicator */}
+            {/* Loading more indicator */} 
             {loadingMore && !endReached && (
               <div className="py-4 text-center">
                 <LoadingSpinner />
               </div>
             )}
             
-            {/* End of feed indicator */}
+            {/* End of feed indicator */} 
             {endReached && (
               <div className="py-6 text-center text-gray-500 dark:text-gray-400">
-                You've reached the end of your feed
+                You've reached the end
               </div>
             )}
           </div>
@@ -785,5 +556,8 @@ function FeedInner({ isMetaMaskDetected }: { isMetaMaskDetected?: boolean }) {
     </div>
   );
 }
+
+// Removed FeedSafetyWrapper as it might be unnecessary complexity now
+// If needed, re-introduce it carefully.
 
 export default Feed;

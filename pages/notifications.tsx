@@ -1,316 +1,193 @@
-import { useState, useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { RootState } from '../lib/store';
-import { setNotifications, markAllAsRead, markAsRead, Notification } from '../lib/slices/notificationsSlice';
+import React, { useEffect, useState } from 'react';
+import { NextPage } from 'next';
 import Head from 'next/head';
-import Header from '../components/Header';
-import Sidebar from '../components/Sidebar';
-import AuraSidebar from '../components/AuraSidebar';
-import { v4 as uuidv4 } from 'uuid';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch } from '../lib/store';
+// Only import existing types/actions from the slice
+import { setNotifications, Notification } from '../lib/slices/notificationsSlice'; 
+import Layout from '../components/Layout';
+import { FaUserPlus, FaHeart, FaRegComment, FaRetweet, FaAt } from 'react-icons/fa'; 
+import { BellIcon } from '@heroicons/react/24/outline';
+import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { useWallet } from '../contexts/WalletContext';
-import db from '../giga-aura/services/db-init';
-import toast from 'react-hot-toast';
+import { formatDistanceToNow } from 'date-fns';
+import Image from 'next/image';
 
-const NotificationsPage = () => {
-  const dispatch = useDispatch();
-  const { items, unreadCount } = useSelector((state: RootState) => state.notifications);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'unread'>('all');
+// Helper to get notification icon - Use base Notification['type']
+const getNotificationIcon = (type: Notification['type']) => {
+  switch (type) {
+    case 'follow': return <FaUserPlus className="text-blue-500" />;
+    case 'like': return <FaHeart className="text-red-500" />;
+    case 'comment': return <FaRegComment className="text-green-500" />;
+    case 'share': return <FaRetweet className="text-purple-500" />; // Assuming 'share' exists, adjust if needed
+    case 'system': return <BellIcon className="text-gray-500" />;
+    // Handle other potential base types or default
+    default: return <BellIcon className="text-gray-500" />; // Default icon for unknown types
+  }
+};
+
+// Helper to format time ago
+const formatTimeAgo = (timestamp: string | Date): string => {
+  try {
+    return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
+  } catch (error) {
+    console.error("Error formatting date:", error);
+    return "recently";
+  }
+};
+
+const NotificationsPage: NextPage = () => {
+  const dispatch = useDispatch<AppDispatch>();
+  // Use the base Notification type from the slice
+  const notifications = useSelector((state: RootState) => state.notifications.items); 
   const { connected, walletAddress } = useWallet();
+  const [isLoading, setIsLoading] = useState(true);
+  const [filter, setFilter] = useState<'all' | 'mentions'>('all');
 
-  // Load notifications on component mount
+  // Fetch notifications (replace with API call if backend exists)
   useEffect(() => {
-    const loadNotifications = async () => {
+    if (connected && walletAddress) {
       setIsLoading(true);
-
+      // Simulate fetching or load from localStorage
       try {
-        if (!connected || !walletAddress) {
-          setIsLoading(false);
-          return;
-        }
-
-        // Get notifications from database
-        const notifications = await db.getNotifications(walletAddress);
-        
-        if (notifications && notifications.length > 0) {
-          dispatch(setNotifications(notifications));
-          console.log(`Loaded ${notifications.length} notifications from database`);
+        const storedNotifications = localStorage.getItem(`giga-aura-notifications-${walletAddress}`);
+        if (storedNotifications) {
+          const parsedNotifications = JSON.parse(storedNotifications);
+          if (Array.isArray(parsedNotifications)) {
+            // Ensure dispatching data matching Notification[] type
+            dispatch(setNotifications(parsedNotifications as Notification[])); 
+          } else {
+             dispatch(setNotifications([]));
+          }
         } else {
-          // If no notifications found, generate some mock notifications for testing
-          const now = Date.now();
-          const mockNotifications: Notification[] = [
-            {
-              id: uuidv4(),
-              type: 'like',
-              message: 'CryptoWhale liked your post',
-              fromWallet: '3xGh..p7F1',
-              fromUsername: 'CryptoWhale',
-              fromAvatar: 'https://cloudinary.com/avatar1.jpg',
-              postId: 'post-123',
-              timestamp: new Date(now - 1000 * 60 * 10).toISOString(), // 10 minutes ago
-              read: false
-            },
-            {
-              id: uuidv4(),
-              type: 'comment',
-              message: 'SolanaBuilder commented on your post: "Great insights!"',
-              fromWallet: '7kJt..r2D5',
-              fromUsername: 'SolanaBuilder',
-              postId: 'post-456',
-              commentId: 'comment-123',
-              timestamp: new Date(now - 1000 * 60 * 30).toISOString(), // 30 minutes ago
-              read: false
-            },
-            {
-              id: uuidv4(),
-              type: 'follow',
-              message: 'NFTCollector started following you',
-              fromWallet: '9pWb..z8T2',
-              fromUsername: 'NFTCollector',
-              timestamp: new Date(now - 1000 * 60 * 120).toISOString(), // 2 hours ago
-              read: true
-            },
-            {
-              id: uuidv4(),
-              type: 'system',
-              message: 'You earned 50 Aura Points this week! Keep engaging to earn more.',
-              timestamp: new Date(now - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
-              read: true
-            },
-            {
-              id: uuidv4(),
-              type: 'share',
-              message: 'Web3Visionary shared your post',
-              fromWallet: '2yFR..p8L3',
-              fromUsername: 'Web3Visionary',
-              postId: 'post-789',
-              timestamp: new Date(now - 1000 * 60 * 60 * 36).toISOString(), // 1.5 days ago
-              read: true
-            }
-          ];
-
-          dispatch(setNotifications(mockNotifications));
-          console.log('Using mock notifications - no real notifications found');
+          dispatch(setNotifications([])); // Set empty if no storage/API
         }
       } catch (error) {
-        console.error('Failed to load notifications:', error);
-        toast.error('Failed to load notifications');
+        console.error("Error loading notifications:", error);
+        toast.error('Failed to load notifications.');
+        dispatch(setNotifications([]));
       } finally {
         setIsLoading(false);
       }
-    };
-
-    loadNotifications();
+    } else {
+      dispatch(setNotifications([])); // Clear if not connected
+      setIsLoading(false);
+    }
   }, [dispatch, connected, walletAddress]);
 
-  // Mark notification as read when clicked
-  const handleNotificationClick = async (notificationId: string) => {
-    dispatch(markAsRead(notificationId));
-    
-    if (connected && walletAddress) {
-      try {
-        // Update in database
-        await db.markNotificationAsRead(notificationId, walletAddress);
-      } catch (error) {
-        console.error('Failed to mark notification as read in database:', error);
-      }
+  const handleRemoveNotification = (id: string) => {
+    if (!walletAddress) return; 
+    console.warn("removeNotification action not implemented, removing locally.");
+    const updatedNotifications = notifications.filter(n => n.id !== id);
+    // Dispatch with Notification[] type
+    dispatch(setNotifications(updatedNotifications as Notification[])); 
+    toast.success('Notification dismissed.');
+    try {
+      localStorage.setItem(`giga-aura-notifications-${walletAddress}`, JSON.stringify(updatedNotifications));
+    } catch (error) {
+      console.error("Error saving notifications to storage:", error);
     }
   };
 
-  // Mark all notifications as read
-  const handleMarkAllAsRead = async () => {
-    dispatch(markAllAsRead());
-    
-    if (connected && walletAddress) {
-      try {
-        // Update in database
-        await db.markAllNotificationsAsRead(walletAddress);
-        toast.success('All notifications marked as read');
-      } catch (error) {
-        console.error('Failed to mark all notifications as read in database:', error);
-      }
-    }
-  };
+  const filteredNotifications = notifications.filter(n => {
+    if (filter === 'all') return true;
+    if (filter === 'mentions') {
+       console.warn("Filtering by mentions is not supported yet as 'mention' type might not exist.");
+       return false; // Return empty for mentions for now
+     }
+    return false;
+  });
 
-  // Filter notifications based on activeFilter
-  const filteredNotifications = activeFilter === 'unread'
-    ? items.filter(notification => !notification.read)
-    : items;
-
-  // Format relative time
-  const getRelativeTime = (timestamp: string) => {
-    const now = new Date();
-    const notificationTime = new Date(timestamp);
-    const diffInMs = now.getTime() - notificationTime.getTime();
-    const diffInMins = Math.floor(diffInMs / (1000 * 60));
-    
-    if (diffInMins < 60) {
-      return `${diffInMins}m ago`;
-    } else if (diffInMins < 24 * 60) {
-      return `${Math.floor(diffInMins / 60)}h ago`;
-    } else {
-      return `${Math.floor(diffInMins / (60 * 24))}d ago`;
-    }
-  };
-
-  // Get notification icon based on type
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'like':
-        return (
-          <div className="bg-[#F6B73C] w-10 h-10 rounded-full flex items-center justify-center text-white">
-            ❤️
-          </div>
-        );
-      case 'comment':
-        return (
-          <div className="bg-[#F0A830] w-10 h-10 rounded-full flex items-center justify-center text-white">
-            💬
-          </div>
-        );
-      case 'follow':
-        return (
-          <div className="bg-[#2C89B7] w-10 h-10 rounded-full flex items-center justify-center text-white">
-            👤
-          </div>
-        );
-      case 'share':
-        return (
-          <div className="bg-[#60C5D1] w-10 h-10 rounded-full flex items-center justify-center text-white">
-            🔄
-          </div>
-        );
-      case 'system':
-        return (
-          <div className="bg-[#F6E04C] w-10 h-10 rounded-full flex items-center justify-center text-white">
-            🔔
-          </div>
-        );
-      default:
-        return (
-          <div className="bg-gray-400 w-10 h-10 rounded-full flex items-center justify-center text-white">
-            📮
-          </div>
-        );
-    }
-  };
 
   return (
-    <>
+    <Layout> 
       <Head>
         <title>Notifications | GigaAura</title>
-        <meta name="description" content="Your notifications on GigaAura" />
+        <meta name="description" content="View your notifications on GigaAura" />
       </Head>
 
-      <div className="min-h-screen bg-light">
-        <Header />
-        
-        <main className="container mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-12 gap-6">
-          <div className="hidden md:block md:col-span-3">
-            <Sidebar className="sticky top-20" />
+      {/* Sticky Header for Notifications */}
+       <div className="sticky top-0 z-10 bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800">
+         {/* Top bar */} 
+         <div className="px-4 py-3 flex justify-between items-center">
+           <h1 className="text-xl font-bold text-black dark:text-white">Notifications</h1>
+         </div>
+         {/* Filter Tabs */} 
+         <div className="flex border-b border-gray-200 dark:border-gray-800">
+           <button
+             onClick={() => setFilter('all')}
+             className={`flex-1 py-3 text-center font-medium transition-colors ${filter === 'all' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-900'}`}
+           >
+             All
+           </button>
+           <button
+             onClick={() => setFilter('mentions')}
+             className={`flex-1 py-3 text-center font-medium transition-colors ${filter === 'mentions' ? 'text-primary border-b-2 border-primary' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-900'}`}
+           >
+             Mentions
+           </button>
+         </div>
+       </div>
+
+      {/* Notifications List */} 
+      <div className="divide-y divide-gray-200 dark:divide-gray-800">
+        {isLoading ? (
+          <div className="p-6 text-center text-gray-500">Loading notifications...</div>
+        ) : filteredNotifications.length === 0 ? (
+          <div className="p-6 text-center text-gray-500">
+            {/* Adjust empty state message based on filter */}
+             {filter === 'mentions' 
+               ? 'You have no mentions yet.'
+               : 'You have no notifications yet.'}
           </div>
-          
-          <div className="col-span-1 md:col-span-6">
-            <div className="bg-white rounded-lg shadow-md">
-              <div className="p-4 border-b flex justify-between items-center">
-                <div className="flex items-center space-x-4">
-                  <h1 className="text-xl font-bold">Notifications</h1>
-                  <div className="bg-[#F6B73C] text-white text-xs px-2 py-1 rounded-full">
-                    {unreadCount > 0 ? unreadCount : 'All read'}
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <div className="border rounded-md overflow-hidden">
-                    <button
-                      className={`px-3 py-1 text-sm ${activeFilter === 'all' ? 'bg-[#2C89B7] text-white' : 'bg-white text-gray-700'}`}
-                      onClick={() => setActiveFilter('all')}
-                    >
-                      All
-                    </button>
-                    <button
-                      className={`px-3 py-1 text-sm ${activeFilter === 'unread' ? 'bg-[#2C89B7] text-white' : 'bg-white text-gray-700'}`}
-                      onClick={() => setActiveFilter('unread')}
-                    >
-                      Unread
-                    </button>
-                  </div>
-                  
-                  {unreadCount > 0 && (
-                    <button
-                      onClick={handleMarkAllAsRead}
-                      className="text-[#2C89B7] text-sm hover:underline"
-                    >
-                      Mark all as read
-                    </button>
-                  )}
-                </div>
+        ) : (
+          filteredNotifications.map((notification) => (
+            <div key={notification.id} className="flex items-start space-x-3 p-4 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
+              <div className="flex-shrink-0 w-6 pt-1 text-center">
+                 {/* Use base type for icon */} 
+                 {getNotificationIcon(notification.type)}
               </div>
-              
-              {isLoading ? (
-                <div className="p-4 space-y-4">
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className="flex items-center space-x-3 animate-pulse">
-                      <div className="rounded-full bg-gray-200 h-10 w-10"></div>
-                      <div className="flex-1">
-                        <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                        <div className="h-3 bg-gray-200 rounded w-1/4"></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : filteredNotifications.length === 0 ? (
-                <div className="p-8 text-center">
-                  <p className="text-gray-500">No notifications to display.</p>
-                  {activeFilter === 'unread' && (
-                    <p className="mt-2 text-sm">
-                      <button
-                        onClick={() => setActiveFilter('all')}
-                        className="text-[#2C89B7] hover:underline"
-                      >
-                        View all notifications
-                      </button>
-                    </p>
+              <div className="flex-1">
+                 {/* Use optional chaining for potentially missing properties */}
+                 {(notification as any).user?.walletAddress && (
+                   <Image 
+                     src={(notification as any).fromAvatar || '/default-avatar.png'} 
+                     alt="" 
+                     width={24} 
+                     height={24} 
+                     className="w-6 h-6 rounded-full mr-2 inline-block align-middle object-cover"/>
+                 )}
+                <p className="text-sm text-black dark:text-white leading-snug inline align-middle">
+                   {(notification as any).user?.walletAddress && (
+                     <Link href={`/profile/${(notification as any).user.walletAddress}`} passHref>
+                       <span className="font-bold hover:underline cursor-pointer">{(notification as any).user.username || 'Someone'}</span>
+                     </Link>
+                   )}
+                  {' '}{notification.message}
+                  {(notification as any).postId && (
+                    <Link href={`/post/${(notification as any).postId}`} passHref>
+                       <span className="text-primary hover:underline cursor-pointer"> your post</span>
+                    </Link>
                   )}
-                </div>
-              ) : (
-                <div className="divide-y">
-                  {filteredNotifications.map(notification => (
-                    <div
-                      key={notification.id}
-                      className={`p-4 hover:bg-gray-50 ${!notification.read ? 'bg-[#F6B73C]/5' : ''}`}
-                      onClick={() => handleNotificationClick(notification.id)}
-                    >
-                      <div className="flex items-start space-x-3">
-                        {getNotificationIcon(notification.type)}
-                        
-                        <div className="flex-1">
-                          <p className={`${!notification.read ? 'font-medium' : ''}`}>
-                            {notification.message}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {getRelativeTime(notification.timestamp)}
-                          </p>
-                        </div>
-                        
-                        {!notification.read && (
-                          <div className="w-2 h-2 rounded-full bg-[#F6B73C]"></div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                </p>
+                <span className="text-xs text-gray-500 dark:text-gray-400 mt-1 block">
+                  {formatTimeAgo(notification.timestamp)}
+                </span>
+              </div>
+              {/* Dismiss button */} 
+              <button 
+                onClick={() => handleRemoveNotification(notification.id)} 
+                className="text-gray-400 hover:text-red-500 text-xs p-1 -mr-1"
+                aria-label="Dismiss notification"
+              >
+                 &times;
+              </button>
             </div>
-          </div>
-          
-          <div className="hidden md:block md:col-span-3">
-            <AuraSidebar />
-          </div>
-        </main>
+          ))
+        )}
       </div>
-    </>
+    </Layout>
   );
 };
 

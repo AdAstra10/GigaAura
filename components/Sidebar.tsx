@@ -3,142 +3,136 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useSelector } from 'react-redux';
 import { RootState } from '../lib/store';
-import { FaHome, FaHashtag, FaBell, FaEnvelope, FaBookmark, 
-         FaUser, FaCog, FaEllipsisH, FaFeather, FaGem } from 'react-icons/fa';
+import { FaHome, FaHashtag, FaBell, FaEnvelope, FaBookmark,
+         FaUser, FaCog, FaFeatherAlt, FaUserCircle } from 'react-icons/fa';
+import { CogIcon, BellIcon, BookmarkIcon, HomeIcon, EnvelopeIcon, UserIcon, HashtagIcon } from '@heroicons/react/24/outline';
+import { CogIcon as CogIconSolid, BellIcon as BellIconSolid, BookmarkIcon as BookmarkIconSolid, HomeIcon as HomeIconSolid, EnvelopeIcon as EnvelopeIconSolid, UserIcon as UserIconSolid, HashtagIcon as HashtagIconSolid } from '@heroicons/react/24/solid';
 import { useWallet } from '../lib/contexts/WalletContext';
 import Image from 'next/image';
 
 interface SidebarProps {
   className?: string;
+  onOpenPostModal: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
+const navigationItems = [
+  { name: 'Home', href: '/home', IconOutline: HomeIcon, IconSolid: HomeIconSolid },
+  { name: 'Explore', href: '/explore', IconOutline: HashtagIcon, IconSolid: HashtagIconSolid },
+  { name: 'Notifications', href: '/notifications', IconOutline: BellIcon, IconSolid: BellIconSolid, badge: 0 },
+  { name: 'Messages', href: '/messages', IconOutline: EnvelopeIcon, IconSolid: EnvelopeIconSolid, badge: 0 },
+  { name: 'Bookmarks', href: '/bookmarks', IconOutline: BookmarkIcon, IconSolid: BookmarkIconSolid },
+  { name: 'Profile', href: '/profile', IconOutline: UserIcon, IconSolid: UserIconSolid },
+  { name: 'Settings', href: '/settings', IconOutline: CogIcon, IconSolid: CogIconSolid },
+];
+
+const Sidebar: React.FC<SidebarProps> = ({ className = '', onOpenPostModal }) => {
   const router = useRouter();
   const user = useSelector((state: RootState) => state.user);
-  const auraPoints = useSelector((state: RootState) => state.auraPoints.totalPoints || 0);
-  const { connectWallet, connected, walletAddress } = useWallet();
-  const [activeHoverItem, setActiveHoverItem] = useState<string | null>(null);
-  
-  // Truncate wallet address for display
-  const truncateWallet = (address: string) => {
+  const { connected, walletAddress } = useWallet();
+
+  const isActive = (href: string) => router.pathname === href || (href === '/profile' && router.pathname.startsWith('/profile'));
+
+  const truncateWallet = (address: string | null | undefined) => {
     if (!address) return '';
-    return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
-  };
-
-  const navigation = [
-    { name: 'Home', href: '/home', icon: FaHome },
-    { name: 'Explore', href: '/explore', icon: FaHashtag },
-    { name: 'Notifications', href: '/notifications', icon: FaBell, badge: 3 },
-    { name: 'Messages', href: '/messages', icon: FaEnvelope, badge: 2 },
-    { name: 'Bookmarks', href: '/bookmarks', icon: FaBookmark },
-    { name: 'Profile', href: '/profile', icon: FaUser },
-    { name: 'Settings', href: '/settings', icon: FaCog },
-    { name: 'More', href: '#', icon: FaEllipsisH },
-  ];
-
-  const handleConnectWallet = async () => {
-    try {
-      await connectWallet();
-    } catch (error) {
-      console.error('Error connecting wallet:', error);
-    }
+    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
   };
 
   return (
-    <aside className={`flex flex-col h-screen sticky top-0 ${className}`}>
-      {/* Logo */}
-      <div className="flex-shrink-0 p-3">
-        <Link href="/home">
-          <div className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 cursor-pointer transition-colors">
-            <div className="w-7 h-7 bg-primary rounded-full flex items-center justify-center text-white font-bold">
-              GA
-            </div>
-          </div>
-        </Link>
-      </div>
-
-      {/* Navigation Links */}
-      <nav className="mb-4 flex-1">
-        {navigation.map((item) => {
-          const isActive = router.pathname === item.href;
-          
-          return (
-            <Link key={item.name} href={item.href}>
-              <div 
-                className="flex items-center p-3 mb-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors cursor-pointer"
-                onMouseEnter={() => setActiveHoverItem(item.name)}
-                onMouseLeave={() => setActiveHoverItem(null)}
-              >
-                <div className="relative">
-                  <item.icon 
-                    className={`h-6 w-6 ${
-                      isActive 
-                        ? 'text-black dark:text-white' 
-                        : 'text-black dark:text-white'
-                    }`} 
-                  />
-                  {item.badge && (
-                    <span className="absolute -top-1.5 -right-1.5 bg-primary text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">{item.badge}</span>
-                  )}
+    <>
+      <aside className={`hidden md:flex flex-col fixed top-0 left-0 h-screen w-[88px] xl:w-[275px] px-2 xl:px-4 py-2 border-r border-gray-200 dark:border-gray-800 ${className}`}>
+        <nav className="flex-1 space-y-1">
+          {navigationItems.map((item) => {
+            const active = isActive(item.href);
+            const Icon = active ? item.IconSolid : item.IconOutline;
+            return (
+              <Link key={item.name} href={item.href} passHref>
+                <div className="flex items-center justify-center xl:justify-start p-3 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer group transition-colors duration-200">
+                  <div className="relative">
+                    <Icon className="h-7 w-7 text-black dark:text-white" />
+                    {item.badge && item.badge > 0 ? (
+                      <span className="absolute -top-1 -right-1 bg-primary text-white rounded-full w-4 h-4 flex items-center justify-center text-xs font-bold">
+                        {item.badge}
+                      </span>
+                    ) : null}
+                  </div>
+                  <span className={`ml-5 text-xl hidden xl:inline ${active ? 'font-bold' : ''} text-black dark:text-white`}>
+                    {item.name}
+                  </span>
                 </div>
-                <span className={`text-lg ml-4 hidden xl:inline text-black dark:text-white ${isActive ? 'font-bold' : ''}`}>
-                  {item.name}
-                </span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="my-4">
+          <button
+            onClick={onOpenPostModal}
+            className="w-full xl:w-auto bg-primary text-white font-bold rounded-full p-3 xl:px-8 xl:py-3 flex items-center justify-center hover:bg-primary-hover transition-colors duration-200"
+          >
+            <FaFeatherAlt className="h-5 w-5 xl:hidden" />
+            <span className="hidden xl:inline text-lg">Post</span>
+          </button>
+        </div>
+
+        {connected && (
+          <div className="mt-auto mb-2">
+            <Link href={`/profile/${walletAddress}`} passHref>
+              <div className="flex items-center justify-center xl:justify-between p-3 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer transition-colors duration-200">
+                <div className="flex items-center">
+                  <div className="w-10 h-10 rounded-full flex-shrink-0 bg-gray-300 dark:bg-gray-700 overflow-hidden">
+                    {user.avatar ? (
+                      <Image
+                        src={user.avatar}
+                        alt={user.username || 'User Avatar'}
+                        width={40}
+                        height={40}
+                        className="object-cover"
+                      />
+                    ) : (
+                      <FaUserCircle className="w-10 h-10 text-gray-500" />
+                    )}
+                  </div>
+                  <div className="ml-3 hidden xl:block flex-1 overflow-hidden whitespace-nowrap">
+                    <div className="font-bold text-sm text-black dark:text-white truncate">
+                      {user.username || 'Unnamed User'}
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                      @{user.username || truncateWallet(walletAddress)}
+                    </div>
+                  </div>
+                </div>
               </div>
             </Link>
-          );
-        })}
-      </nav>
-
-      {/* Post Button */}
-      <div className="px-3 mb-4">
-        <Link href="/compose">
-          <button className="tweet-button flex items-center justify-center">
-            <span className="md:hidden">
-              <FaFeather className="h-5 w-5" />
-            </span>
-            <span className="hidden md:block">Post</span>
-          </button>
-        </Link>
-      </div>
-
-      {/* User Profile Section - Always show profile if connected */}
-      {connected && (
-        <div className="mt-auto mb-4 px-3">
-          <div className="flex items-center p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 cursor-pointer transition-colors justify-between">
-            <div className="flex items-center">
-              <div className="w-10 h-10 rounded-full flex-shrink-0 bg-primary text-white flex items-center justify-center overflow-hidden">
-                {user.avatar ? (
-                  <img 
-                    src={user.avatar} 
-                    alt={user.username || 'User'} 
-                    className="w-10 h-10 object-cover"
-                  />
-                ) : (
-                  <span className="text-lg font-semibold">
-                    {user.username ? user.username.charAt(0).toUpperCase() : walletAddress?.substring(0, 2)}
-                  </span>
-                )}
-              </div>
-              <div className="ml-3 flex-1 hidden md:block">
-                <div className="font-bold text-black dark:text-white">
-                  {user.username || 'Anonymous User'}
-                </div>
-                <div className="text-sm text-black dark:text-gray-400">
-                  @{user.username || truncateWallet(walletAddress || '')}
-                </div>
-                <div className="text-sm flex items-center text-black dark:text-gray-400">
-                  <FaGem className="mr-1 text-primary" /> <span className="font-bold text-primary">{auraPoints}</span> Aura Points
-                </div>
-              </div>
-            </div>
-            <div className="text-black dark:text-gray-400 hidden md:block">
-              <FaEllipsisH />
-            </div>
           </div>
+        )}
+      </aside>
+
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-black border-t border-gray-200 dark:border-gray-800 z-40">
+        <div className="flex justify-around items-center h-14">
+          {navigationItems.slice(0, 4).map((item) => {
+            const active = isActive(item.href);
+            const Icon = active ? item.IconSolid : item.IconOutline;
+            return (
+              <Link key={`mobile-${item.name}`} href={item.href} passHref>
+                <div className="flex flex-col items-center justify-center p-2 group relative">
+                  <Icon className={`h-6 w-6 ${active ? 'text-primary' : 'text-gray-600 dark:text-gray-400'}`} />
+                  {item.badge && item.badge > 0 ? (
+                     <span className="absolute top-1 right-1 bg-primary text-white rounded-full w-2 h-2"></span>
+                  ) : null}
+                </div>
+              </Link>
+            );
+          })}
+          <button
+            onClick={onOpenPostModal}
+            className="absolute bottom-16 right-4 bg-primary text-white rounded-full p-4 shadow-lg hover:bg-primary-hover transition-colors duration-200"
+            aria-label="Create Post"
+           >
+             <FaFeatherAlt className="h-6 w-6" />
+           </button>
         </div>
-      )}
-    </aside>
+      </nav>
+    </>
   );
 };
 

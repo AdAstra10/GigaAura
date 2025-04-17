@@ -259,7 +259,7 @@ const Search: React.FC = () => {
   
   return (
     <ErrorBoundary FallbackComponent={SearchFallback}>
-      <div className="min-h-screen bg-light dark:bg-dark">
+      <div className="app-container">
         <Head>
           <title>Search | GigaAura</title>
           <meta name="description" content="Search GigaAura for posts, people, and topics" />
@@ -268,11 +268,7 @@ const Search: React.FC = () => {
         <Header />
 
         <main className="tab-container">
-          <div className="container mx-auto grid grid-cols-1 md:grid-cols-12 md:divide-x md:divide-[var(--border-color)]">
-            <div className="hidden md:block md:col-span-3">
-              <Sidebar className="sticky top-20 px-4" />
-            </div>
-            
+          <div className="container mx-auto grid grid-cols-1 md:grid-cols-9 md:divide-x md:divide-[var(--border-color)]">
             <div className="col-span-1 md:col-span-6 fixed-width-container">
               <div className="feed-container fixed-width-container">
                 {/* Header with search input */}
@@ -334,7 +330,7 @@ const Search: React.FC = () => {
                 )}
               </div>
             </div>
-            
+
             <div className="hidden md:block md:col-span-3">
               <AuraSidebar />
             </div>

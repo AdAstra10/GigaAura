@@ -5,8 +5,6 @@ import { useWallet } from '../../contexts/WalletContext';
 import { useDarkMode } from '../../contexts/DarkModeContext';
 import Head from 'next/head';
 import Header from '../../components/Header';
-import Sidebar from '../../components/Sidebar';
-import AuraSidebar from '../../components/AuraSidebar';
 import PostCard from '../../components/PostCard';
 import { Post } from '../../lib/slices/postsSlice';
 import { useRouter } from 'next/router';
@@ -19,6 +17,7 @@ import { addNotification } from '../../lib/slices/notificationsSlice';
 import { addTransaction } from '../../lib/slices/auraPointsSlice';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
+import Layout from '../../components/Layout';
 
 const UserProfilePage = () => {
   const dispatch = useDispatch();
@@ -173,9 +172,23 @@ const UserProfilePage = () => {
       router.push('/profile');
     }
   }, [walletAddress, address, router]);
-  
+
+  // State for Post Modal
+  const [isPostModalOpen, setIsPostModalOpen] = useState(false);
+
+  const handleOpenPostModal = () => {
+    setIsPostModalOpen(true);
+  };
+
+  const handleClosePostModal = () => {
+    setIsPostModalOpen(false);
+  };
+
+  // Check if profile data is still loading
+  const isLoading = !userData.username && userPosts.length === 0;
+
   return (
-    <>
+    <Layout>
       <Head>
         <title>{userData.username || 'User'} | GigaAura</title>
         <meta name="description" content={`${userData.username || 'User'}'s profile on GigaAura`} />
@@ -185,10 +198,6 @@ const UserProfilePage = () => {
         <Header />
         
         <main className="container mx-auto grid grid-cols-1 md:grid-cols-12 md:divide-x md:divide-[var(--border-color)]">
-          <div className="hidden md:block md:col-span-3">
-            <Sidebar className="sticky top-20 px-4" />
-          </div>
-          
           <div className="col-span-1 md:col-span-6 fixed-width-container">
             <div className="feed-container fixed-width-container">
               {/* Header with back button and name */}
@@ -199,8 +208,8 @@ const UserProfilePage = () => {
                   </div>
                 </Link>
                 <div>
-                  <h1 className="text-xl font-bold text-black dark:text-white">{userData.username || 'Profile'}</h1>
-                  <span className="text-gray-500 text-sm">{userPosts.length} posts</span>
+                  <h1 className="text-xl font-bold text-black dark:text-white">{isLoading ? 'Loading...' : (userData.username || 'Profile')}</h1>
+                  {!isLoading && <span className="text-gray-500 text-sm">{userPosts.length} posts</span>}
                 </div>
               </div>
               
@@ -239,21 +248,21 @@ const UserProfilePage = () => {
               {/* Profile Info */}
               <div className="px-4 pt-20 pb-4 border-b border-[var(--border-color)]">
                 <h1 className="text-xl font-bold text-black dark:text-white flex items-center">
-                  {userData.username || 'Anonymous User'}
-                  {userData.verified && (
+                  {isLoading ? 'Loading...' : (userData.username || 'Anonymous User')}
+                  {userData.verified && !isLoading && (
                     <CheckBadgeIcon className="h-5 w-5 text-primary ml-1" />
                   )}
                 </h1>
                 <p className="text-gray-500">@{truncateWallet(typeof address === 'string' ? address : undefined)}</p>
                 
                 <p className="text-black dark:text-white mt-3">
-                  {userData.bio || 'No bio yet'}
+                  {isLoading ? 'Loading bio...' : (userData.bio || 'No bio yet')}
                 </p>
                 
                 <div className="flex items-center text-gray-500 mt-3 space-x-4">
                   <div className="flex items-center">
                     <FaCalendarAlt className="mr-2" />
-                    <span>Joined {format(userData.joinDate, 'MMMM yyyy')}</span>
+                    <span>Joined {format(new Date(userData.joinDate), 'MMMM yyyy')}</span>
                   </div>
                 </div>
                 
@@ -365,14 +374,10 @@ const UserProfilePage = () => {
               </div>
             </div>
           </div>
-          
-          <div className="hidden md:block md:col-span-3">
-            <AuraSidebar />
-          </div>
         </main>
       </div>
-    </>
+    </Layout>
   );
 };
 
-export default UserProfilePage; 
+export default UserProfilePage;

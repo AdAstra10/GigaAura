@@ -1,12 +1,10 @@
 import { useState, useEffect, ChangeEvent, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { RootState } from '../lib/store';
-import { updateProfile } from '../lib/slices/userSlice';
+import { RootState, AppDispatch } from '../lib/store';
+import { updateProfile, User } from '../lib/slices/userSlice';
 import { useWallet } from '../contexts/WalletContext';
-import { useDarkMode } from '../contexts/DarkModeContext';
 import Head from 'next/head';
-import Header from '../components/Header';
-import Sidebar from '../components/Sidebar';
+import Layout from '../components/Layout';
 import AuraSidebar from '../components/AuraSidebar';
 import { Post } from '../lib/slices/postsSlice';
 import PostCard from '../components/PostCard';
@@ -15,70 +13,136 @@ import { useRouter } from 'next/router';
 import toast from 'react-hot-toast';
 import { FaCalendarAlt, FaCamera, FaTimes, FaArrowLeft } from 'react-icons/fa';
 import { format } from 'date-fns';
-import { CheckBadgeIcon, XMarkIcon, CameraIcon } from '@heroicons/react/24/solid';
+import { CheckBadgeIcon, XMarkIcon, CameraIcon, ArrowLeftIcon } from '@heroicons/react/24/solid';
 import Image from 'next/image';
 
+// Extend the User type locally if needed for joinDate (or add to slice)
+interface ProfileData extends Partial<User> {
+  joinDate?: string | Date; // Add optional joinDate
+}
+
+// Loading Spinner component
+const LoadingSpinner = () => (
+  <div className="flex justify-center items-center py-10">
+    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+  </div>
+);
+
 const ProfilePage = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
-  const { walletAddress, connectWallet, connecting } = useWallet();
-  const { isDarkMode } = useDarkMode();
-  const user = useSelector((state: RootState) => state.user);
-  const { userPosts, feed } = useSelector((state: RootState) => state.posts);
+  const { targetWalletAddress } = router.query; 
+  const { walletAddress: connectedWalletAddress, connectWallet, connecting } = useWallet();
+  const userState = useSelector((state: RootState) => state.user);
+  const { feed } = useSelector((state: RootState) => state.posts);
   const { totalPoints } = useSelector((state: RootState) => state.auraPoints);
   
+  // Determine which wallet address to display/use
+  const displayWalletAddress = typeof targetWalletAddress === 'string' ? targetWalletAddress : connectedWalletAddress;
+  const isOwnProfile = displayWalletAddress === connectedWalletAddress;
+
+  // State specific to the displayed profile, use extended type
+  const [profileData, setProfileData] = useState<ProfileData>({});
+  const [profilePosts, setProfilePosts] = useState<Post[]>([]);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+
   const [isEditing, setIsEditing] = useState(false);
-  const [username, setUsername] = useState(user.username || '');
-  const [bio, setBio] = useState(user.bio || '');
-  const [avatarUrl, setAvatarUrl] = useState(user.avatar || '');
-  const [bannerUrl, setBannerUrl] = useState(user.bannerImage || '');
+  // Edit form state - initialize with profileData or defaults
+  const [username, setUsername] = useState('');
+  const [bio, setBio] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [bannerUrl, setBannerUrl] = useState('');
+  
   const [isSaving, setIsSaving] = useState(false);
-  const [editJoinDate] = useState(new Date(2025, 2, 1)); // March 2025
   const [activeTab, setActiveTab] = useState('posts');
   
-  // Profile picture upload
+  // Image editing state
   const [showPfpModal, setShowPfpModal] = useState(false);
   const [tempImageUrl, setTempImageUrl] = useState<string | null>(null);
   const [imageZoom, setImageZoom] = useState(1);
   const [editingBanner, setEditingBanner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
-  
-  // User posts - filter from the main feed
-  const [myPosts, setMyPosts] = useState<Post[]>([]);
-  
-  // Update form when user data changes
+
+  // --- Data Fetching and Initialization --- 
+
   useEffect(() => {
-    if (user.username) setUsername(user.username);
-    if (user.bio) setBio(user.bio);
-    if (user.avatar) setAvatarUrl(user.avatar);
-    if (user.bannerImage) setBannerUrl(user.bannerImage);
-  }, [user.username, user.bio, user.avatar, user.bannerImage]);
-  
-  // Get user posts from the feed
-  useEffect(() => {
-    if (walletAddress && feed.length > 0) {
-      const filtered = feed.filter(post => post.authorWallet === walletAddress);
-      setMyPosts(filtered);
-    }
-  }, [walletAddress, feed]);
+    const fetchProfileData = async () => {
+      if (!displayWalletAddress) {
+         setIsLoadingProfile(false);
+         // Optionally redirect or show message if no address is available
+         // if (!connectedWalletAddress) router.push('/home'); // Example redirect
+         return;
+      }
+      
+      setIsLoadingProfile(true);
+      console.log(`Fetching profile for: ${displayWalletAddress}`);
+      try {
+        // TODO: Replace with actual API call to fetch profile data by wallet address
+        // const fetchedData = await fetch(`/api/profile/${displayWalletAddress}`).then(res => res.json());
+        
+        // --- Mock/LocalStorage Fetching --- 
+        let fetchedData: ProfileData = {}; // Use ProfileData type
+        if (isOwnProfile) {
+          // For own profile, use Redux state and add a default joinDate if not present
+          fetchedData = { ...userState, joinDate: new Date() }; // Default joinDate to now
+        } else {
+          // Try loading from localStorage for other profiles (basic persistence)
+          const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
+          const bios = JSON.parse(localStorage.getItem('userBios') || '{}');
+          const avatars = JSON.parse(localStorage.getItem('profilePictures') || '{}');
+          const banners = JSON.parse(localStorage.getItem('bannerImages') || '{}');
+          // Fetch joinDate if stored, otherwise use placeholder
+          const joinDates = JSON.parse(localStorage.getItem('joinDates') || '{}'); 
+          fetchedData = {
+            username: usernames[displayWalletAddress],
+            bio: bios[displayWalletAddress],
+            avatar: avatars[displayWalletAddress],
+            bannerImage: banners[displayWalletAddress],
+            joinDate: joinDates[displayWalletAddress] || new Date(), // Use stored or default
+            // Add other fields like followers/following counts if fetched
+          };
+        }
+        // --- End Mock/LocalStorage --- 
+
+        setProfileData(fetchedData);
+        // Initialize edit form state only after data is fetched
+        setUsername(fetchedData.username || '');
+        setBio(fetchedData.bio || '');
+        setAvatarUrl(fetchedData.avatar || '');
+        setBannerUrl(fetchedData.bannerImage || '');
+
+        // Fetch posts for this profile
+        const userSpecificPosts = feed.filter(post => post.authorWallet === displayWalletAddress);
+        setProfilePosts(userSpecificPosts);
+        console.log(`Found ${userSpecificPosts.length} posts for ${displayWalletAddress}`);
+
+      } catch (error) {
+        console.error('Error fetching profile data:', error);
+        toast.error('Could not load profile.');
+        setProfileData({}); // Clear data on error
+        setProfilePosts([]);
+      } finally {
+        setIsLoadingProfile(false);
+      }
+    };
+
+    fetchProfileData();
+  }, [displayWalletAddress, isOwnProfile, userState, feed]); // Rerun if address changes or own profile state updates
+
+  // --- Edit Handlers --- 
 
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>, isBanner = false) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
-      
-      // Check file size (limit to 5MB)
       if (file.size > 5 * 1024 * 1024) {
         toast.error('Image size should be less than 5MB');
         return;
       }
-      
-      // Check file type
-      if (!file.type.includes('image/')) {
+      if (!file.type.startsWith('image/')) { // Corrected check
         toast.error('Please upload an image file');
         return;
       }
-      
       const reader = new FileReader();
       reader.onload = () => {
         setTempImageUrl(reader.result as string);
@@ -86,7 +150,6 @@ const ProfilePage = () => {
         setEditingBanner(isBanner);
         setImageZoom(1);
       };
-      
       reader.readAsDataURL(file);
     }
   };
@@ -105,62 +168,42 @@ const ProfilePage = () => {
   };
   
   const handleSaveProfile = async () => {
+    if (!isOwnProfile) return; // Should not happen, but safeguard
+
     setIsSaving(true);
-    
+    const profileUpdateData = {
+      username,
+      bio,
+      avatar: avatarUrl,
+      bannerImage: bannerUrl
+      // Include joinDate if it's part of the update payload
+    };
+
     try {
-      // In a real app, you'd have an API call here
+      // TODO: Replace with actual API call to update profile
+      // await fetch(`/api/profile/update`, { method: 'POST', body: JSON.stringify(profileUpdateData) });
       await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API call
       
-      dispatch(updateProfile({
-        username,
-        bio,
-        avatar: avatarUrl,
-        bannerImage: bannerUrl
-      }));
+      // Dispatch update to Redux store
+      dispatch(updateProfile(profileUpdateData));
       
-      // Save profile data to localStorage for persistence with wallet address
-      if (walletAddress) {
-        // Create centralized function to save all profile data
-        const saveProfileData = () => {
-          // Save profile picture
-          if (avatarUrl) {
-            const profilePictures = JSON.parse(localStorage.getItem('profilePictures') || '{}');
-            profilePictures[walletAddress] = avatarUrl;
-            localStorage.setItem('profilePictures', JSON.stringify(profilePictures));
-          }
+      // Save profile data to localStorage for persistence
+      if (connectedWalletAddress) {
+          const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
+          const bios = JSON.parse(localStorage.getItem('userBios') || '{}');
+          const avatars = JSON.parse(localStorage.getItem('profilePictures') || '{}');
+          const banners = JSON.parse(localStorage.getItem('bannerImages') || '{}');
+          // Assume joinDate is set once and not updated, or handle update if needed
           
-          // Save banner image
-          if (bannerUrl) {
-            const bannerImages = JSON.parse(localStorage.getItem('bannerImages') || '{}');
-            bannerImages[walletAddress] = bannerUrl;
-            localStorage.setItem('bannerImages', JSON.stringify(bannerImages));
-          }
-          
-          // Save username
-          if (username) {
-            const usernames = JSON.parse(localStorage.getItem('usernames') || '{}');
-            usernames[walletAddress] = username;
-            localStorage.setItem('usernames', JSON.stringify(usernames));
-          }
-          
-          // Save bio
-          if (bio) {
-            const bios = JSON.parse(localStorage.getItem('userBios') || '{}');
-            bios[walletAddress] = bio;
-            localStorage.setItem('userBios', JSON.stringify(bios));
-          }
-        };
-        
-        // Execute the save function
-        saveProfileData();
-        
-        // Force a reload of profile data to ensure it's updated across the app
-        dispatch(updateProfile({
-          username,
-          bio,
-          avatar: avatarUrl,
-          bannerImage: bannerUrl
-        }));
+          usernames[connectedWalletAddress] = username;
+          bios[connectedWalletAddress] = bio;
+          avatars[connectedWalletAddress] = avatarUrl;
+          banners[connectedWalletAddress] = bannerUrl;
+
+          localStorage.setItem('usernames', JSON.stringify(usernames));
+          localStorage.setItem('userBios', JSON.stringify(bios));
+          localStorage.setItem('profilePictures', JSON.stringify(avatars));
+          localStorage.setItem('bannerImages', JSON.stringify(banners));
       }
       
       toast.success('Profile updated successfully');
@@ -172,8 +215,10 @@ const ProfilePage = () => {
       setIsSaving(false);
     }
   };
+
+  // --- Helper Functions --- 
   
-  const truncateWallet = (address: string | null) => {
+  const truncateWallet = (address: string | null | undefined) => {
     if (!address) return '';
     return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
   };
@@ -181,425 +226,260 @@ const ProfilePage = () => {
   const handleConnectWallet = async () => {
     try {
       await connectWallet();
+      // No need to redirect here, the main effect will pick up the change
     } catch (error) {
       console.error('Error connecting wallet:', error);
+      toast.error('Failed to connect wallet.');
     }
   };
 
-  const navigateToUserProfile = (authorWallet: string) => {
-    router.push(`/profile/${authorWallet}`);
-  };
-  
-  if (!walletAddress) {
+  // --- Render Logic --- 
+
+  // Show connect prompt if trying to view any profile without being connected
+  if (!connectedWalletAddress && !isLoadingProfile) { 
     return (
-      <>
+      <Layout>
         <Head>
-          <title>Profile | GigaAura</title>
-          <meta name="description" content="Your GigaAura profile" />
+          <title>Connect Wallet | GigaAura</title>
         </Head>
-        
-        <div className="min-h-screen bg-light dark:bg-dark">
-          <Header />
-          
-          <main className="container mx-auto px-4 py-6">
-            <div className="max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
-              <h2 className="text-2xl font-bold mb-4 dark:text-white">Connect Your Wallet</h2>
-              <p className="text-gray-600 dark:text-gray-300 mb-6">
-                Please connect your wallet to view your profile and start earning Aura Points.
-              </p>
-              
-              <button
-                onClick={handleConnectWallet}
-                disabled={connecting}
-                className="px-6 py-3 bg-primary text-white font-medium rounded-full shadow-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors w-full"
-              >
-                {connecting ? 'Connecting...' : 'Connect Wallet'}
-              </button>
-              
-              <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
-                Don't have a Phantom wallet? <a href="https://phantom.app/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Get one here</a>
-              </p>
-            </div>
-          </main>
+        <div className="flex flex-col items-center justify-center p-8 text-center h-[calc(100vh-100px)]">
+          <h2 className="text-2xl font-bold mb-4 text-black dark:text-white">Connect Your Wallet</h2>
+          <p className="text-gray-600 dark:text-gray-300 mb-6">
+            Please connect your wallet to view profiles and interact with GigaAura.
+          </p>
+          <button
+            onClick={handleConnectWallet}
+            disabled={connecting}
+            className="px-6 py-3 bg-primary text-white font-medium rounded-full shadow-md hover:bg-primary/90 transition-colors"
+          >
+            {connecting ? 'Connecting...' : 'Connect Wallet'}
+          </button>
         </div>
-      </>
+      </Layout>
     );
   }
   
+  // Main profile content
   return (
-    <>
+    <Layout rightSidebarContent={<AuraSidebar />}> 
       <Head>
-        <title>{username || 'My Profile'} | GigaAura</title>
-        <meta name="description" content="Your GigaAura profile" />
+        {/* Use fetched profile username or default */}
+        <title>{profileData.username || truncateWallet(displayWalletAddress) || 'Profile'} | GigaAura</title>
+        <meta name="description" content={`Profile of ${profileData.username || displayWalletAddress} on GigaAura`} />
       </Head>
       
-      <div className="min-h-screen bg-light dark:bg-dark">
-        <Header />
-        
-        <main className="container mx-auto grid grid-cols-1 md:grid-cols-12 md:divide-x md:divide-[var(--border-color)]">
-          <div className="hidden md:block md:col-span-3">
-            <Sidebar className="sticky top-20 px-4" />
+      {/* Profile Header (Sticky) */} 
+      <div className="sticky top-0 z-10 bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-4 py-2 flex items-center space-x-4">
+        <button onClick={() => router.back()} className="text-black dark:text-white p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800">
+          <ArrowLeftIcon className="h-5 w-5" />
+        </button>
+        <div>
+          <h1 className="text-lg font-bold text-black dark:text-white leading-tight">{profileData.username || 'Profile'}</h1>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{profilePosts.length} Posts</p> {/* Post count */} 
+        </div>
+      </div>
+
+      {isLoadingProfile ? (
+        <LoadingSpinner />
+      ) : (
+        <> 
+          {/* Banner Image */}
+          <div className="relative h-48 bg-gray-300 dark:bg-gray-700">
+            {isEditing && isOwnProfile && (
+              <button 
+                onClick={() => bannerInputRef.current?.click()}
+                className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white text-xs opacity-0 hover:opacity-100 transition-opacity"
+              >
+                <CameraIcon className="h-5 w-5 mr-1" /> Change Banner
+              </button>
+            )}
+            {bannerUrl ? (
+              <Image src={bannerUrl} alt="Banner" layout="fill" objectFit="cover" />
+            ) : (
+              <div className="h-full bg-gradient-to-r from-blue-400 to-purple-500"></div> // Default gradient
+            )}
+            <input type="file" ref={bannerInputRef} onChange={(e) => handleImageUpload(e, true)} accept="image/*" className="hidden" />
           </div>
-          
-          <div className="col-span-1 md:col-span-6 fixed-width-container">
-            <div className="feed-container fixed-width-container">
-              {/* Profile header with back button and name */}
-              <div className="sticky top-0 bg-light dark:bg-dark z-10 px-4 py-3 border-b border-[var(--border-color)] flex items-center">
-                <Link href="/home" className="mr-4">
-                  <div className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800">
-                    <FaArrowLeft className="text-black dark:text-white" />
+
+          {/* Profile Info Section */} 
+          <div className="px-4 pb-4 border-b border-gray-200 dark:border-gray-800">
+            <div className="flex justify-between items-start -mt-16">
+              {/* Avatar */} 
+              <div className="relative">
+                 <div className="w-32 h-32 rounded-full border-4 border-white dark:border-black bg-gray-200 dark:bg-gray-600 overflow-hidden">
+                   {avatarUrl ? (
+                     <Image src={avatarUrl} alt="Avatar" width={128} height={128} objectFit="cover" />
+                   ) : (
+                     <div className="w-full h-full flex items-center justify-center text-gray-500 text-4xl">?</div>
+                   )}
+                 </div>
+                 {isEditing && isOwnProfile && (
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="absolute bottom-1 right-1 bg-gray-800 p-2 rounded-full text-white hover:bg-gray-700"
+                      aria-label="Change profile picture"
+                    >
+                       <CameraIcon className="h-4 w-4" />
+                    </button>
+                 )}
+                 <input type="file" ref={fileInputRef} onChange={(e) => handleImageUpload(e, false)} accept="image/*" className="hidden" />
+               </div>
+
+              {/* Edit/Follow Button */} 
+              {isOwnProfile ? (
+                isEditing ? (
+                  <div className="flex space-x-2 mt-16">
+                    <button 
+                      onClick={() => {
+                        setIsEditing(false); 
+                        // Reset form if needed
+                        setUsername(profileData.username || ''); 
+                        setBio(profileData.bio || '');
+                        setAvatarUrl(profileData.avatar || '');
+                        setBannerUrl(profileData.bannerImage || '');
+                      }}
+                      className="px-4 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      onClick={handleSaveProfile}
+                      disabled={isSaving}
+                      className="px-4 py-1.5 text-sm bg-black text-white dark:bg-white dark:text-black rounded-full font-semibold hover:opacity-90 disabled:opacity-50"
+                    >
+                      {isSaving ? 'Saving...' : 'Save'}
+                    </button>
                   </div>
-                </Link>
-                <div>
-                  <h1 className="text-xl font-bold text-black dark:text-white">{username || 'Profile'}</h1>
-                  <span className="text-gray-500 text-sm">{myPosts.length} posts</span>
-                </div>
-              </div>
-              
-              {/* Banner Image */}
-              <div className="relative h-48 bg-gray-300 dark:bg-gray-700">
-                {bannerUrl && (
-                  <img src={bannerUrl} alt="Profile Banner" className="w-full h-full object-cover" />
-                )}
-                
-                {/* Profile Picture - positioned to overlap banner */}
-                <div className="absolute -bottom-16 left-4">
-                  <div className="w-32 h-32 rounded-full border-4 border-white dark:border-dark bg-gray-300 dark:bg-gray-700 overflow-hidden">
-                    {avatarUrl ? (
-                      <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-white text-4xl font-bold">
-                        {username?.charAt(0)?.toUpperCase() || walletAddress?.charAt(0)?.toUpperCase() || '?'}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Edit Profile Button */}
-                <div className="absolute top-4 right-4">
+                ) : (
                   <button 
                     onClick={() => setIsEditing(true)}
-                    className="bg-black/30 text-white dark:bg-white/20 dark:text-white font-bold py-1 px-4 rounded-full hover:bg-black/40 dark:hover:bg-white/30 transition"
+                    className="mt-16 px-4 py-1.5 text-sm font-semibold border border-gray-300 dark:border-gray-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   >
                     Edit profile
                   </button>
-                </div>
-              </div>
-              
-              {/* Profile Info */}
-              <div className="px-4 pt-20 pb-4 border-b border-[var(--border-color)]">
-                <h1 className="text-xl font-bold text-black dark:text-white flex items-center">
-                  {username || 'Anonymous'}
-                  {/* Verified badge */}
-                  <CheckBadgeIcon className="h-5 w-5 text-primary ml-1" />
-                </h1>
-                <p className="text-gray-500">@{truncateWallet(walletAddress)}</p>
-                
-                <p className="text-black dark:text-white mt-3">
-                  {bio || 'No bio yet'}
-                </p>
-                
-                <div className="flex items-center text-gray-500 mt-3 space-x-4">
-                  <div className="flex items-center">
-                    <FaCalendarAlt className="mr-2" />
-                    <span>Joined {format(editJoinDate, 'MMMM yyyy')}</span>
-                  </div>
-                  <div>
-                    <span className="font-bold text-black dark:text-white">{totalPoints}</span> Aura Points
-                  </div>
-                </div>
-                
-                <div className="flex space-x-5 mt-3">
-                  <div>
-                    <span className="font-bold text-black dark:text-white">175</span>
-                    <span className="text-gray-500 ml-1">Following</span>
-                  </div>
-                  <div>
-                    <span className="font-bold text-black dark:text-white">248</span>
-                    <span className="text-gray-500 ml-1">Followers</span>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Profile Tabs */}
-              <div className="border-b border-[var(--border-color)]">
-                <div className="flex">
-                  <button
-                    className={`flex-1 py-4 text-center font-medium relative ${
-                      activeTab === 'posts' 
-                        ? 'text-black dark:text-white font-bold' 
-                        : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
-                    }`}
-                    onClick={() => setActiveTab('posts')}
-                  >
-                    Posts
-                    {activeTab === 'posts' && (
-                      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-12 h-1 bg-primary rounded-full"></div>
-                    )}
-                  </button>
-                  <button
-                    className={`flex-1 py-4 text-center font-medium relative ${
-                      activeTab === 'replies' 
-                        ? 'text-black dark:text-white font-bold' 
-                        : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
-                    }`}
-                    onClick={() => setActiveTab('replies')}
-                  >
-                    Replies
-                    {activeTab === 'replies' && (
-                      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-12 h-1 bg-primary rounded-full"></div>
-                    )}
-                  </button>
-                  <button
-                    className={`flex-1 py-4 text-center font-medium relative ${
-                      activeTab === 'media' 
-                        ? 'text-black dark:text-white font-bold' 
-                        : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
-                    }`}
-                    onClick={() => setActiveTab('media')}
-                  >
-                    Media
-                    {activeTab === 'media' && (
-                      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-12 h-1 bg-primary rounded-full"></div>
-                    )}
-                  </button>
-                  <button
-                    className={`flex-1 py-4 text-center font-medium relative ${
-                      activeTab === 'likes' 
-                        ? 'text-black dark:text-white font-bold' 
-                        : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
-                    }`}
-                    onClick={() => setActiveTab('likes')}
-                  >
-                    Likes
-                    {activeTab === 'likes' && (
-                      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-12 h-1 bg-primary rounded-full"></div>
-                    )}
-                  </button>
-                </div>
-              </div>
-              
-              {/* User Posts */}
-              <div>
-                {myPosts.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-                    <h2 className="text-3xl font-bold text-black dark:text-white mb-2">
-                      {activeTab === 'posts' ? 'You haven\'t posted yet' : 
-                       activeTab === 'replies' ? 'No replies yet' :
-                       activeTab === 'media' ? 'No media yet' : 'No likes yet'}
-                    </h2>
-                    <p className="text-gray-500 max-w-md">
-                      {activeTab === 'posts' ? 'When you make a post, it will show up here.' : 
-                       activeTab === 'replies' ? 'When you reply to a post, it will show up here.' :
-                       activeTab === 'media' ? 'Posts with images or videos will show up here.' : 
-                       'Posts you\'ve liked will show up here.'}
-                    </p>
-                  </div>
-                ) : (
-                  activeTab === 'posts' && myPosts.map(post => (
-                    <PostCard key={post.id} post={post} />
-                  ))
-                )}
-                
-                {activeTab !== 'posts' && (
-                  <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-                    <h2 className="text-3xl font-bold text-black dark:text-white mb-2">
-                      {activeTab === 'replies' ? 'No replies yet' :
-                       activeTab === 'media' ? 'No media yet' : 'No likes yet'}
-                    </h2>
-                    <p className="text-gray-500 max-w-md">
-                      {activeTab === 'replies' ? 'When you reply to a post, it will show up here.' :
-                       activeTab === 'media' ? 'Posts with images or videos will show up here.' : 
-                       'Posts you\'ve liked will show up here.'}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          <div className="hidden md:block md:col-span-3">
-            <AuraSidebar />
-          </div>
-        </main>
-      </div>
-      
-      {/* Edit Profile Modal (displays over the page when editing is true) */}
-      {isEditing && (
-        <div className="edit-profile-modal">
-          <div className="edit-profile-content">
-            <div className="edit-profile-header">
-              <div className="flex items-center space-x-4">
-                <button 
-                  onClick={() => setIsEditing(false)}
-                  className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800"
-                >
-                  <XMarkIcon className="h-5 w-5 text-black dark:text-white" />
-                </button>
-                <h2 className="text-xl font-bold text-black dark:text-white">Edit profile</h2>
-              </div>
-              <button
-                onClick={handleSaveProfile}
-                disabled={isSaving}
-                className="bg-black dark:bg-white text-white dark:text-black font-bold py-1.5 px-4 rounded-full hover:bg-opacity-90 dark:hover:bg-opacity-90 transition"
-              >
-                {isSaving ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-            
-            {/* Banner Image */}
-            <div className="relative h-48 bg-gray-300 dark:bg-gray-700">
-              {bannerUrl && (
-                <img src={bannerUrl} alt="Banner" className="w-full h-full object-cover" />
+                )
+              ) : (
+                 // TODO: Implement Follow/Unfollow Button Logic
+                 <button className="mt-16 px-4 py-1.5 text-sm font-semibold bg-black text-white dark:bg-white dark:text-black rounded-full hover:opacity-90">
+                   Follow
+                 </button>
+               )}
+             </div>
+
+            {/* Username, Handle, Bio */} 
+            <div className="mt-3">
+              {isEditing ? (
+                <input 
+                  type="text" 
+                  value={username} 
+                  onChange={(e) => setUsername(e.target.value)} 
+                  placeholder="Username"
+                  className="text-xl font-bold text-black dark:text-white bg-transparent border-b border-gray-300 dark:border-gray-700 focus:outline-none focus:border-primary w-full mb-1"
+                />
+              ) : (
+                <h2 className="text-xl font-bold text-black dark:text-white">{profileData.username || 'Unnamed User'}</h2>
               )}
-              <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                <div className="flex gap-4">
-                  <button 
-                    onClick={() => bannerInputRef.current?.click()}
-                    className="p-2 bg-black bg-opacity-50 text-white rounded-full"
-                  >
-                    <CameraIcon className="h-6 w-6" />
-                  </button>
-                  {bannerUrl && (
-                    <button 
-                      onClick={() => setBannerUrl('')}
-                      className="p-2 bg-black bg-opacity-50 text-white rounded-full"
-                    >
-                      <XMarkIcon className="h-6 w-6" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-            
-            {/* Profile Image */}
-            <div className="mx-4 -mt-16 relative">
-              <div className="w-32 h-32 rounded-full border-4 border-white dark:border-dark bg-gray-300 dark:bg-gray-700 overflow-hidden">
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-white text-4xl font-bold">
-                    {username?.charAt(0)?.toUpperCase() || walletAddress?.charAt(0)?.toUpperCase() || '?'}
-                  </div>
-                )}
-              </div>
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                <button 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-2 bg-black bg-opacity-50 text-white rounded-full"
-                >
-                  <CameraIcon className="h-6 w-6" />
-                </button>
-              </div>
-            </div>
-            
-            {/* Form fields */}
-            <div className="p-4 space-y-4 mt-12">
-              <div>
-                <label className="block text-sm text-gray-500 mb-1">Name</label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-black text-black dark:text-white focus:outline-none focus:ring-1 focus:ring-primary"
-                  placeholder="Add your name"
-                  maxLength={50}
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-500 mb-1">Bio</label>
-                <textarea
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-black text-black dark:text-white focus:outline-none focus:ring-1 focus:ring-primary"
-                  placeholder="Add your bio"
-                  maxLength={160}
+              <p className="text-sm text-gray-500 dark:text-gray-400">@{profileData.username || truncateWallet(displayWalletAddress)}</p>
+              {isEditing ? (
+                <textarea 
+                  value={bio} 
+                  onChange={(e) => setBio(e.target.value)} 
+                  placeholder="Bio"
                   rows={3}
+                  className="text-sm text-black dark:text-white bg-transparent border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:border-primary w-full mt-2 p-1"
                 />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mt-4">
-                  Your blue checkmark will be hidden for a period of time after you edit your display name or profile photo until it is reviewed.
-                </p>
-                <a href="#" className="text-primary text-xs hover:underline">Learn more</a>
-              </div>
+              ) : (
+                <p className="text-sm mt-2 text-black dark:text-white">{profileData.bio || 'No bio yet.'}</p>
+              )}
             </div>
-            
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => handleImageUpload(e, false)}
-              className="hidden"
-            />
-            <input
-              ref={bannerInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => handleImageUpload(e, true)}
-              className="hidden"
-            />
-          </div>
-        </div>
-      )}
-      
-      {/* Profile picture crop/zoom modal */}
-      {showPfpModal && tempImageUrl && (
-        <div className="edit-profile-modal">
-          <div className="edit-profile-content">
-            <div className="edit-profile-header">
-              <div className="flex items-center">
-                <button 
-                  onClick={() => setShowPfpModal(false)}
-                  className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800"
-                >
-                  <XMarkIcon className="h-5 w-5 text-black dark:text-white" />
-                </button>
-                <h2 className="text-xl font-bold text-black dark:text-white ml-4">
-                  {editingBanner ? 'Edit banner' : 'Edit profile picture'}
-                </h2>
-              </div>
+
+            {/* Join Date & Stats (Optional) */} 
+            <div className="mt-3 flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
+               {/* Check if joinDate exists before formatting */} 
+               {profileData.joinDate && (
+                 <div className="flex items-center space-x-1">
+                   <FaCalendarAlt />
+                   <span>Joined {format(new Date(profileData.joinDate), 'MMMM yyyy')}</span>
+                 </div>
+               )}
+               {/* TODO: Add Following/Followers count */} 
+               {/* <div className="flex items-center space-x-1"><span className="font-bold text-black dark:text-white">123</span> Following</div> */}
+               {/* <div className="flex items-center space-x-1"><span className="font-bold text-black dark:text-white">456</span> Followers</div> */}
+             </div>
+           </div>
+
+          {/* Profile Tabs (Posts, Replies, Likes, etc.) */} 
+          <div className="flex border-b border-gray-200 dark:border-gray-800">
+            {['posts', 'replies', 'media', 'likes'].map((tab) => (
               <button
-                onClick={handleConfirmProfilePicture}
-                className="bg-black dark:bg-white text-white dark:text-black font-bold py-1.5 px-4 rounded-full hover:bg-opacity-90 dark:hover:bg-opacity-90 transition"
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex-1 py-3 text-center font-medium capitalize transition-colors ${activeTab === tab ? 'text-primary border-b-2 border-primary' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-900'}`}
               >
-                Save
+                {tab}
               </button>
+            ))}
+          </div>
+
+          {/* Tab Content */} 
+          <div className="divide-y divide-gray-200 dark:divide-gray-800">
+            {/* Only rendering Posts for now */}
+            {activeTab === 'posts' && (
+              profilePosts.length > 0 ? (
+                profilePosts.map(post => (
+                  <PostCard key={post.id} post={post} comments={post.comments || []} />
+                ))
+              ) : (
+                <div className="p-6 text-center text-gray-500">No posts yet.</div>
+              )
+            )}
+            {/* Add other tab content here (Replies, Media, Likes) */} 
+            {activeTab !== 'posts' && (
+               <div className="p-6 text-center text-gray-500">{`${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}`} content not available yet.</div>
+             )}
+           </div>
+         </>
+       )}
+
+      {/* Image Cropping/Zooming Modal */} 
+      {showPfpModal && tempImageUrl && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-lg p-4 max-w-sm w-full relative">
+            <button onClick={() => setShowPfpModal(false)} className="absolute top-2 right-2 text-gray-500 hover:text-black dark:hover:text-white"><XMarkIcon className="h-6 w-6" /></button>
+            <h3 className="text-lg font-bold mb-4 text-black dark:text-white">Edit {editingBanner ? 'Banner' : 'Profile Picture'}</h3>
+            <div className="relative w-full h-64 overflow-hidden mb-4 bg-gray-200 dark:bg-gray-700 rounded">
+              <Image 
+                src={tempImageUrl} 
+                alt="Preview" 
+                layout="fill" 
+                objectFit="contain" // Use contain initially, adjust with zoom?
+                style={{ transform: `scale(${imageZoom})` }}
+              />
             </div>
-            
-            <div className="p-4">
-              <div className="relative mx-auto" style={{ 
-                maxHeight: '400px',
-                overflow: 'hidden',
-                borderRadius: editingBanner ? '0px' : '50%',
-                width: editingBanner ? '100%' : '200px',
-                height: editingBanner ? '200px' : '200px'
-              }}>
-                <img 
-                  src={tempImageUrl} 
-                  alt="Preview" 
-                  className="w-full h-full object-cover"
-                  style={{ transform: `scale(${imageZoom})` }}
-                />
-              </div>
-              
-              <div className="mt-4">
-                <label className="block text-sm text-gray-500 mb-1">Zoom</label>
-                <input
-                  type="range"
-                  min="1"
-                  max="2"
-                  step="0.01"
-                  value={imageZoom}
-                  onChange={(e) => setImageZoom(parseFloat(e.target.value))}
-                  className="w-full"
-                />
-              </div>
+            {/* Simple Zoom Slider */}
+            <div className="flex items-center space-x-2 mb-4">
+              <label htmlFor="zoom" className="text-sm text-gray-600 dark:text-gray-300">Zoom:</label>
+              <input 
+                type="range" 
+                id="zoom" 
+                min="1" 
+                max="3" 
+                step="0.1" 
+                value={imageZoom}
+                onChange={(e) => setImageZoom(parseFloat(e.target.value))}
+                className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
+              />
             </div>
+            <button 
+              onClick={handleConfirmProfilePicture}
+              className="w-full bg-primary text-white py-2 rounded-lg hover:bg-primary-hover transition-colors"
+            >
+              Apply
+            </button>
           </div>
         </div>
       )}
-    </>
+    </Layout>
   );
 };
 
